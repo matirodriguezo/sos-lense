@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Proyecto_Carabineros",
-    "slug": "Proyecto_Carabineros",
+    "name": "S.O.S. Carabineros",
+    "slug": "sos-carabineros",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,18 +10,36 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1a237e"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sos.carabineros",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "S.O.S. Carabineros necesita tu ubicación para enviar alertas de emergencia a la central policial."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#1a237e"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.sos.carabineros",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "S.O.S. Carabineros necesita acceso a tu ubicación para enviar alertas de emergencia.",
+          "locationAlwaysPermission": "S.O.S. Carabineros necesita acceso a tu ubicación en segundo plano para tracking continuo."
+        }
+      ]
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }
