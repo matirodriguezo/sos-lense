@@ -11,30 +11,67 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Keyboard,
+  Modal,
 } from "react-native";
 import { auth } from "../../firebase/firebaseConfig";
-import { addQuickRequest, sendMessage, listenMessages } from "../../services/incidentService";
-import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
+import {
+  addQuickRequest,
+  sendMessage,
+  listenMessages,
+  listenIncidentById,
+  cancelIncident,
+} from "../../services/incidentService";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
+
+const QUICK_OPTIONS = [
+  { icon: "medical-outline", label: "Necesito Ambulancia" },
+  { icon: "shield-outline", label: "Robo en progreso" },
+  { icon: "hand-left-outline", label: "Necesito intérprete" },
+  { icon: "car-outline", label: "Accidente de tránsito" },
+  { icon: "walk-outline", label: "El sospechoso huyó" },
+  { icon: "checkmark-circle-outline", label: "Estoy bien" },
+];
 
 export default function VideoCallScreen({ route, navigation }) {
   const { incidentId } = route.params;
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [showChat, setShowChat] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [camFlipped, setCamFlipped] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [closeReason, setCloseReason] = useState("");
+  const [incident, setIncident] = useState(null);
   const flatListRef = useRef(null);
-  const inputRef = useRef(null);
 
   useEffect(() => {
-    const unsub = listenMessages(incidentId, setMessages);
-    return unsub;
+    const unsubMsg = listenMessages(incidentId, setMessages);
+    const unsubInc = listenIncidentById(incidentId, setIncident);
+    return () => {
+      unsubMsg();
+      unsubInc();
+    };
   }, [incidentId]);
+
+  useEffect(() => {
+    if (incident?.status === "CERRADO") {
+      Alert.alert("Incidente Cerrado", "El carabinero ha cerrado este incidente. Serás redirigido al inicio.", [
+        { text: "OK", onPress: () => navigation.reset({ index: 0, routes: [{ name: "Home" }] }) },
+      ]);
+    }
+    if (incident?.status === "ANULADO") {
+      Alert.alert("Incidente Anulado", "Has cancelado este incidente. Serás redirigido al inicio.", [
+        { text: "OK", onPress: () => navigation.reset({ index: 0, routes: [{ name: "Home" }] }) },
+      ]);
+    }
+  }, [incident?.status]);
 
   const handleQuickRequest = async (request) => {
     try {
       await addQuickRequest(incidentId, request);
+      await sendMessage(incidentId, `[ALERTA RÁPIDA] ${request}`, auth.currentUser.uid, "CITIZEN");
     } catch {}
   };
 
@@ -51,67 +88,85 @@ export default function VideoCallScreen({ route, navigation }) {
     Alert.alert("Finalizar llamada", "¿Estás seguro de que deseas colgar?", [
       { text: "Cancelar", style: "cancel" },
       {
-        text: "Colgar",
-        style: "destructive",
+        text: "Colgar", style: "destructive",
         onPress: () => navigation.reset({ index: 0, routes: [{ name: "Home" }] }),
       },
     ]);
   };
 
+  const handleCloseWithReason = async () => {
+    if (!closeReason.trim()) {
+      Alert.alert("Motivo requerido", "Por favor indica el motivo del cierre.");
+      return;
+    }
+    try {
+      await cancelIncident(incidentId, closeReason.trim());
+      await sendMessage(incidentId, `🔴 Incidente cerrado: ${closeReason.trim()}`, auth.currentUser.uid, "CITIZEN");
+      setShowCloseModal(false);
+      Alert.alert("Cerrado", "Serás redirigido al inicio.", [
+        { text: "OK", onPress: () => navigation.reset({ index: 0, routes: [{ name: "Home" }] }) },
+      ]);
+    } catch {
+      Alert.alert("Error", "No se pudo cerrar el incidente.");
+    }
+  };
+
   const isMine = (msg) => msg.senderId === auth.currentUser?.uid;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={0}
-    >
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
-      <View style={styles.cameraFeed}>
-        <Text style={styles.cameraEmoji}>📱</Text>
-        <Text style={styles.cameraText}>Cámara frontal</Text>
-
+      {/* Área de Video Principal (Dividida visualmente para el prototipo) */}
+      <View style={styles.videoContainer}>
+        {/* Cabecera Flotante */}
         <View style={styles.floatingHeader}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.headerTitle}>S.O.S. CARABINEROS</Text>
+          <View style={styles.liveBadge}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveText}>EN VIVO</Text>
           </View>
+          <Text style={styles.headerTitle}>S.O.S. CARABINEROS</Text>
+          <TouchableOpacity style={styles.senaBtn} onPress={() => Alert.alert("LENSE", "Traductor en progreso")}>
+            <Ionicons name="hand-right" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
 
+        {/* Simulador de Cámara (Fondo negro) */}
+        <View style={styles.mainVideo}>
+          <Ionicons name={camFlipped ? "camera-reverse-outline" : "camera-outline"} size={64} color="rgba(255,255,255,0.1)" />
+          <Text style={styles.cameraLabel}>{camFlipped ? "CÁMARA TRASERA" : "CÁMARA FRONTAL"}</Text>
+        </View>
+
+        {/* PiP (Picture in Picture) del Oficial */}
         <View style={styles.pipContainer}>
           <View style={styles.pipVideo}>
-            <Text style={styles.pipEmoji}>👮</Text>
+            <MaterialCommunityIcons name="police-badge-outline" size={32} color="#FFFFFF" style={{opacity: 0.5}} />
             <View style={styles.pipBadge}>
-              <Text style={styles.pipBadgeDot}>●</Text>
+              <View style={styles.pipBadgeDot} />
               <Text style={styles.pipBadgeText}>OFICIAL</Text>
             </View>
           </View>
         </View>
       </View>
 
-      {/* Quick replies */}
+      {/* Scroll de Respuestas Rápidas */}
       <View style={styles.quickSection}>
-        <TouchableOpacity
-          style={styles.quickPill}
-          onPress={() => handleQuickRequest("Necesito Ambulancia")}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.pillIconRed}>🩺</Text>
-          <Text style={styles.pillLabel}>Necesito Ambulancia</Text>
-          <Text style={styles.pillChevron}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.quickPill}
-          onPress={() => handleQuickRequest("Robo en progreso")}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.pillIconRed}>🛡️</Text>
-          <Text style={styles.pillLabel}>Robo en progreso</Text>
-          <Text style={styles.pillChevron}>›</Text>
-        </TouchableOpacity>
+        <FlatList
+          data={QUICK_OPTIONS}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickList}
+          keyExtractor={(item) => item.label}
+          renderItem={({ item }) => (
+            <TouchableOpacity style={styles.quickPill} onPress={() => handleQuickRequest(item.label)} activeOpacity={0.7}>
+              <Ionicons name={item.icon} size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.pillLabel}>{item.label}</Text>
+            </TouchableOpacity>
+          )}
+        />
       </View>
 
-      {/* Chat expandable */}
+      {/* Interfaz de Chat (Toggleable) */}
       {showChat && (
         <View style={styles.chatContainer}>
           <FlatList
@@ -120,201 +175,157 @@ export default function VideoCallScreen({ route, navigation }) {
             keyExtractor={(item) => item.id}
             style={styles.chatList}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-            ListEmptyComponent={
-              <Text style={styles.emptyChat}>Sin mensajes aún</Text>
-            }
+            ListEmptyComponent={<Text style={styles.emptyChat}>Escribe un mensaje a la central...</Text>}
             renderItem={({ item }) => (
-              <View
-                style={[
-                  styles.chatBubble,
-                  isMine(item) ? styles.chatBubbleMine : styles.chatBubbleOther,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chatText,
-                    isMine(item) ? styles.chatTextMine : styles.chatTextOther,
-                  ]}
-                >
-                  {item.text}
-                </Text>
-                <Text
-                  style={[
-                    styles.chatMeta,
-                    isMine(item) ? styles.chatMetaMine : styles.chatMetaOther,
-                  ]}
-                >
-                  {isMine(item) ? "Tú" : "Carabinero"}
+              <View style={[styles.chatBubble, isMine(item) ? styles.chatBubbleMine : styles.chatBubbleOther]}>
+                <Text style={[styles.chatText, isMine(item) ? styles.chatTextMine : styles.chatTextOther]}>{item.text}</Text>
+                <Text style={[styles.chatMeta, isMine(item) ? styles.chatMetaMine : styles.chatMetaOther]}>
+                  {isMine(item) ? "Tú" : "Oficial"}
                 </Text>
               </View>
             )}
           />
           <View style={styles.inputRow}>
             <TextInput
-              ref={inputRef}
               style={styles.chatInput}
               value={input}
               onChangeText={setInput}
               placeholder="Escribe un mensaje..."
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholderTextColor="#888"
               onSubmitEditing={handleSend}
             />
             <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
-              <Text style={styles.sendBtnText}>Enviar</Text>
+              <Ionicons name="send" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
       )}
 
-      {/* Control dock */}
+      {/* Dock Inferior de Controles */}
       <View style={styles.controlDock}>
-        <TouchableOpacity
-          style={styles.ctrlBtn}
-          onPress={() => Alert.alert("Cámara", "Alternar cámara no disponible sin SDK de video.")}
-        >
-          <Text style={styles.ctrlIcon}>🔄</Text>
+        <TouchableOpacity style={[styles.ctrlBtn, camFlipped && styles.ctrlBtnActive]} onPress={() => setCamFlipped(!camFlipped)}>
+          <Ionicons name="camera-reverse" size={24} color="#FFFFFF" />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.ctrlBtn}
-          onPress={() => Alert.alert("Micrófono", "Silenciar no disponible sin SDK de video.")}
-        >
-          <Text style={styles.ctrlIcon}>🔇</Text>
+        
+        <TouchableOpacity style={[styles.ctrlBtn, isMuted && styles.ctrlBtnActive]} onPress={() => setIsMuted(!isMuted)}>
+          <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color="#FFFFFF" />
         </TouchableOpacity>
+        
         <TouchableOpacity style={styles.hangupBtn} onPress={handleHangup}>
-          <Text style={styles.hangupIcon}>📞</Text>
+          <MaterialCommunityIcons name="phone-hangup" size={32} color="#FFFFFF" />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.ctrlBtn, showChat && styles.ctrlBtnActive]}
-          onPress={() => setShowChat(!showChat)}
-        >
-          <Text style={styles.ctrlIcon}>💬</Text>
+        
+        <TouchableOpacity style={[styles.ctrlBtn, showChat && styles.ctrlBtnActive]} onPress={() => setShowChat(!showChat)}>
+          <Ionicons name="chatbubble-ellipses" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.ctrlBtnDanger} onPress={() => setShowCloseModal(true)}>
+          <Ionicons name="close" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
+
+      {/* Modal de Cierre de Incidente */}
+      <Modal visible={showCloseModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Finalizar Incidente</Text>
+            <Text style={styles.modalSub}>Por favor, indica el motivo del cierre de esta alerta:</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={closeReason}
+              onChangeText={setCloseReason}
+              placeholder="Ej: Falsa alarma, ya estoy seguro..."
+              placeholderTextColor="#999"
+              multiline
+              textAlignVertical="top"
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => { setShowCloseModal(false); setCloseReason(""); }}>
+                <Text style={styles.modalCancelText}>Volver</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleCloseWithReason}>
+                <Text style={styles.modalConfirmText}>Confirmar Cierre</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-  // Camera
-  cameraFeed: {
-    flex: 1,
-    backgroundColor: "#1a1a1a",
-    justifyContent: "center",
-    alignItems: "center",
-    position: "relative",
-  },
-  cameraEmoji: { fontSize: 48, opacity: 0.3 },
-  cameraText: { color: "rgba(255,255,255,0.3)", fontSize: FONT_SIZE.sm, marginTop: SPACING.sm },
+  container: { flex: 1, backgroundColor: "#000000" },
+  
+  videoContainer: { flex: 1, position: "relative", backgroundColor: "#111111" },
   floatingHeader: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: SPACING.xl + SPACING.sm,
-    paddingBottom: SPACING.sm,
-    backgroundColor: COLORS.whiteTranslucent,
+    position: "absolute", top: 40, left: 0, right: 0,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, zIndex: 10,
   },
-  headerLeft: { alignItems: "center" },
-  headerTitle: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color: COLORS.primary },
-  // PiP
-  pipContainer: { position: "absolute", top: SPACING.xl + SPACING.xl + SPACING.sm, right: SPACING.md },
+  liveBadge: { flexDirection: "row", alignItems: "center", backgroundColor: "#D32F2F", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4, gap: 6 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FFFFFF" },
+  liveText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  headerTitle: { fontSize: 14, fontWeight: "bold", color: "#FFFFFF", letterSpacing: 1, textShadowColor: 'rgba(0, 0, 0, 0.75)', textShadowOffset: {width: -1, height: 1}, textShadowRadius: 10 },
+  senaBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  
+  mainVideo: { flex: 1, justifyContent: "center", alignItems: "center" },
+  cameraLabel: { color: "rgba(255,255,255,0.2)", fontSize: 14, marginTop: 12, fontWeight: "bold", letterSpacing: 2 },
+  
+  pipContainer: { position: "absolute", top: 100, right: 20, zIndex: 10 },
   pipVideo: {
-    width: width * 0.28,
-    height: width * 0.38,
-    borderRadius: RADIUS.md,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    backgroundColor: "#222",
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
+    width: 100, height: 140, borderRadius: 12, borderWidth: 2, borderColor: "#004B2B",
+    backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", overflow: "hidden",
   },
-  pipEmoji: { fontSize: 28 },
   pipBadge: {
-    position: "absolute",
-    bottom: SPACING.xs, left: SPACING.xs,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.blackTranslucent,
-    paddingHorizontal: SPACING.sm, paddingVertical: 2,
-    borderRadius: RADIUS.xs, gap: 3,
+    position: "absolute", bottom: 6, left: 6, flexDirection: "row", alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.8)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, gap: 4,
   },
-  pipBadgeDot: { color: COLORS.success, fontSize: 8 },
-  pipBadgeText: { color: COLORS.surface, fontSize: 8, fontWeight: FONT_WEIGHT.bold },
-  // Quick replies
-  quickSection: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    gap: SPACING.sm,
-    backgroundColor: "#000",
-  },
+  pipBadgeDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: "#4CAF50" },
+  pipBadgeText: { color: "#FFFFFF", fontSize: 8, fontWeight: "bold" },
+  
+  quickSection: { paddingVertical: 12, backgroundColor: "#111111" },
+  quickList: { paddingHorizontal: 16, gap: 10 },
   quickPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.overlay,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md - 4,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
   },
-  pillIconRed: { fontSize: 18, marginRight: SPACING.sm + 2 },
-  pillLabel: { flex: 1, color: COLORS.surface, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
-  pillChevron: { color: "rgba(255,255,255,0.4)", fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold },
-  // Chat
-  chatContainer: { backgroundColor: "#111", maxHeight: 250 },
-  chatList: { maxHeight: 180, paddingHorizontal: SPACING.sm },
-  emptyChat: { color: "rgba(255,255,255,0.3)", fontSize: FONT_SIZE.sm, textAlign: "center", padding: SPACING.md },
-  chatBubble: { maxWidth: "80%", padding: SPACING.sm + 2, borderRadius: RADIUS.md, marginBottom: SPACING.xs },
-  chatBubbleMine: { backgroundColor: COLORS.primary, alignSelf: "flex-end", borderBottomRightRadius: 4 },
-  chatBubbleOther: { backgroundColor: "rgba(255,255,255,0.15)", alignSelf: "flex-start", borderBottomLeftRadius: 4 },
-  chatText: { fontSize: FONT_SIZE.sm },
-  chatTextMine: { color: COLORS.surface },
-  chatTextOther: { color: COLORS.surface },
-  chatMeta: { fontSize: 10, marginTop: 4 },
-  chatMetaMine: { color: "rgba(255,255,255,0.5)" },
+  pillLabel: { color: "#FFFFFF", fontSize: 13, fontWeight: "600" },
+  
+  chatContainer: { backgroundColor: "#1A1A1A", height: 250, borderTopWidth: 1, borderTopColor: "#333" },
+  chatList: { padding: 16 },
+  emptyChat: { color: "#666", fontSize: 13, textAlign: "center", marginTop: 20 },
+  chatBubble: { maxWidth: "80%", padding: 12, borderRadius: 12, marginBottom: 8 },
+  chatBubbleMine: { backgroundColor: "#004B2B", alignSelf: "flex-end", borderBottomRightRadius: 4 },
+  chatBubbleOther: { backgroundColor: "#333333", alignSelf: "flex-start", borderBottomLeftRadius: 4 },
+  chatText: { fontSize: 14, lineHeight: 20 },
+  chatTextMine: { color: "#FFFFFF" },
+  chatTextOther: { color: "#E0E0E0" },
+  chatMeta: { fontSize: 10, marginTop: 6, fontWeight: "bold" },
+  chatMetaMine: { color: "rgba(255,255,255,0.5)", textAlign: "right" },
   chatMetaOther: { color: "rgba(255,255,255,0.4)" },
-  inputRow: { flexDirection: "row", padding: SPACING.sm, gap: SPACING.sm },
-  chatInput: {
-    flex: 1,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: RADIUS.pill,
-    paddingHorizontal: SPACING.md,
-    color: COLORS.surface,
-    height: 40,
-    fontSize: FONT_SIZE.sm,
-  },
-  sendBtn: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.md,
-    borderRadius: RADIUS.pill,
-    justifyContent: "center",
-  },
-  sendBtnText: { color: COLORS.surface, fontWeight: FONT_WEIGHT.semiBold, fontSize: FONT_SIZE.sm },
-  // Control dock
+  
+  inputRow: { flexDirection: "row", padding: 12, gap: 10, borderTopWidth: 1, borderTopColor: "#333" },
+  chatInput: { flex: 1, backgroundColor: "#2A2A2A", borderRadius: 20, paddingHorizontal: 16, color: "#FFFFFF", height: 44, fontSize: 14 },
+  sendBtn: { width: 44, height: 44, backgroundColor: "#004B2B", borderRadius: 22, justifyContent: "center", alignItems: "center" },
+  
   controlDock: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: SPACING.md + SPACING.sm,
-    paddingVertical: SPACING.lg,
-    backgroundColor: "#000",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.06)",
+    flexDirection: "row", justifyContent: "space-evenly", alignItems: "center",
+    paddingVertical: 20, paddingHorizontal: 10, backgroundColor: "#000000", borderTopWidth: 1, borderTopColor: "#222",
   },
-  ctrlBtn: {
-    width: 48, height: 48, borderRadius: 24,
-    backgroundColor: COLORS.primary, justifyContent: "center", alignItems: "center",
-  },
-  ctrlBtnActive: { backgroundColor: COLORS.primary, borderWidth: 2, borderColor: COLORS.surface },
-  ctrlIcon: { fontSize: 20 },
-  hangupBtn: {
-    width: 60, height: 60, borderRadius: 30,
-    backgroundColor: COLORS.danger, justifyContent: "center", alignItems: "center",
-  },
-  hangupIcon: { fontSize: 26, color: COLORS.surface, transform: [{ rotate: "135deg" }] },
+  ctrlBtn: { width: 50, height: 50, borderRadius: 25, backgroundColor: "#222222", justifyContent: "center", alignItems: "center" },
+  ctrlBtnActive: { backgroundColor: "#FFFFFF", borderColor: "#004B2B", borderWidth: 2 },
+  ctrlBtnDanger: { width: 50, height: 50, borderRadius: 25, backgroundColor: "#D32F2F", justifyContent: "center", alignItems: "center" },
+  hangupBtn: { width: 64, height: 64, borderRadius: 32, backgroundColor: "#D32F2F", justifyContent: "center", alignItems: "center" },
+  
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "center", alignItems: "center", padding: 24 },
+  modalContent: { backgroundColor: "#FFFFFF", borderRadius: 16, padding: 24, width: "100%" },
+  modalTitle: { fontSize: 20, fontWeight: "bold", color: "#1A1A1A", marginBottom: 8 },
+  modalSub: { fontSize: 14, color: "#666666", marginBottom: 20 },
+  modalInput: { backgroundColor: "#F8F9FA", borderRadius: 8, padding: 16, fontSize: 14, borderWidth: 1, borderColor: "#E0E0E0", minHeight: 120, color: "#1A1A1A" },
+  modalButtons: { flexDirection: "row", gap: 12, marginTop: 24 },
+  modalCancelBtn: { flex: 1, height: 48, borderRadius: 8, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#E0E0E0" },
+  modalCancelText: { color: "#666666", fontWeight: "bold" },
+  modalConfirmBtn: { flex: 1, height: 48, borderRadius: 8, backgroundColor: "#D32F2F", justifyContent: "center", alignItems: "center" },
+  modalConfirmText: { color: "#FFFFFF", fontWeight: "bold" },
 });

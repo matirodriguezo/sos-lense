@@ -1,5 +1,5 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import HomeScreen from "../screens/citizen/HomeScreen";
+import CitizenTabs from "./CitizenTabs";
 import ClassificationScreen from "../screens/citizen/ClassificationScreen";
 import VideoCallScreen from "../screens/citizen/VideoCallScreen";
 import { COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
@@ -21,7 +21,7 @@ export default function CitizenStack() {
     >
       <Stack.Screen
         name="Home"
-        component={HomeScreen}
+        component={CitizenTabs}
         options={{ headerShown: false }}
       />
       <Stack.Screen

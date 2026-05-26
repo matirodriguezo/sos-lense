@@ -8,6 +8,7 @@ export const INCIDENT_STATUS = {
   ACTIVO: "ACTIVO",
   EN_CURSO: "EN_CURSO",
   CERRADO: "CERRADO",
+  ANULADO: "ANULADO",
 };
 
 export const INCIDENT_TYPES = [

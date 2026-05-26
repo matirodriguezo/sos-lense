@@ -1,6 +1,8 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { View, Text, StyleSheet } from "react-native";
-import CitizenStack from "./CitizenStack";
+import HomeScreen from "../screens/citizen/HomeScreen";
+import HistoryScreen from "../screens/citizen/HistoryScreen";
+import ProfileScreen from "../screens/citizen/ProfileScreen";
 import { COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
 
 const Tab = createBottomTabNavigator();
@@ -30,28 +32,20 @@ export default function CitizenTabs() {
     >
       <Tab.Screen
         name="Inicio"
-        component={CitizenStack}
+        component={HomeScreen}
         options={{ tabBarLabel: "Inicio" }}
       />
       <Tab.Screen
         name="Historial"
-        component={PlaceholderScreen}
+        component={HistoryScreen}
         options={{ tabBarLabel: "Historial" }}
       />
       <Tab.Screen
         name="Perfil"
-        component={PlaceholderScreen}
+        component={ProfileScreen}
         options={{ tabBarLabel: "Perfil" }}
       />
     </Tab.Navigator>
-  );
-}
-
-function PlaceholderScreen() {
-  return (
-    <View style={styles.placeholder}>
-      <Text style={styles.placeholderText}>Próximamente</Text>
-    </View>
   );
 }
 
@@ -79,15 +73,4 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 75, 43, 0.1)",
   },
   icon: { fontSize: 20 },
-  placeholder: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: COLORS.background,
-  },
-  placeholderText: {
-    fontSize: FONT_SIZE.lg,
-    color: COLORS.textSecondary,
-    fontWeight: FONT_WEIGHT.semiBold,
-  },
 });

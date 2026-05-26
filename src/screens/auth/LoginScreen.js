@@ -15,7 +15,8 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "fire
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../../firebase/firebaseConfig";
 import { ROLES } from "../../constants/roles";
-import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT } from "../../constants/theme";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons"; // Agregado
 
 export default function LoginScreen({ navigation }) {
   const [rut, setRut] = useState("");
@@ -85,18 +86,19 @@ export default function LoginScreen({ navigation }) {
         >
           <View style={styles.brandSection}>
             <View style={styles.shieldContainer}>
-              <Text style={styles.shieldEmoji}>🛡️</Text>
+              <MaterialCommunityIcons name="shield-check" size={40} color="#FFFFFF" />
+              <Text style={styles.shieldText}>CARABINEROS</Text>
+              <Text style={styles.shieldSubText}>DE CHILE</Text>
             </View>
             <Text style={styles.welcomeTitle}>Bienvenido</Text>
             <Text style={styles.welcomeSubtitle}>
-              Plataforma de comunicación de emergencia{"\n"}para la Comunidad Sorda.
+              Plataforma de emergencia para la Comunidad Sorda
             </Text>
           </View>
 
           <View style={styles.formSection}>
-            <Text style={styles.inputLabel}>RUT</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>👤</Text>
+              <Text style={styles.inputLabelInside}>RUT</Text>
               <TextInput
                 style={styles.inputField}
                 placeholder="Ej: 12.345.678-9"
@@ -107,52 +109,50 @@ export default function LoginScreen({ navigation }) {
               />
             </View>
 
-            <Text style={[styles.inputLabel, { marginTop: SPACING.md }]}>
-              {isRegistering ? "Crea una Contraseña" : "Clave Única"}
-            </Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>🔒</Text>
-              <TextInput
-                style={styles.inputField}
-                placeholder="••••••••"
-                placeholderTextColor={COLORS.border}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeButton}
-              >
-                <Text style={styles.eyeIcon}>
-                  {showPassword ? "👁️" : "👁️‍🗨️"}
-                </Text>
-              </TouchableOpacity>
+              <Text style={styles.inputLabelInside}>
+                {isRegistering ? "Crea una Contraseña" : "Clave Única"}
+              </Text>
+              <View style={styles.passwordRow}>
+                <TextInput
+                  style={[styles.inputField, { flex: 1 }]}
+                  placeholder="••••••••"
+                  placeholderTextColor={COLORS.border}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                />
+                {!isRegistering && (
+                  <Ionicons name="finger-print-outline" size={24} color="#A0A0A0" style={{ marginRight: 12 }} />
+                )}
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={22}
+                    color="#A0A0A0"
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {isRegistering && (
-              <>
-                <Text style={[styles.inputLabel, { marginTop: SPACING.md }]}>
-                  Confirmar Contraseña
-                </Text>
-                <View style={styles.inputWrapper}>
-                  <Text style={styles.inputIcon}>🔒</Text>
-                  <TextInput
-                    style={styles.inputField}
-                    placeholder="Repite la contraseña"
-                    placeholderTextColor={COLORS.textSecondary}
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry={!showPassword}
-                  />
-                </View>
-              </>
+              <View style={styles.inputWrapper}>
+                <Text style={styles.inputLabelInside}>Confirmar Contraseña</Text>
+                <TextInput
+                  style={styles.inputField}
+                  placeholder="Repite la contraseña"
+                  placeholderTextColor={COLORS.textSecondary}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={!showPassword}
+                />
+              </View>
             )}
 
             {!isRegistering && (
               <TouchableOpacity
                 style={styles.forgotLink}
-                onPress={() => Alert.alert("Restablecer contraseña", "Contacta a tu unidad de Carabineros para restablecer tu acceso.")}
+                onPress={() => Alert.alert("Restablecer", "Contacta a tu unidad.")}
               >
                 <Text style={styles.forgotText}>¿Olvidé mi contraseña?</Text>
               </TouchableOpacity>
@@ -167,37 +167,19 @@ export default function LoginScreen({ navigation }) {
               activeOpacity={0.8}
             >
               <Text style={styles.primaryButtonText}>
-                {loading
-                  ? "Procesando..."
-                  : isRegistering
-                  ? "Crear Cuenta Ciudadana"
-                  : "Ingresar con Clave Única"}
+                {loading ? "Procesando..." : isRegistering ? "Crear Cuenta" : "Ingresar con Clave Única"}
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.switchMode}
-              onPress={() => setIsRegistering(!isRegistering)}
-            >
-              <Text style={styles.switchModeText}>
-                {isRegistering
-                  ? "¿Ya tienes cuenta? Inicia sesión"
-                  : "¿No tienes cuenta? Regístrate"}
+            <TouchableOpacity style={styles.switchMode} onPress={() => setIsRegistering(!isRegistering)}>
+              <Text style={styles.wcagText}>
+                {isRegistering ? "¿Ya tienes cuenta? Inicia sesión" : "Cumple con estándares de accesibilidad WCAG 2.1"}
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.officerLink}
-              onPress={() => navigation.navigate("OfficerLogin")}
-            >
-              <Text style={styles.officerLinkText}>
-                Acceso Personal Carabineros
-              </Text>
+            <TouchableOpacity style={styles.officerLink} onPress={() => navigation.navigate("OfficerLogin")}>
+              <Text style={styles.officerLinkText}>Acceso Personal Carabineros</Text>
             </TouchableOpacity>
-
-            <Text style={styles.wcagText}>
-              En cumplimiento con los estándares de accesibilidad WCAG 2.1
-            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -206,103 +188,106 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.surface },
+  safeArea: { flex: 1, backgroundColor: "#F8F9FA" }, // Fondo gris muy claro
   flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.xl,
+    paddingHorizontal: 24,
+    paddingVertical: 40,
   },
-  // Brand
-  brandSection: { alignItems: "center", marginBottom: SPACING.xl },
+  brandSection: { alignItems: "center", marginBottom: 40 },
   shieldContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: COLORS.greenTranslucent,
+    width: 90,
+    height: 100,
+    backgroundColor: "#004B2B",
+    borderBottomLeftRadius: 45,
+    borderBottomRightRadius: 45,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: SPACING.md,
+    marginBottom: 24,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
-  shieldEmoji: { fontSize: 36 },
+  shieldText: { color: "#FFF", fontSize: 10, fontWeight: "bold", marginTop: 4 },
+  shieldSubText: { color: "#FFF", fontSize: 8 },
   welcomeTitle: {
-    fontSize: 24,
-    fontWeight: FONT_WEIGHT.bold,
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.sm,
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#1A1A1A",
+    marginBottom: 8,
   },
   welcomeSubtitle: {
-    fontSize: FONT_SIZE.base,
-    color: COLORS.textSecondary,
+    fontSize: 14,
+    color: "#666666",
     textAlign: "center",
-    lineHeight: 20,
   },
-  // Form
-  formSection: { width: "100%", marginBottom: SPACING.xl },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: FONT_WEIGHT.medium,
-    color: COLORS.labelGray,
-    marginBottom: SPACING.sm - 2,
-  },
+  formSection: { width: "100%", marginBottom: 32 },
   inputWrapper: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  inputLabelInside: {
+    fontSize: 12,
+    color: "#666666",
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  inputField: {
+    fontSize: 16,
+    color: "#1A1A1A",
+    height: 30,
+  },
+  passwordRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.background,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: SPACING.md - 4,
-    height: 48,
+    justifyContent: "space-between",
   },
-  inputIcon: { fontSize: 18, marginRight: SPACING.sm, opacity: 0.6 },
-  inputField: {
-    flex: 1,
-    fontSize: FONT_SIZE.base,
-    color: COLORS.textPrimary,
-    height: 48,
-  },
-  eyeButton: { padding: SPACING.sm },
-  eyeIcon: { fontSize: 20, opacity: 0.6 },
-  forgotLink: { alignSelf: "flex-end", marginTop: SPACING.sm },
+  forgotLink: { alignSelf: "flex-end" },
   forgotText: {
-    fontSize: 12,
-    color: COLORS.primary,
-    textDecorationLine: "underline",
-    fontWeight: FONT_WEIGHT.medium,
+    fontSize: 13,
+    color: "#004B2B",
+    fontWeight: "600",
   },
-  // Footer
   footerSection: { width: "100%" },
   primaryButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.sm,
-    height: 50,
+    backgroundColor: "#004B2B",
+    borderRadius: 25,
+    height: 56,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: SPACING.md,
+    marginBottom: 16,
+    elevation: 3,
+    shadowColor: "#004B2B",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   primaryButtonText: {
-    color: COLORS.surface,
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.medium,
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
   },
-  switchMode: { alignItems: "center", marginBottom: SPACING.md },
-  switchModeText: {
-    fontSize: FONT_SIZE.base,
-    color: COLORS.primary,
-    fontWeight: FONT_WEIGHT.semiBold,
-  },
-  officerLink: { alignItems: "center", marginBottom: SPACING.xl },
-  officerLinkText: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.primary,
-    fontWeight: FONT_WEIGHT.semiBold,
+  switchMode: { alignItems: "center", marginBottom: 32 },
+  wcagText: {
+    fontSize: 12,
+    color: "#888888",
     textDecorationLine: "underline",
   },
-  wcagText: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.textSecondary,
-    textAlign: "center",
+  officerLink: { alignItems: "center" },
+  officerLinkText: {
+    fontSize: 14,
+    color: "#004B2B",
+    fontWeight: "bold",
   },
 });

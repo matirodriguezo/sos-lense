@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from "react";
-import { ActivityIndicator, View, Text } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase/firebaseConfig";
 import { ROLES } from "../constants/roles";
-import { COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
+import { COLORS } from "../constants/theme";
 import AuthStack from "./AuthStack";
 import CitizenStack from "./CitizenStack";
 import OfficerTabs from "./OfficerTabs";

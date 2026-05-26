@@ -15,7 +15,7 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "fire
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../../firebase/firebaseConfig";
 import { ROLES } from "../../constants/roles";
-import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function OfficerLoginScreen({ navigation }) {
   const [rut, setRut] = useState("");
@@ -79,75 +79,62 @@ export default function OfficerLoginScreen({ navigation }) {
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-        >
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backArrow}>‹</Text>
-          </TouchableOpacity>
-
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          
+          {/* Header & Brand */}
           <View style={styles.brandSection}>
-            <View style={styles.shieldContainer}>
-              <Text style={styles.shieldEmoji}>🛡️</Text>
+            <View style={styles.logoCircle}>
+              <MaterialCommunityIcons name="star-circle" size={50} color="#D4AF37" />
             </View>
-            <Text style={styles.welcomeTitle}>Ingreso de Personal</Text>
-            <Text style={styles.welcomeSubtitle}>
-              Sistema Integrado de Emergencias S.O.S.
-            </Text>
+            <Text style={styles.republicText}>REPÚBLICA DE CHILE</Text>
+            <Text style={styles.welcomeTitle}>S.O.S. CARABINEROS</Text>
+            <View style={styles.divider} />
+            <Text style={styles.portalText}>PORTAL DE OPERADORES</Text>
           </View>
 
-          <View style={styles.formSection}>
-            <Text style={styles.inputLabel}>RUT / Placa</Text>
+          {/* Form Card Overlay */}
+          <View style={styles.cardContainer}>
+            <Text style={styles.inputLabelInside}>NÚMERO DE PLACA / RUT</Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>👤</Text>
               <TextInput
                 style={styles.inputField}
                 placeholder="Ej: 12.345.678-9"
-                placeholderTextColor={COLORS.textSecondary}
+                placeholderTextColor="#A0A0A0"
                 value={rut}
                 onChangeText={setRut}
                 autoCapitalize="none"
               />
             </View>
 
-            <Text style={[styles.inputLabel, { marginTop: SPACING.md }]}>
-              {isRegistering ? "Crea una Contraseña" : "Contraseña"}
+            <Text style={styles.inputLabelInside}>
+              {isRegistering ? "CREAR CONTRASEÑA" : "CONTRASEÑA DE SISTEMA"}
             </Text>
             <View style={styles.inputWrapper}>
-              <Text style={styles.inputIcon}>🔒</Text>
               <TextInput
-                style={styles.inputField}
+                style={[styles.inputField, { flex: 1 }]}
                 placeholder="••••••••"
-                placeholderTextColor={COLORS.border}
+                placeholderTextColor="#A0A0A0"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
               />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeButton}
-              >
-                <Text style={styles.eyeIcon}>
-                  {showPassword ? "👁️" : "👁️‍🗨️"}
-                </Text>
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={20}
+                  color="#A0A0A0"
+                />
               </TouchableOpacity>
             </View>
 
             {isRegistering && (
               <>
-                <Text style={[styles.inputLabel, { marginTop: SPACING.md }]}>
-                  Confirmar Contraseña
-                </Text>
+                <Text style={styles.inputLabelInside}>CONFIRMAR CONTRASEÑA</Text>
                 <View style={styles.inputWrapper}>
-                  <Text style={styles.inputIcon}>🔒</Text>
                   <TextInput
                     style={styles.inputField}
                     placeholder="Repite la contraseña"
-                    placeholderTextColor={COLORS.textSecondary}
+                    placeholderTextColor="#A0A0A0"
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     secureTextEntry={!showPassword}
@@ -157,51 +144,38 @@ export default function OfficerLoginScreen({ navigation }) {
             )}
 
             {!isRegistering && (
-              <TouchableOpacity
-                style={styles.forgotLink}
-                onPress={() => Alert.alert("Restablecer contraseña", "Contacta a tu unidad de Carabineros para restablecer tu acceso.")}
-              >
-                <Text style={styles.forgotText}>¿Olvidé mi contraseña?</Text>
-              </TouchableOpacity>
+              <View style={styles.checkboxRow}>
+                <Ionicons name="square-outline" size={20} color="#A0A0A0" />
+                <Text style={styles.checkboxText}>Mantener sesión activa en turno</Text>
+              </View>
             )}
-          </View>
 
-          <View style={styles.footerSection}>
             <TouchableOpacity
               style={[styles.primaryButton, loading && { opacity: 0.6 }]}
               onPress={isRegistering ? handleRegister : handleLogin}
               disabled={loading}
-              activeOpacity={0.8}
             >
               <Text style={styles.primaryButtonText}>
-                {loading
-                  ? "Procesando..."
-                  : isRegistering
-                  ? "Registrar Personal"
-                  : "Ingresar al Sistema"}
+                {loading ? "Verificando..." : isRegistering ? "Registrar Personal" : "Iniciar Turno"}
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.switchMode}
-              onPress={() => setIsRegistering(!isRegistering)}
-            >
-              <Text style={styles.switchModeText}>
-                {isRegistering
-                  ? "¿Ya tienes cuenta? Ingresa"
-                  : "¿Nuevo oficial? Regístrate"}
-              </Text>
+            <TouchableOpacity onPress={() => setIsRegistering(!isRegistering)} style={{marginTop: 15, alignSelf: 'center'}}>
+               <Text style={styles.checkboxText}>{isRegistering ? "Cancelar registro" : "¿Nuevo operador? Regístrate"}</Text>
             </TouchableOpacity>
 
-            <View style={[styles.restrictedCard, SHADOWS.card]}>
-              <View style={styles.restrictedRow}>
-                <Text style={styles.restrictedIcon}>🛡️</Text>
-                <Text style={styles.restrictedText}>
-                  ACCESO RESTRINGIDO A{"\n"}PERSONAL AUTORIZADO
-                </Text>
-              </View>
+            <View style={styles.footerInfoRow}>
+              <MaterialCommunityIcons name="shield-outline" size={16} color="#A0A0A0" />
+              <Text style={styles.footerInfoText}>Sistema LENSE — Acceso Restringido</Text>
             </View>
           </View>
+
+          {/* Back to Citizen Flow */}
+          <TouchableOpacity style={styles.backToCitizen} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={18} color="#D4AF37" />
+            <Text style={styles.backToCitizenText}>Volver a portal ciudadano</Text>
+          </TouchableOpacity>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -209,121 +183,97 @@ export default function OfficerLoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.surface },
+  safeArea: { flex: 1, backgroundColor: "#003A20" }, // Verde Institucional Profundo
   flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.lg,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 20,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.background,
+  brandSection: { alignItems: "center", marginBottom: 30 },
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: "#D4AF37", // Dorado Institucional
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: SPACING.md,
+    marginBottom: 16,
   },
-  backArrow: { fontSize: 28, color: COLORS.primary, lineHeight: 28 },
-  // Brand
-  brandSection: { alignItems: "center", marginBottom: SPACING.xl },
-  shieldContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: COLORS.greenTranslucent,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: SPACING.md,
-  },
-  shieldEmoji: { fontSize: 36 },
+  republicText: { color: "#E0E0E0", fontSize: 12, letterSpacing: 2, fontWeight: "600", marginBottom: 4 },
   welcomeTitle: {
-    fontSize: 24,
-    fontWeight: FONT_WEIGHT.bold,
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.sm,
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 1,
   },
-  welcomeSubtitle: {
-    fontSize: FONT_SIZE.base,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-    lineHeight: 20,
+  divider: {
+    width: 40,
+    height: 3,
+    backgroundColor: "#D4AF37",
+    marginVertical: 12,
   },
-  // Form
-  formSection: { width: "100%", marginBottom: SPACING.xl },
-  inputLabel: {
+  portalText: { color: "#D4AF37", fontSize: 14, letterSpacing: 2, fontWeight: "bold" },
+  
+  cardContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 24,
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
+  inputLabelInside: {
     fontSize: 12,
-    fontWeight: FONT_WEIGHT.medium,
-    color: COLORS.labelGray,
-    marginBottom: SPACING.sm - 2,
+    color: "#666666",
+    fontWeight: "bold",
+    marginBottom: 8,
+    letterSpacing: 0.5,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.background,
-    borderRadius: RADIUS.sm,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: SPACING.md - 4,
-    height: 48,
-  },
-  inputIcon: { fontSize: 18, marginRight: SPACING.sm, opacity: 0.6 },
-  inputField: {
-    flex: 1,
-    fontSize: FONT_SIZE.base,
-    color: COLORS.textPrimary,
-    height: 48,
-  },
-  eyeButton: { padding: SPACING.sm },
-  eyeIcon: { fontSize: 20, opacity: 0.6 },
-  forgotLink: { alignSelf: "flex-end", marginTop: SPACING.sm },
-  forgotText: {
-    fontSize: 12,
-    color: COLORS.primary,
-    textDecorationLine: "underline",
-    fontWeight: FONT_WEIGHT.medium,
-  },
-  // Footer
-  footerSection: { width: "100%" },
-  primaryButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.sm,
+    borderColor: "#E0E0E0",
+    borderRadius: 10,
+    paddingHorizontal: 16,
     height: 50,
+    marginBottom: 20,
+  },
+  inputField: {
+    fontSize: 16,
+    color: "#1A1A1A",
+    height: "100%",
+  },
+  checkboxRow: { flexDirection: "row", alignItems: "center", marginBottom: 24 },
+  checkboxText: { fontSize: 14, color: "#666666", marginLeft: 8 },
+  
+  primaryButton: {
+    backgroundColor: "#004B2B",
+    borderRadius: 12,
+    height: 54,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: SPACING.lg,
   },
-  primaryButtonText: {
-    color: COLORS.surface,
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.medium,
-  },
-  switchMode: { alignItems: "center", marginBottom: SPACING.md },
-  switchModeText: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.primary,
-    fontWeight: FONT_WEIGHT.semiBold,
-  },
-  restrictedCard: {
-    backgroundColor: COLORS.background,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  restrictedRow: {
+  primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" },
+  
+  footerInfoRow: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "center",
-    gap: SPACING.sm,
+    alignItems: "center",
+    marginTop: 24,
   },
-  restrictedIcon: { fontSize: 24, opacity: 0.5 },
-  restrictedText: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.textSecondary,
-    fontWeight: FONT_WEIGHT.bold,
-    textAlign: "center",
-    letterSpacing: 1,
+  footerInfoText: { fontSize: 12, color: "#A0A0A0", marginLeft: 6 },
+  
+  backToCitizen: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 30,
   },
+  backToCitizenText: { color: "#D4AF37", fontSize: 14, marginLeft: 8, fontWeight: "600" },
 });

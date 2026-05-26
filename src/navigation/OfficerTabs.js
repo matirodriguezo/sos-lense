@@ -1,7 +1,10 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { View, Text, StyleSheet } from "react-native";
 import OfficerStack from "./OfficerStack";
-import { COLORS, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../constants/theme";
+import MapScreen from "../screens/officer/MapScreen";
+import ChatScreen from "../screens/officer/ChatScreen";
+import ProfileScreen from "../screens/officer/ProfileScreen";
+import { COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
 
 const Tab = createBottomTabNavigator();
 
@@ -42,28 +45,20 @@ export default function OfficerTabs() {
       />
       <Tab.Screen
         name="Mapa"
-        component={Placeholder}
+        component={MapScreen}
         options={{ tabBarLabel: "Mapa" }}
       />
       <Tab.Screen
         name="Chat"
-        component={Placeholder}
+        component={ChatScreen}
         options={{ tabBarLabel: "Chat" }}
       />
       <Tab.Screen
         name="Perfil"
-        component={Placeholder}
+        component={ProfileScreen}
         options={{ tabBarLabel: "Perfil" }}
       />
     </Tab.Navigator>
-  );
-}
-
-function Placeholder() {
-  return (
-    <View style={styles.placeholder}>
-      <Text style={styles.placeholderText}>Próximamente</Text>
-    </View>
   );
 }
 
@@ -93,15 +88,4 @@ const styles = StyleSheet.create({
   },
   icon: { fontSize: 20, opacity: 0.5 },
   iconActive: { opacity: 1 },
-  placeholder: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: COLORS.background,
-  },
-  placeholderText: {
-    fontSize: FONT_SIZE.lg,
-    color: COLORS.textSecondary,
-    fontWeight: FONT_WEIGHT.semiBold,
-  },
 });
