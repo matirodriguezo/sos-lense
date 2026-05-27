@@ -171,11 +171,17 @@ export default function LoginScreen({ navigation }) {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.switchMode} onPress={() => setIsRegistering(!isRegistering)}>
-              <Text style={styles.wcagText}>
-                {isRegistering ? "¿Ya tienes cuenta? Inicia sesión" : "Cumple con estándares de accesibilidad WCAG 2.1"}
+            <TouchableOpacity style={{ alignItems: "center", marginBottom: 15 }} onPress={() => setIsRegistering(!isRegistering)}>
+              <Text style={{ fontSize: 14, color: "#004B2B", fontWeight: "bold" }}>
+                {isRegistering ? "¿Ya tienes cuenta? Inicia sesión" : "¿No tienes cuenta? Regístrate"}
               </Text>
             </TouchableOpacity>
+
+            <View style={styles.switchMode}>
+              <Text style={styles.wcagText}>
+                Cumple con estándares de accesibilidad WCAG 2.1
+              </Text>
+            </View>
 
             <TouchableOpacity style={styles.officerLink} onPress={() => navigation.navigate("OfficerLogin")}>
               <Text style={styles.officerLinkText}>Acceso Personal Carabineros</Text>
