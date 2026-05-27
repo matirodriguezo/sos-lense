@@ -28,10 +28,10 @@ const STATUS_CONFIG = {
 };
 
 const TYPE_CONFIG = {
-  ACCIDENTE: { icon: "car-outline", label: "Accidente de Tránsito", gifPath: require("../../assets/gifs/Accidente de transito.gif") },
-  ROBO: { icon: "shield-half-outline", label: "Robo o Asalto", gifPath: require("../../assets/gifs/Robo o Asalto.gif") },
-  VIOLENCIA: { icon: "home-outline", label: "Violencia Intrafamiliar", gifPath: require("../../assets/gifs/Violencia.gif") },
-  MEDICA: { icon: "pulse-outline", label: "Emergencia Médica", gifPath: require("../../assets/gifs/Emergencia Medica.gif") },
+  ACCIDENTE: { icon: "car-outline", label: "Accidente de Tránsito", gifPath: require("../../../assets/gifs/Accidente de transito.gif") },
+  ROBO: { icon: "shield-half-outline", label: "Robo o Asalto", gifPath: require("../../../assets/gifs/Robo o Asalto.gif") },
+  VIOLENCIA: { icon: "home-outline", label: "Violencia Intrafamiliar", gifPath: require("../../../assets/gifs/Violencia.gif") },
+  MEDICA: { icon: "pulse-outline", label: "Emergencia Médica", gifPath: require("../../../assets/gifs/Emergencia Medica.gif") },
   OTRO: { icon: "alert-circle-outline", label: "Otro Incidente", gifPath: null },
 };
 

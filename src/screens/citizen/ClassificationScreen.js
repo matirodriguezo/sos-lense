@@ -17,10 +17,10 @@ import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 
 const INCIDENT_OPTIONS = [
-  { id: "ACCIDENTE", icon: "car-outline", label: "Accidente de Tránsito", gifPath: require("../../assets/gifs/Accidente de transito.gif") },
-  { id: "ROBO", icon: "shield-half-outline", label: "Robo o Asalto", gifPath: require("../../assets/gifs/Robo o Asalto.gif") },
-  { id: "VIOLENCIA", icon: "home-outline", label: "Violencia Intrafamiliar", gifPath: require("../../assets/gifs/Violencia.gif") },
-  { id: "MEDICA", icon: "pulse-outline", label: "Emergencia Médica", gifPath: require("../../assets/gifs/Emergencia Medica.gif") },
+  { id: "ACCIDENTE", icon: "car-outline", label: "Accidente de Tránsito", gifPath: require("../../../assets/gifs/Accidente de transito.gif") },
+  { id: "ROBO", icon: "shield-half-outline", label: "Robo o Asalto", gifPath: require("../../../assets/gifs/Robo o Asalto.gif") },
+  { id: "VIOLENCIA", icon: "home-outline", label: "Violencia Intrafamiliar", gifPath: require("../../../assets/gifs/Violencia.gif") },
+  { id: "MEDICA", icon: "pulse-outline", label: "Emergencia Médica", gifPath: require("../../../assets/gifs/Emergencia Medica.gif") },
 ];
 
 export default function ClassificationScreen({ route, navigation }) {
