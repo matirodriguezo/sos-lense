@@ -5,7 +5,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase/firebaseConfig";
 import { ROLES } from "../constants/roles";
 import { useTheme } from "../context/ThemeContext";
-import { setCurrentAlias } from "../services/userStore";
+import { setCurrentAlias, setShiftStart } from "../services/userStore";
 import AuthStack from "./AuthStack";
 import CitizenStack from "./CitizenStack";
 import OfficerTabs from "./OfficerTabs";
@@ -37,6 +37,7 @@ export default function AppNavigator() {
           const data = docSnap.data();
           setRole(data.role);
           setCurrentAlias(data.alias || "");
+          if (data.role === ROLES.OFFICER) setShiftStart(Date.now());
         }
         setLoading(false);
       } else {

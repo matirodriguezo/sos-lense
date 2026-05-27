@@ -15,6 +15,7 @@ import { auth, db } from "../../firebase/firebaseConfig";
 import { doc, getDoc } from "firebase/firestore";
 import { listenAllActiveIncidents, listenAllCancelled, listenMyCases } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
+import { getShiftStart } from "../../services/userStore";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 const STATUS_CONFIG = {
@@ -39,7 +40,21 @@ const sortByTime = (a, b) => {
   return tB - tA;
 };
 
-const getElapsedTime = (createdAt) => {
+  const formatElapsed = (ms) => {
+    const totalSec = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSec / 3600);
+    const minutes = Math.floor((totalSec % 3600) / 60);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
+  const getShiftTime = () => {
+    const start = getShiftStart();
+    if (!start) return "—";
+    return formatElapsed(Date.now() - start);
+  };
+
+  const getElapsedTime = (createdAt) => {
   if (!createdAt) return "";
   const created = createdAt.toMillis ? createdAt.toMillis() : createdAt;
   const diffMs = Date.now() - created;
@@ -232,7 +247,7 @@ export default function DispatchPanelScreen({ navigation }) {
             <View style={[s.drawerStatsRow, { borderBottomColor: colors.border }]}>
               <View style={[s.drawerStat, { borderRightColor: colors.border }]}><Text style={[s.drawerStatN, { color: colors.textPrimary }]}>7</Text><Text style={[s.drawerStatL, { color: colors.emptyText }]}>Casos Hoy</Text></View>
               <View style={[s.drawerStat, { borderRightColor: colors.border }]}><Text style={[s.drawerStatN, { color: colors.textPrimary }]}>5</Text><Text style={[s.drawerStatL, { color: colors.emptyText }]}>Resueltos</Text></View>
-              <View style={s.drawerStat}><Text style={[s.drawerStatN, { color: colors.textPrimary }]}>6h 24m</Text><Text style={[s.drawerStatL, { color: colors.emptyText }]}>En Turno</Text></View>
+              <View style={s.drawerStat}><Text style={[s.drawerStatN, { color: colors.textPrimary }]}>{getShiftTime()}</Text><Text style={[s.drawerStatL, { color: colors.emptyText }]}>En Turno</Text></View>
             </View>
 
             <View style={s.drawerBody}>
