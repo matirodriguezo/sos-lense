@@ -52,6 +52,11 @@ export default function IncidentManagementScreen({ route, navigation }) {
     enterChat(incidentId);
     const unsubIncident = listenIncidentById(incidentId, (data) => {
       setIncident(data);
+      if (data.officerId && data.officerId !== auth.currentUser.uid) {
+        Alert.alert("Caso ya asignado", `Este caso ya fue tomado por ${data.officerAlias || "otro oficial"}.`);
+        navigation.goBack();
+        return;
+      }
       if (!data.officerId) {
         const officerAlias = getCurrentAlias();
         assignOfficer(incidentId, auth.currentUser.uid, officerAlias);
