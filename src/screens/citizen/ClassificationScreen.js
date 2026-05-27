@@ -8,6 +8,7 @@ import {
   StatusBar,
   Alert,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { doc, updateDoc } from "firebase/firestore";
@@ -29,6 +30,10 @@ export default function ClassificationScreen({ route, navigation }) {
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const insets = useSafeAreaInsets();
+
+  const [loadedCount, setLoadedCount] = useState(0);
+  const numGifs = INCIDENT_OPTIONS.filter((opt) => opt.gifPath).length;
+  const allGifsReady = loadedCount >= numGifs;
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
@@ -76,6 +81,20 @@ export default function ClassificationScreen({ route, navigation }) {
     <SafeAreaView style={[s.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.headerBg} />
 
+      {!allGifsReady && (
+        <View style={{ position: "absolute", opacity: 0 }}>
+          {INCIDENT_OPTIONS.map((item) =>
+            item.gifPath ? (
+              <Image
+                key={`preload-${item.id}`}
+                source={item.gifPath}
+                onLoad={() => setLoadedCount((c) => c + 1)}
+              />
+            ) : null
+          )}
+        </View>
+      )}
+
       {/* Navbar */}
       <View style={[s.navbar, { backgroundColor: colors.headerBg, borderBottomColor: colors.border, paddingTop: 12 + insets.top }]}>
         <TouchableOpacity style={s.closeButton} onPress={confirmCancel}>
@@ -120,11 +139,17 @@ export default function ClassificationScreen({ route, navigation }) {
                   </View>
                 )}
                 {item.gifPath ? (
-                  <Image 
-                    source={item.gifPath}
-                    style={s.gifIcon}
-                    resizeMode="contain"
-                  />
+                  allGifsReady ? (
+                    <Image 
+                      source={item.gifPath}
+                      style={s.gifIcon}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <View style={s.gifIconLoader}>
+                      <ActivityIndicator color={colors.primary} />
+                    </View>
+                  )
                 ) : (
                   <Ionicons 
                     name={item.icon} 
@@ -186,17 +211,21 @@ const makeStyles = (colors) =>
     card: {
       width: "47%", aspectRatio: 1.05,
       borderRadius: 12, justifyContent: "center", alignItems: "center",
-      borderWidth: 1, position: "relative",
+      borderWidth: 1, position: "relative", padding: 10,
       shadowColor: colors.textPrimary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
     },
     checkBadge: {
       position: "absolute", top: 10, right: 10, width: 20, height: 20,
       borderRadius: 10, justifyContent: "center", alignItems: "center",
+      zIndex: 2,
     },
     gifIcon: {
-      width: 50, height: 50, marginBottom: 12,
+      flex: 1, width: "100%", marginBottom: 8,
     },
-    cardLabel: { fontSize: 13, fontWeight: "600", textAlign: "center", paddingHorizontal: 8 },
+    gifIconLoader: {
+      flex: 1, width: "100%", marginBottom: 8, justifyContent: "center", alignItems: "center",
+    },
+    cardLabel: { fontSize: 13, fontWeight: "600", textAlign: "center", paddingHorizontal: 4 },
     
     otherLink: { alignItems: "center", marginTop: 32 },
     otherLinkText: { fontSize: 14, fontWeight: "bold", textDecorationLine: "underline" },
