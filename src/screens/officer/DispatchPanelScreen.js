@@ -9,7 +9,7 @@ import {
   StatusBar,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../../firebase/firebaseConfig";
 import { doc, getDoc } from "firebase/firestore";
@@ -54,6 +54,7 @@ const getElapsedTime = (createdAt) => {
 
 export default function DispatchPanelScreen({ navigation }) {
   const [activeTab, setActiveTab] = useState("activos");
+  const insets = useSafeAreaInsets();
   const [activos, setActivos] = useState([]);
   const [myCases, setMyCases] = useState([]);
   const [cancelados, setCancelados] = useState([]);
@@ -201,7 +202,7 @@ export default function DispatchPanelScreen({ navigation }) {
       {menuVisible && (
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setMenuVisible(false)}>
           <View style={styles.drawerContainer}>
-            <View style={styles.drawerHeader}>
+            <View style={[styles.drawerHeader, { paddingTop: 24 + insets.top }]}>
               <TouchableOpacity onPress={() => setMenuVisible(false)} style={{ alignSelf: 'flex-end' }}>
                 <Ionicons name="close" size={28} color="#FFFFFF" />
               </TouchableOpacity>
@@ -257,7 +258,7 @@ export default function DispatchPanelScreen({ navigation }) {
       )}
 
       {/* Main App */}
-      <View style={styles.navbar}>
+      <View style={[styles.navbar, { paddingTop: 12 + insets.top }]}>
         <TouchableOpacity style={styles.menuBtn} onPress={() => setMenuVisible(true)}>
           <Ionicons name="menu" size={28} color="#FFFFFF" />
         </TouchableOpacity>
@@ -305,7 +306,7 @@ export default function DispatchPanelScreen({ navigation }) {
         data={data}
         keyExtractor={(item) => item.id}
         renderItem={renderCard}
-        contentContainerStyle={data.length === 0 ? styles.emptyContainer : styles.list}
+        contentContainerStyle={data.length === 0 ? [styles.emptyContainer, { paddingBottom: insets.bottom }] : [styles.list, { paddingBottom: insets.bottom }]}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="shield-checkmark-outline" size={60} color="#E0E0E0" />
@@ -354,11 +355,11 @@ const styles = StyleSheet.create({
   logoutText: { fontSize: 16, color: "#D32F2F", fontWeight: "bold", marginLeft: 12 },
 
   navbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#003A20", paddingHorizontal: 16, paddingVertical: 12 },
-  menuBtn: { width: 40, height: 40, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
+  menuBtn: { width: 44, height: 44, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
   navCenter: { alignItems: "center" },
   navTitle: { fontSize: 14, fontWeight: "bold", color: "#FFFFFF" },
   navSub: { fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 },
-  avatarBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#004B2B", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#D4AF37" },
+  avatarBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#004B2B", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#D4AF37" },
 
   dashboardStats: { flexDirection: "row", padding: 16, gap: 16, backgroundColor: "#FFFFFF" },
   statBoxRed: { flex: 1, backgroundColor: "#FFF5F5", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#FFD6D6" },
@@ -390,7 +391,7 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 16, fontWeight: "bold", color: "#666666", marginTop: 12 },
   emptySub: { fontSize: 13, color: "#A0A0A0", marginTop: 8, textAlign: "center" },
 
-  card: { backgroundColor: "#FFFFFF", borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: "#E0E0E0", overflow: "hidden", elevation: 2, shadowColor: "#000", shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.05, shadowRadius: 4 },
+  card: { backgroundColor: "#FFFFFF", borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: "#E0E0E0", elevation: 2, shadowColor: "#000", shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.05, shadowRadius: 4 },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#F0F0F0" },
   cardHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },

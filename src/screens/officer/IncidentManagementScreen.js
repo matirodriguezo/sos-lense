@@ -17,6 +17,8 @@ import {
 import { auth } from "../../firebase/firebaseConfig";
 import { listenIncidentById, listenMessages, sendMessage, addQuickRequest, assignOfficer, closeIncident, sendSystemMessage } from "../../services/incidentService";
 import { getCurrentAlias } from "../../services/userStore";
+import { useNotifications } from "../../context/NotificationContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 const { width, height } = Dimensions.get("window");
@@ -29,6 +31,9 @@ const DISPATCH_OPTIONS = [
 
 export default function IncidentManagementScreen({ route, navigation }) {
   const { incidentId } = route.params;
+  const { enterChat, leaveChat } = useNotifications();
+  const insets = useSafeAreaInsets();
+  const VIDEO_HEIGHT = Math.min(height * 0.28, 240);
   const [incident, setIncident] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -40,6 +45,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
   const intervalRef = useRef(null);
 
   useEffect(() => {
+    enterChat(incidentId);
     const unsubIncident = listenIncidentById(incidentId, (data) => {
       setIncident(data);
       if (!data.officerId) {
@@ -56,14 +62,16 @@ export default function IncidentManagementScreen({ route, navigation }) {
       setElapsed(`${String(Math.floor(diff / 60)).padStart(2, "0")}:${String(diff % 60).padStart(2, "0")}`);
     }, 1000);
 
-    return () => { unsubIncident(); unsubMessages(); if (intervalRef.current) clearInterval(intervalRef.current); };
+    return () => { leaveChat(); unsubIncident(); unsubMessages(); if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [incidentId]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
     const text = input.trim();
     setInput("");
-    try { await sendMessage(incidentId, text, auth.currentUser.uid, "OFFICER"); } catch {}
+    try {
+      await sendMessage(incidentId, text, auth.currentUser.uid, "OFFICER");
+    } catch {}
   };
 
   const handleDispatch = (label) => {
@@ -107,7 +115,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
       <StatusBar barStyle="light-content" backgroundColor="#0B1319" />
 
       {/* Top Bar */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: 12 + insets.top }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#E0E0E0" />
         </TouchableOpacity>
@@ -119,7 +127,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
       </View>
 
       {/* Split Video Layout */}
-      <View style={styles.videoSplitContainer}>
+      <View style={[styles.videoSplitContainer, { height: VIDEO_HEIGHT }]}>
         {/* Citizen Feed */}
         <View style={[styles.videoBox, { backgroundColor: "#3A1A1A", borderColor: "#D32F2F" }]}>
           <View style={styles.videoTopTag}><Text style={styles.videoTopTagText}>● EN VIVO</Text></View>
@@ -170,7 +178,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
       </View>
 
       {/* Finalize Button */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: 16 + insets.bottom }]}>
         <TouchableOpacity style={styles.finalizeBtn} onPress={() => navigation.replace("CloseIncident", { incidentId })}>
           <Text style={styles.finalizeText}>■ Finalizar Procedimiento</Text>
         </TouchableOpacity>
@@ -178,8 +186,8 @@ export default function IncidentManagementScreen({ route, navigation }) {
 
       {/* Chat Bottom Sheet Modal */}
       <Modal visible={showChatModal} transparent animationType="slide">
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-            <View style={styles.chatSheet}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <View style={[styles.chatSheet, { paddingBottom: 20 + insets.bottom }]}>
                 <View style={styles.chatSheetHeader}>
                     <View style={{flexDirection: 'row', alignItems: 'center'}}>
                         <Ionicons name="chatbubble-ellipses-outline" size={20} color="#FFFFFF" style={{marginRight: 8}}/>
@@ -229,7 +237,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0B1319" }, // Dark tech background
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 50, paddingBottom: 16 },
-  backBtn: { width: 40, height: 40, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
+  backBtn: { width: 44, height: 44, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
   headerTitleContainer: { alignItems: "center" },
   headerSub: { color: "#A0A0A0", fontSize: 12, fontWeight: "bold" },
   headerTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "900", letterSpacing: 1 },
@@ -279,6 +287,6 @@ const styles = StyleSheet.create({
   chatTextMine: { color: "#FFFFFF" },
   chatTextOther: { color: "#FFFFFF" },
   inputRow: { flexDirection: "row", gap: 12, marginTop: 16 },
-  chatInput: { flex: 1, backgroundColor: "#0F172A", borderRadius: 8, paddingHorizontal: 16, color: "#FFFFFF", height: 48, borderWidth: 1, borderColor: "#334155" },
+  chatInput: { flex: 1, backgroundColor: "#0F172A", borderRadius: 8, paddingHorizontal: 16, color: "#FFFFFF", height: 48, borderWidth: 1, borderColor: "#334155", textAlignVertical: "center" },
   sendBtn: { width: 48, height: 48, backgroundColor: "#004B2B", borderRadius: 8, justifyContent: "center", alignItems: "center" },
 });

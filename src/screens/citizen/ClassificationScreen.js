@@ -8,14 +8,13 @@ import {
   StatusBar,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase/firebaseConfig";
 import { cancelIncident } from "../../services/incidentService";
 import { Ionicons } from "@expo/vector-icons";
 
-const { width } = Dimensions.get("window");
-const CARD_SIZE = (width - 48 - 16) / 2; // padding 24x2 + gap 16
+// Card sizing uses percentage-based widths for responsiveness
 
 const INCIDENT_OPTIONS = [
   { id: "ACCIDENTE", icon: "car-outline", label: "Accidente de Tránsito" },
@@ -28,6 +27,7 @@ export default function ClassificationScreen({ route, navigation }) {
   const { incidentId } = route.params;
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const classifyAndNavigate = async (id) => {
     setSelected(id);
@@ -75,7 +75,7 @@ export default function ClassificationScreen({ route, navigation }) {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Navbar */}
-      <View style={styles.navbar}>
+      <View style={[styles.navbar, { paddingTop: 12 + insets.top }]}>
         <TouchableOpacity style={styles.closeButton} onPress={confirmCancel}>
           <Ionicons name="close" size={28} color="#1A1A1A" />
         </TouchableOpacity>
@@ -133,15 +133,12 @@ export default function ClassificationScreen({ route, navigation }) {
       </View>
 
       {/* Bottom Fixed Area */}
-      <View style={styles.bottomArea}>
-        <TouchableOpacity 
-          style={[styles.confirmButton, submitting && { opacity: 0.6 }]} 
-          disabled={true} 
-        >
-          <Text style={styles.confirmButtonText}>
-            {submitting ? "Actualizando..." : "Actualizar Reporte"}
-          </Text>
-        </TouchableOpacity>
+      <View style={[styles.bottomArea, { paddingBottom: 20 + insets.bottom }]}>
+        {submitting && (
+          <View style={styles.confirmButton}>
+            <Text style={styles.confirmButtonText}>Actualizando...</Text>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -154,7 +151,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF", paddingHorizontal: 20, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: "#E0E0E0",
   },
-  closeButton: { width: 36, height: 36, justifyContent: "center" },
+  closeButton: { width: 44, height: 44, justifyContent: "center", alignItems: "center" },
   stepText: { fontSize: 16, fontWeight: "bold", color: "#1A1A1A" },
   sosLabel: { fontSize: 16, fontWeight: "900", color: "#004B2B", letterSpacing: 1 },
   
@@ -173,7 +170,7 @@ const styles = StyleSheet.create({
   
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 16 },
   card: {
-    width: CARD_SIZE, height: CARD_SIZE * 0.95, backgroundColor: "#FFFFFF",
+    width: "47%", aspectRatio: 1.05, backgroundColor: "#FFFFFF",
     borderRadius: 12, justifyContent: "center", alignItems: "center",
     borderWidth: 1, borderColor: "#E0E0E0", position: "relative",
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,

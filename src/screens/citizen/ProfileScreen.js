@@ -1,19 +1,24 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
+  ScrollView,
   StyleSheet,
   Alert,
+  Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../../firebase/firebaseConfig";
 import { listenCitizenHistory } from "../../services/incidentService";
-import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
+import { useTheme } from "../../context/ThemeContext";
+import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function ProfileScreen({ navigation }) {
+  const { colors, isDark, toggleTheme } = useTheme();
   const [userData, setUserData] = useState(null);
   const [incidentCount, setIncidentCount] = useState(0);
 
@@ -44,128 +49,133 @@ export default function ProfileScreen({ navigation }) {
     ]);
   };
 
+  const s = useMemo(() => makeStyles(colors), [colors]);
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.navbar}>
+    <SafeAreaView style={[s.safeArea, { backgroundColor: colors.background }]}>
+      <View style={[s.navbar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={{ width: 36 }} />
-        <Text style={styles.navTitle}>Mi Perfil</Text>
+        <Text style={[s.navTitle, { color: colors.textPrimary }]}>Mi Perfil</Text>
         <View style={{ width: 36 }} />
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.avatarSection}>
-          <View style={styles.avatarLarge}>
-            <Text style={styles.avatarLargeText}>
+      <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={s.avatarSection}>
+          <View style={[s.avatarLarge, { backgroundColor: colors.primary }]}>
+            <Text style={[s.avatarLargeText, { color: colors.surface }]}>
               {auth.currentUser?.email?.charAt(0).toUpperCase() || "U"}
             </Text>
           </View>
-          <Text style={styles.userName}>{userData?.alias || "Ciudadano"}</Text>
-          <Text style={styles.userEmail}>{auth.currentUser?.email}</Text>
+          <Text style={[s.userName, { color: colors.textPrimary }]}>{userData?.alias || "Ciudadano"}</Text>
+          <Text style={[s.userEmail, { color: colors.textSecondary }]}>{auth.currentUser?.email}</Text>
         </View>
 
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{incidentCount}</Text>
-            <Text style={styles.statLabel}>Incidentes</Text>
+        <View style={[s.themeRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons name={isDark ? "moon" : "sunny"} size={20} color={colors.textPrimary} />
+          <Text style={[s.themeLabel, { color: colors.textPrimary }]}>Modo oscuro</Text>
+          <Switch value={isDark} onValueChange={toggleTheme} trackColor={{ false: "#ccc", true: colors.primary }} thumbColor="#fff" />
+        </View>
+
+        <View style={s.statsRow}>
+          <View style={[s.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[s.statNumber, { color: colors.primary }]}>{incidentCount}</Text>
+            <Text style={[s.statLabel, { color: colors.textSecondary }]}>Incidentes</Text>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>
-              {incidentCount > 0
-                ? Math.round((incidentCount / incidentCount) * 100)
-                : 0}%
+          <View style={[s.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[s.statNumber, { color: colors.primary }]}>
+              {incidentCount > 0 ? 100 : 0}%
             </Text>
-            <Text style={styles.statLabel}>Gestionados</Text>
+            <Text style={[s.statLabel, { color: colors.textSecondary }]}>Gestionados</Text>
           </View>
         </View>
 
-        <View style={[styles.infoCard, SHADOWS.card]}>
-          <Text style={styles.infoTitle}>Información de la cuenta</Text>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Nombre / Alias</Text>
-            <Text style={styles.infoValue}>{userData?.alias || "—"}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>RUT</Text>
-            <Text style={styles.infoValue}>{userData?.rut || "—"}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Rol</Text>
-            <Text style={styles.infoValue}>Ciudadano</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue}>{auth.currentUser?.email}</Text>
-          </View>
+        <View style={[s.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[s.infoTitle, { color: colors.textPrimary }]}>Información de la cuenta</Text>
+          {[
+            ["Nombre / Alias", userData?.alias || "—"],
+            ["RUT", userData?.rut || "—"],
+            ["Rol", "Ciudadano"],
+            ["Email", auth.currentUser?.email],
+          ].map(([label, value], i) => (
+            <View key={label} style={[s.infoRow, { borderTopColor: colors.border }]}>
+              <Text style={[s.infoLabel, { color: colors.textSecondary }]}>{label}</Text>
+              <Text style={[s.infoValue, { color: colors.textPrimary }]}>{value}</Text>
+            </View>
+          ))}
         </View>
 
         <TouchableOpacity
-          style={styles.historyBtn}
+          style={[s.historyBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => navigation.navigate("Historial")}
         >
-          <Text style={styles.historyBtnIcon}>📋</Text>
-          <Text style={styles.historyBtnText}>Ver historial de incidentes</Text>
-          <Text style={styles.historyBtnArrow}>→</Text>
+          <Text style={s.historyBtnIcon}>📋</Text>
+          <Text style={[s.historyBtnText, { color: colors.textPrimary }]}>Ver historial de incidentes</Text>
+          <Text style={[s.historyBtnArrow, { color: colors.textSecondary }]}>→</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Text style={styles.logoutIcon}>🚪</Text>
-          <Text style={styles.logoutText}>Cerrar Sesión</Text>
+        <TouchableOpacity
+          style={[s.logoutBtn, { backgroundColor: colors.surface, borderColor: colors.danger }]}
+          onPress={handleLogout}
+        >
+          <Text style={s.logoutIcon}>🚪</Text>
+          <Text style={[s.logoutText, { color: colors.danger }]}>Cerrar Sesión</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.background },
-  navbar: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    backgroundColor: COLORS.surface, paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md - 4, borderBottomWidth: 1, borderBottomColor: COLORS.border,
-  },
-
-  navTitle: { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, color: COLORS.textPrimary },
-  content: { flex: 1, paddingHorizontal: SPACING.lg, paddingTop: SPACING.lg },
-  avatarSection: { alignItems: "center", marginBottom: SPACING.xl },
-  avatarLarge: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: COLORS.primary, justifyContent: "center", alignItems: "center",
-    marginBottom: SPACING.md,
-  },
-  avatarLargeText: { color: COLORS.surface, fontSize: 32, fontWeight: FONT_WEIGHT.bold },
-  userName: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: COLORS.textPrimary },
-  userEmail: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, marginTop: SPACING.xs },
-  statsRow: { flexDirection: "row", gap: SPACING.md, marginBottom: SPACING.lg },
-  statCard: {
-    flex: 1, backgroundColor: COLORS.surface, borderRadius: RADIUS.md,
-    padding: SPACING.md, alignItems: "center", borderWidth: 1, borderColor: COLORS.border,
-  },
-  statNumber: { fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.bold, color: COLORS.primary },
-  statLabel: { fontSize: FONT_SIZE.xxs, color: COLORS.textSecondary, marginTop: SPACING.xs },
-  infoCard: {
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.md,
-    padding: SPACING.lg, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACING.md,
-  },
-  infoTitle: { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, color: COLORS.textPrimary, marginBottom: SPACING.md },
-  infoRow: {
-    flexDirection: "row", justifyContent: "space-between",
-    paddingVertical: SPACING.sm, borderTopWidth: 1, borderTopColor: COLORS.border,
-  },
-  infoLabel: { fontSize: FONT_SIZE.base, color: COLORS.textSecondary },
-  infoValue: { fontSize: FONT_SIZE.base, color: COLORS.textPrimary, fontWeight: FONT_WEIGHT.semiBold },
-  historyBtn: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.md,
-    padding: SPACING.md, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACING.md,
-  },
-  historyBtnIcon: { fontSize: 20, marginRight: SPACING.md },
-  historyBtnText: { flex: 1, fontSize: FONT_SIZE.base, color: COLORS.textPrimary, fontWeight: FONT_WEIGHT.medium },
-  historyBtnArrow: { fontSize: FONT_SIZE.lg, color: COLORS.textSecondary },
-  logoutBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.md,
-    padding: SPACING.md, borderWidth: 1, borderColor: COLORS.danger, gap: SPACING.sm,
-  },
-  logoutIcon: { fontSize: 18 },
-  logoutText: { fontSize: FONT_SIZE.base, color: COLORS.danger, fontWeight: FONT_WEIGHT.semiBold },
-});
+const makeStyles = (colors) =>
+  StyleSheet.create({
+    safeArea: { flex: 1 },
+    navbar: {
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      paddingHorizontal: SPACING.md, paddingVertical: SPACING.md - 4, borderBottomWidth: 1,
+    },
+    navTitle: { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
+    scrollContent: { flexGrow: 1, paddingHorizontal: SPACING.lg, paddingTop: SPACING.lg, paddingBottom: SPACING.xl },
+    avatarSection: { alignItems: "center", marginBottom: SPACING.xl },
+    avatarLarge: {
+      width: 80, height: 80, borderRadius: 40,
+      justifyContent: "center", alignItems: "center", marginBottom: SPACING.md,
+    },
+    avatarLargeText: { fontSize: 32, fontWeight: FONT_WEIGHT.bold },
+    userName: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold },
+    userEmail: { fontSize: FONT_SIZE.sm, marginTop: SPACING.xs },
+    themeRow: {
+      flexDirection: "row", alignItems: "center", borderRadius: RADIUS.md,
+      padding: SPACING.md, borderWidth: 1, marginBottom: SPACING.md, gap: SPACING.sm,
+    },
+    themeLabel: { flex: 1, fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.medium },
+    statsRow: { flexDirection: "row", gap: SPACING.md, marginBottom: SPACING.lg },
+    statCard: {
+      flex: 1, borderRadius: RADIUS.md,
+      padding: SPACING.md, alignItems: "center", borderWidth: 1,
+    },
+    statNumber: { fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.bold },
+    statLabel: { fontSize: FONT_SIZE.xxs, marginTop: SPACING.xs },
+    infoCard: {
+      borderRadius: RADIUS.md, padding: SPACING.lg,
+      borderWidth: 1, marginBottom: SPACING.md,
+    },
+    infoTitle: { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING.md },
+    infoRow: {
+      flexDirection: "row", justifyContent: "space-between",
+      paddingVertical: SPACING.sm, borderTopWidth: 1,
+    },
+    infoLabel: { fontSize: FONT_SIZE.base },
+    infoValue: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semiBold },
+    historyBtn: {
+      flexDirection: "row", alignItems: "center",
+      borderRadius: RADIUS.md, padding: SPACING.md, borderWidth: 1, marginBottom: SPACING.md,
+    },
+    historyBtnIcon: { fontSize: 20, marginRight: SPACING.md },
+    historyBtnText: { flex: 1, fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.medium },
+    historyBtnArrow: { fontSize: FONT_SIZE.lg },
+    logoutBtn: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
+      borderRadius: RADIUS.md, padding: SPACING.md, borderWidth: 1, gap: SPACING.sm,
+    },
+    logoutIcon: { fontSize: 18 },
+    logoutText: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semiBold },
+  });

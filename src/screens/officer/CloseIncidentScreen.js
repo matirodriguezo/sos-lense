@@ -8,10 +8,14 @@ import {
   Alert,
   ActivityIndicator,
   StatusBar,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { listenIncidentById, closeIncident, sendMessage } from "../../services/incidentService";
 import { auth } from "../../firebase/firebaseConfig";
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function CloseIncidentScreen({ route, navigation }) {
@@ -53,7 +57,9 @@ export default function CloseIncidentScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#003A20" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.navbarBg} />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
       
       {/* Header Institucional */}
       <View style={styles.header}>
@@ -65,7 +71,6 @@ export default function CloseIncidentScreen({ route, navigation }) {
       </View>
       <View style={styles.headerFooter}><Text style={styles.headerFooterText}>Complete el reporte para archivar el caso</Text></View>
 
-      <View style={styles.content}>
         {/* Resumen */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>RESUMEN DEL CASO</Text>
@@ -93,7 +98,7 @@ export default function CloseIncidentScreen({ route, navigation }) {
                 value={reason}
                 onChangeText={setReason}
                 placeholder="Ej: Resuelto, Derivado a unidad, Falsa alarma..."
-                placeholderTextColor="#A0A0A0"
+                placeholderTextColor={COLORS.textSecondary}
             />
         </View>
 
@@ -104,15 +109,15 @@ export default function CloseIncidentScreen({ route, navigation }) {
                 value={observations}
                 onChangeText={setObservations}
                 placeholder="Describa el desarrollo del procedimiento, medidas tomadas y resultado final..."
-                placeholderTextColor="#A0A0A0"
+                placeholderTextColor={COLORS.textSecondary}
                 multiline
                 textAlignVertical="top"
             />
         </View>
 
         {/* Warning & Submit */}
-        <View style={{marginTop: 'auto', marginBottom: 20}}>
-            <TouchableOpacity style={[styles.submitBtn, loading && {opacity: 0.7}]} onPress={handleClose} disabled={loading}>
+        <View style={styles.footerArea}>
+            <TouchableOpacity style={[styles.submitBtn, loading && {opacity: 0.5}]} onPress={handleClose} disabled={loading} activeOpacity={0.7}>
                 <Text style={styles.submitBtnText}>{loading ? "Archivando..." : "Guardar y Cerrar Caso"}</Text>
             </TouchableOpacity>
             
@@ -121,40 +126,43 @@ export default function CloseIncidentScreen({ route, navigation }) {
                 <Text style={styles.warningText}>Esta acción es irreversible. El caso será archivado y enviado al registro institucional.</Text>
             </View>
         </View>
-      </View>
+      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F4F6F8" },
-  header: { flexDirection: "row", alignItems: "center", backgroundColor: "#003A20", padding: 20, paddingTop: 30 },
-  headerIconBox: { width: 44, height: 44, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", marginRight: 16 },
-  headerSub: { color: "#A0A0A0", fontSize: 12, fontWeight: "bold" },
-  headerTitle: { color: "#FFFFFF", fontSize: 22, fontWeight: "900" },
-  headerFooter: { backgroundColor: "#003A20", paddingHorizontal: 20, paddingBottom: 20 },
-  headerFooterText: { color: "#4CAF50", fontSize: 13, fontWeight: "600" },
+  safeArea: { flex: 1, backgroundColor: COLORS.background },
+  flex: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xl },
+  header: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.navbarBg, padding: SPACING.lg, paddingTop: 30 },
+  headerIconBox: { width: 44, height: 44, borderRadius: RADIUS.sm, backgroundColor: COLORS.whiteTranslucent, justifyContent: "center", alignItems: "center", marginRight: SPACING.md },
+  headerSub: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
+  headerTitle: { color: "#FFFFFF", fontSize: FONT_SIZE.xl, fontWeight: "900" },
+  headerTexts: { flex: 1 },
+  headerFooter: { backgroundColor: COLORS.navbarBg, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg },
+  headerFooterText: { color: COLORS.success, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semiBold },
   
-  content: { flex: 1, padding: 20 },
-  
-  card: { backgroundColor: "#FFFFFF", borderRadius: 16, padding: 20, marginBottom: 24, elevation: 2, shadowColor: "#000", shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.05, shadowRadius: 4 },
-  cardTitle: { fontSize: 12, fontWeight: "bold", color: "#A0A0A0", letterSpacing: 1, marginBottom: 16 },
-  grid: { flexDirection: "row", flexWrap: "wrap", rowGap: 20 },
+  card: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.lg, ...SHADOWS.card },
+  cardTitle: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, color: COLORS.textSecondary, letterSpacing: 1, marginBottom: SPACING.md },
+  grid: { flexDirection: "row", flexWrap: "wrap", rowGap: SPACING.lg },
   gridItem: { width: "50%" },
-  gridLabel: { fontSize: 11, color: "#666666", marginBottom: 4 },
-  gridValue: { fontSize: 14, fontWeight: "bold", color: "#1A1A1A" },
+  gridLabel: { fontSize: FONT_SIZE.xxs, color: COLORS.textSecondary, marginBottom: SPACING.xxs },
+  gridValue: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: COLORS.textPrimary },
   row: { flexDirection: "row", alignItems: "center" },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#D32F2F", marginRight: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.danger, marginRight: SPACING.xs },
   
-  inputLabel: { fontSize: 12, fontWeight: "bold", color: "#1A1A1A", letterSpacing: 0.5, marginBottom: 8 },
-  pickerFake: { backgroundColor: "#FFFFFF", borderRadius: 8, borderWidth: 1, borderColor: "#E0E0E0", paddingHorizontal: 16, height: 50, justifyContent: "center", marginBottom: 20 },
-  inputText: { fontSize: 14, color: "#1A1A1A" },
-  textAreaBox: { backgroundColor: "#FFFFFF", borderRadius: 8, borderWidth: 1, borderColor: "#E0E0E0", padding: 16, height: 120 },
-  textArea: { flex: 1, fontSize: 14, color: "#1A1A1A", lineHeight: 20 },
+  inputLabel: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, color: COLORS.textPrimary, letterSpacing: 0.5, marginBottom: SPACING.sm },
+  pickerFake: { backgroundColor: COLORS.inputBg, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: SPACING.md, height: 50, justifyContent: "center", marginBottom: SPACING.lg },
+  inputText: { fontSize: FONT_SIZE.base, color: COLORS.textPrimary, includeFontPadding: false },
+  textAreaBox: { backgroundColor: COLORS.inputBg, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.border, padding: SPACING.md, height: 120 },
+  textArea: { flex: 1, fontSize: FONT_SIZE.base, color: COLORS.textPrimary, lineHeight: 20 },
   
-  submitBtn: { backgroundColor: "#004B2B", borderRadius: 12, height: 56, justifyContent: "center", alignItems: "center", marginBottom: 16 },
-  submitBtnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" },
+  footerArea: { marginTop: "auto", marginBottom: SPACING.lg },
+  submitBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, height: 56, justifyContent: "center", alignItems: "center", marginBottom: SPACING.md },
+  submitBtnText: { color: "#FFFFFF", fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
   
-  warningBox: { flexDirection: "row", backgroundColor: "#FFFBEB", borderRadius: 8, padding: 16, borderWidth: 1, borderColor: "#FEF08A", alignItems: "center" },
-  warningText: { flex: 1, fontSize: 12, color: "#B45309", marginLeft: 12, lineHeight: 16 },
+  warningBox: { flexDirection: "row", backgroundColor: "#FFFBEB", borderRadius: RADIUS.sm, padding: SPACING.md, borderWidth: 1, borderColor: "#FEF08A", alignItems: "center" },
+  warningText: { flex: 1, fontSize: FONT_SIZE.xs, color: "#B45309", marginLeft: SPACING.sm, lineHeight: 16 },
 });

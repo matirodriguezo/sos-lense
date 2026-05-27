@@ -4,14 +4,14 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase/firebaseConfig";
 import { ROLES } from "../constants/roles";
-import { COLORS } from "../constants/theme";
+import { useTheme } from "../context/ThemeContext";
 import { setCurrentAlias } from "../services/userStore";
-import { registerForPushNotifications } from "../services/notificationService";
 import AuthStack from "./AuthStack";
 import CitizenStack from "./CitizenStack";
 import OfficerTabs from "./OfficerTabs";
 
 export default function AppNavigator() {
+  const { colors } = useTheme();
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -38,7 +38,6 @@ export default function AppNavigator() {
           setRole(data.role);
           setCurrentAlias(data.alias || "");
         }
-        registerForPushNotifications(firebaseUser.uid);
         setLoading(false);
       } else {
         setUser(null);
@@ -52,8 +51,8 @@ export default function AppNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: COLORS.surface }}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }

@@ -1,13 +1,15 @@
-import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import { useState, useEffect, useMemo } from "react";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../../firebase/firebaseConfig";
 import { listenMyCases } from "../../services/incidentService";
+import { useTheme } from "../../context/ThemeContext";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function ProfileScreen({ navigation }) {
+  const { colors, isDark, toggleTheme } = useTheme();
   const [userData, setUserData] = useState(null);
   const [caseCount, setCaseCount] = useState(0);
 
@@ -29,82 +31,99 @@ export default function ProfileScreen({ navigation }) {
     ]);
   };
 
+  const s = useMemo(() => makeStyles(colors), [colors]);
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}><Ionicons name="menu" size={28} color="#004B2B" /></TouchableOpacity>
-        <Text style={styles.headerTitle}>S.O.S. CARABINEROS</Text>
-        <View style={styles.miniAvatar}><MaterialCommunityIcons name="police-badge" size={16} color="#D4AF37" /></View>
+    <SafeAreaView style={[s.safeArea, { backgroundColor: colors.background }]}>
+      <View style={[s.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="menu" size={28} color={colors.primary} />
+        </TouchableOpacity>
+        <Text style={[s.headerTitle, { color: colors.primary }]}>S.O.S. CARABINEROS</Text>
+        <View style={[s.miniAvatar, { backgroundColor: colors.drawerHeaderBg }]}>
+          <MaterialCommunityIcons name="police-badge" size={16} color="#D4AF37" />
+        </View>
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.avatarSection}>
-          <View style={styles.avatarLarge}>
+      <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={s.avatarSection}>
+          <View style={[s.avatarLarge, { backgroundColor: colors.drawerHeaderBg, borderColor: colors.primary }]}>
             <MaterialCommunityIcons name="police-badge" size={48} color="#D4AF37" />
           </View>
-          <View style={styles.serviceBadge}><Text style={styles.serviceBadgeText}>● En Servicio</Text></View>
-          <Text style={styles.userName}>{userData?.alias || "Operador"}</Text>
-          {userData?.rut && <Text style={styles.userRank}>Placa: {userData.rut}</Text>}
+          <View style={[s.serviceBadge, { borderColor: colors.background }]}><Text style={s.serviceBadgeText}>● En Servicio</Text></View>
+          <Text style={[s.userName, { color: colors.textPrimary }]}>{userData?.alias || "Operador"}</Text>
+          {userData?.rut && <Text style={[s.userRank, { color: colors.primary }]}>Placa: {userData.rut}</Text>}
         </View>
 
-        <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.editBtn}><Ionicons name="pencil" size={14} color="#FFF"/> <Text style={styles.editBtnText}>Editar Perfil</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.sheetBtn}><Ionicons name="document-text-outline" size={14} color="#004B2B"/> <Text style={styles.sheetBtnText}>Hoja de Vida</Text></TouchableOpacity>
+        <View style={[s.themeRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons name={isDark ? "moon" : "sunny"} size={20} color={colors.textPrimary} />
+          <Text style={[s.themeLabel, { color: colors.textPrimary }]}>Modo oscuro</Text>
+          <Switch value={isDark} onValueChange={toggleTheme} trackColor={{ false: "#ccc", true: colors.primary }} thumbColor="#fff" />
         </View>
 
-        <View style={styles.dataCard}>
-            <View style={styles.dataHeader}><MaterialCommunityIcons name="badge-account-outline" size={20} color="#A0A0A0"/> <Text style={styles.dataTitle}>NÚMERO DE PLACA / RUT</Text></View>
-            <Text style={styles.dataValueBig}>{userData?.rut || "12.345.678-9"}</Text>
-            <Text style={styles.dataSub}>Credencial Validada</Text>
+        <View style={[s.dataCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={s.dataHeader}>
+            <MaterialCommunityIcons name="badge-account-outline" size={20} color={colors.textSecondary} />
+            <Text style={[s.dataTitle, { color: colors.textSecondary }]}>NÚMERO DE PLACA / RUT</Text>
+          </View>
+          <Text style={[s.dataValueBig, { color: colors.textPrimary }]}>{userData?.rut || "—"}</Text>
+          <Text style={[s.dataSub, { color: colors.textSecondary }]}>Credencial Validada</Text>
         </View>
 
-        <View style={styles.dataCard}>
-            <View style={styles.dataHeader}><Ionicons name="mail-outline" size={20} color="#A0A0A0"/> <Text style={styles.dataTitle}>EMAIL INSTITUCIONAL</Text></View>
-            <Text style={styles.dataValue}>{auth.currentUser?.email || "—"}</Text>
+        <View style={[s.dataCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={s.dataHeader}>
+            <Ionicons name="mail-outline" size={20} color={colors.textSecondary} />
+            <Text style={[s.dataTitle, { color: colors.textSecondary }]}>EMAIL INSTITUCIONAL</Text>
+          </View>
+          <Text style={[s.dataValue, { color: colors.textPrimary }]}>{auth.currentUser?.email || "—"}</Text>
         </View>
 
-        <View style={styles.dataCard}>
-            <View style={styles.dataHeader}><Ionicons name="shield-checkmark-outline" size={20} color="#A0A0A0"/> <Text style={styles.dataTitle}>UNIDAD ASIGNADA</Text></View>
-            <Text style={styles.dataValue}>Central de Comunicaciones (CENCO)</Text>
-            <Text style={styles.dataSub}>Sector Sur, Región Metropolitana</Text>
+        <View style={[s.dataCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={s.dataHeader}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={colors.textSecondary} />
+            <Text style={[s.dataTitle, { color: colors.textSecondary }]}>UNIDAD ASIGNADA</Text>
+          </View>
+          <Text style={[s.dataValue, { color: colors.textPrimary }]}>Central de Comunicaciones (CENCO)</Text>
+          <Text style={[s.dataSub, { color: colors.textSecondary }]}>Sector Sur, Región Metropolitana</Text>
         </View>
-        
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#D32F2F" />
-          <Text style={styles.logoutText}>Finalizar Turno</Text>
+
+        <TouchableOpacity style={[s.logoutBtn, { backgroundColor: colors.surface, borderColor: colors.badgeRed }]} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={20} color={colors.danger} />
+          <Text style={[s.logoutText, { color: colors.danger }]}>Finalizar Turno</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F8F9FA" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, backgroundColor: "#FFF", borderBottomWidth: 1, borderBottomColor: "#E0E0E0" },
-  headerTitle: { color: "#004B2B", fontSize: 16, fontWeight: "900", letterSpacing: 1 },
-  miniAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: "#003A20", justifyContent: "center", alignItems: "center" },
-  
-  content: { flex: 1, padding: 24 },
-  avatarSection: { alignItems: "center", marginBottom: 24 },
-  avatarLarge: { width: 100, height: 100, borderRadius: 50, backgroundColor: "#003A20", justifyContent: "center", alignItems: "center", borderWidth: 3, borderColor: "#004B2B" },
-  serviceBadge: { backgroundColor: "#4CAF50", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginTop: -12, borderWidth: 2, borderColor: "#F8F9FA" },
-  serviceBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "bold" },
-  userName: { fontSize: 22, fontWeight: "bold", color: "#1A1A1A", marginTop: 12 },
-  userRank: { fontSize: 14, color: "#004B2B", fontWeight: "600", marginTop: 4 },
-  
-  actionRow: { flexDirection: "row", gap: 12, marginBottom: 32 },
-  editBtn: { flex: 1, flexDirection: "row", backgroundColor: "#004B2B", paddingVertical: 12, borderRadius: 8, justifyContent: "center", alignItems: "center", gap: 6 },
-  editBtnText: { color: "#FFF", fontSize: 12, fontWeight: "bold" },
-  sheetBtn: { flex: 1, flexDirection: "row", backgroundColor: "#FFF", paddingVertical: 12, borderRadius: 8, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#E0E0E0", gap: 6 },
-  sheetBtnText: { color: "#004B2B", fontSize: 12, fontWeight: "bold" },
+const makeStyles = (colors) =>
+  StyleSheet.create({
+    safeArea: { flex: 1 },
+    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, borderBottomWidth: 1 },
+    headerTitle: { fontSize: 16, fontWeight: "900", letterSpacing: 1 },
+    miniAvatar: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center" },
 
-  dataCard: { backgroundColor: "#FFF", padding: 20, borderRadius: 12, borderWidth: 1, borderColor: "#E0E0E0", marginBottom: 16 },
-  dataHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
-  dataTitle: { fontSize: 11, color: "#666", fontWeight: "bold", letterSpacing: 1 },
-  dataValueBig: { fontSize: 28, fontWeight: "900", color: "#1A1A1A" },
-  dataValue: { fontSize: 18, fontWeight: "bold", color: "#1A1A1A" },
-  dataSub: { fontSize: 12, color: "#A0A0A0", marginTop: 4 },
+    scrollContent: { flexGrow: 1, padding: 24, paddingBottom: 40 },
+    avatarSection: { alignItems: "center", marginBottom: 24 },
+    avatarLarge: { width: 100, height: 100, borderRadius: 50, justifyContent: "center", alignItems: "center", borderWidth: 3 },
+    serviceBadge: { backgroundColor: "#4CAF50", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginTop: -12, borderWidth: 2 },
+    serviceBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "bold" },
+    userName: { fontSize: 22, fontWeight: "bold", marginTop: 12 },
+    userRank: { fontSize: 14, fontWeight: "600", marginTop: 4 },
 
-  logoutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: "auto", padding: 16, borderRadius: 12, backgroundColor: "#FFF0F0", borderWidth: 1, borderColor: "#FFD6D6", gap: 8 },
-  logoutText: { color: "#D32F2F", fontSize: 14, fontWeight: "bold" },
-});
+    themeRow: {
+      flexDirection: "row", alignItems: "center", borderRadius: 12,
+      padding: 16, borderWidth: 1, marginBottom: 16, gap: 8,
+    },
+    themeLabel: { flex: 1, fontSize: 14, fontWeight: "500" },
+
+    dataCard: { padding: 20, borderRadius: 12, borderWidth: 1, marginBottom: 16 },
+    dataHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+    dataTitle: { fontSize: 11, fontWeight: "bold", letterSpacing: 1 },
+    dataValueBig: { fontSize: 28, fontWeight: "900" },
+    dataValue: { fontSize: 18, fontWeight: "bold" },
+    dataSub: { fontSize: 12, marginTop: 4 },
+
+    logoutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: "auto", padding: 16, borderRadius: 12, borderWidth: 1, gap: 8 },
+    logoutText: { fontSize: 14, fontWeight: "bold" },
+  });

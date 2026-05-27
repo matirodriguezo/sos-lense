@@ -69,8 +69,8 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#003A20" },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 16 },
-  backBtn: { width: 40, height: 40, justifyContent: "center" },
-  layerBtn: { width: 40, height: 40, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 8, justifyContent: "center", alignItems: "center" },
+  backBtn: { width: 44, height: 44, justifyContent: "center", alignItems: "center" },
+  layerBtn: { width: 44, height: 44, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 8, justifyContent: "center", alignItems: "center" },
   headerTitle: { color: "#D4AF37", fontSize: 16, fontWeight: "900", letterSpacing: 1 },
   headerSub: { color: "#A0A0A0", fontSize: 11, marginTop: 2 },
   

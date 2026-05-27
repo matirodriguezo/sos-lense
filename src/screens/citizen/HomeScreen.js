@@ -11,7 +11,7 @@ import {
   StatusBar,
   FlatList,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { signOut } from "firebase/auth";
 import * as Location from "expo-location";
 import { auth } from "../../firebase/firebaseConfig";
@@ -20,11 +20,12 @@ import { db } from "../../firebase/firebaseConfig";
 import { triggerSOS, listenCitizenHistory } from "../../services/incidentService";
 import { getCurrentAlias } from "../../services/userStore";
 import { INCIDENT_STATUS } from "../../constants/roles";
+import { useNotifications } from "../../context/NotificationContext";
 import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
-const { width, height } = Dimensions.get("window");
-const CARD_WIDTH = width - SPACING.lg * 2;
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const SOS_SIZE = Math.min(SCREEN_WIDTH * 0.42, 200);
 const HISTORY_PREVIEW_COUNT = 3;
 
 const TYPE_ICONS = {
@@ -42,10 +43,12 @@ export default function HomeScreen({ navigation }) {
   const [lastIncidents, setLastIncidents] = useState([]);
   const [userData, setUserData] = useState(null);
   const [activeIncident, setActiveIncident] = useState(null);
+  const { unreadCount } = useNotifications();
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const pressTimer = useRef(null);
   const pressInterval = useRef(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -195,7 +198,7 @@ export default function HomeScreen({ navigation }) {
       {menuVisible && (
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setMenuVisible(false)}>
           <View style={styles.drawerContainer}>
-            <View style={styles.drawerHeader}>
+            <View style={[styles.drawerHeader, { paddingTop: 24 + insets.top }]}>
               <View style={styles.drawerAvatar}>
                 <Ionicons name="person-outline" size={32} color="#004B2B" />
               </View>
@@ -233,12 +236,12 @@ export default function HomeScreen({ navigation }) {
       )}
 
       {/* Navbar */}
-      <View style={styles.navbar}>
-        <TouchableOpacity onPress={() => setMenuVisible(true)}>
-          <Ionicons name="menu" size={30} color="#1A1A1A" />
+      <View style={[styles.navbar, { paddingTop: 12 + insets.top }]}>
+        <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.menuBtn}>
+          <Ionicons name="menu" size={28} color="#1A1A1A" />
         </TouchableOpacity>
         <Text style={styles.navTitle}>S.O.S. CARABINEROS</Text>
-        <TouchableOpacity style={styles.avatarButton} onPress={() => navigation.navigate("Perfil")}>
+        <TouchableOpacity style={styles.avatarButton} onPress={() => navigation.navigate("Perfil")} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
           <Ionicons name="person-outline" size={18} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
@@ -266,6 +269,11 @@ export default function HomeScreen({ navigation }) {
               <Text style={styles.activeCallTitle}>Llamada activa</Text>
               <Text style={styles.activeCallSub}>Presiona para reingresar</Text>
             </View>
+            {unreadCount > 0 && (
+              <View style={styles.activeCallBadge}>
+                <Text style={styles.activeCallBadgeText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
+              </View>
+            )}
             <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         )}
@@ -274,7 +282,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.sosSection}>
           <Animated.View style={[{ transform: [{ scale: scaleAnim }] }]}>
             <TouchableOpacity
-              style={[styles.sosButton, loading && { opacity: 0.7 }]}
+              style={[styles.sosButton, { width: SOS_SIZE, height: SOS_SIZE, borderRadius: SOS_SIZE / 2 }, loading && { opacity: 0.7 }]}
               onPressIn={startSOSPress}
               onPressOut={cancelSOSPress}
               disabled={loading}
@@ -298,8 +306,13 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       {/* Bottom Bar */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={[styles.denunciaButton, loading && { opacity: 0.6 }]} onPress={handleDenuncia} disabled={loading}>
+      <View style={[styles.bottomBar, { paddingBottom: 20 + insets.bottom }]}>
+        <TouchableOpacity
+          style={[styles.denunciaButton, loading && { opacity: 0.5 }]}
+          onPress={handleDenuncia}
+          disabled={loading}
+          activeOpacity={0.7}
+        >
           <Ionicons name="camera-outline" size={24} color="#FFFFFF" />
           <Text style={styles.denunciaText}>Botón para denuncias</Text>
         </TouchableOpacity>
@@ -312,8 +325,8 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#F8F9FA" },
   // Drawer
   overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 100 },
-  drawerContainer: { width: width * 0.75, height: "100%", backgroundColor: "#FFFFFF" },
-  drawerHeader: { backgroundColor: "#004B2B", paddingVertical: 40, paddingHorizontal: 24, paddingTop: 60 },
+  drawerContainer: { width: SCREEN_WIDTH * 0.75, height: "100%", backgroundColor: "#FFFFFF" },
+  drawerHeader: { backgroundColor: "#004B2B", paddingVertical: 24, paddingHorizontal: 24 },
   drawerAvatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: "#E6F0EC", justifyContent: "center", alignItems: "center", marginBottom: 12 },
   drawerName: { color: "#FFFFFF", fontSize: 20, fontWeight: "bold" },
   drawerRut: { color: "#E0E0E0", fontSize: 13, marginTop: 4 },
@@ -325,9 +338,10 @@ const styles = StyleSheet.create({
   logoutText: { fontSize: 16, color: "#D32F2F", marginLeft: 16, fontWeight: "600" },
   
   // Navbar
-  navbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#FFFFFF", paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#E0E0E0" },
-  navTitle: { fontSize: 16, fontWeight: "bold", color: "#004B2B", letterSpacing: 1 },
-  avatarButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: "#004B2B", justifyContent: "center", alignItems: "center" },
+  navbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.headerBg, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  navTitle: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: COLORS.primary, letterSpacing: 1 },
+  menuBtn: { width: 44, height: 44, justifyContent: "center", alignItems: "center" },
+  avatarButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.primary, justifyContent: "center", alignItems: "center" },
   
   content: { flex: 1, paddingHorizontal: 24, alignItems: "center" },
   lenseCard: { width: "100%", height: 180, borderRadius: 16, backgroundColor: "#151F1A", marginTop: 24, justifyContent: "center", alignItems: "center", position: "relative" },
@@ -344,15 +358,17 @@ const styles = StyleSheet.create({
   activeCallInfo: { flex: 1 },
   activeCallTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" },
   activeCallSub: { color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 2 },
+  activeCallBadge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: "#D32F2F", justifyContent: "center", alignItems: "center", paddingHorizontal: 6 },
+  activeCallBadgeText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700" },
   sosSection: { flex: 1, justifyContent: "center", alignItems: "center" },
-  sosButton: { width: 220, height: 220, borderRadius: 110, backgroundColor: "#D32F2F", justifyContent: "center", alignItems: "center", elevation: 12, shadowColor: "#D32F2F", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 10 },
-  sosText: { fontSize: 44, fontWeight: "bold", color: "#FFFFFF", letterSpacing: 2, marginTop: 4 },
+  sosButton: { backgroundColor: COLORS.danger, justifyContent: "center", alignItems: "center", ...SHADOWS.sos },
+  sosText: { fontSize: 40, fontWeight: FONT_WEIGHT.bold, color: "#FFFFFF", letterSpacing: 2, marginTop: SPACING.xs },
   progressContainer: { width: 140, height: 6, backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 3, marginTop: 16, alignSelf: "center" },
   progressBar: { height: "100%", backgroundColor: "#FFFFFF", borderRadius: 3 },
-  sosHint: { fontSize: 14, color: "#666666", textAlign: "center", marginTop: 32, lineHeight: 22 },
-  sosHintBold: { color: "#1A1A1A", fontWeight: "900", letterSpacing: 1 },
+sosHint: { fontSize: FONT_SIZE.base, color: COLORS.textSecondary, textAlign: "center", marginTop: SPACING.xl, lineHeight: 22 },
+  sosHintBold: { color: COLORS.textPrimary, fontWeight: "900", letterSpacing: 1 },
   
-  bottomBar: { paddingHorizontal: 24, paddingVertical: 20, backgroundColor: "#F8F9FA" },
-  denunciaButton: { flexDirection: "row", backgroundColor: "#004B2B", borderRadius: 12, height: 56, justifyContent: "center", alignItems: "center", gap: 12 },
-  denunciaText: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" },
+  bottomBar: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, backgroundColor: COLORS.background },
+  denunciaButton: { flexDirection: "row", backgroundColor: COLORS.primary, borderRadius: RADIUS.md, height: 56, justifyContent: "center", alignItems: "center", gap: SPACING.sm },
+  denunciaText: { color: "#FFFFFF", fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
 });

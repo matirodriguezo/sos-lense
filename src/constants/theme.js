@@ -1,4 +1,4 @@
-export const COLORS = {
+export const LIGHT_COLORS = {
   primary: "#004B2B",
   danger: "#D32F2F",
   background: "#F8F9FA",
@@ -18,7 +18,57 @@ export const COLORS = {
   blackTranslucent: "rgba(0,0,0,0.5)",
   labelGray: "#444444",
   lenseCard: "#1a2a1a",
+  cardBg: "#FFFFFF",
+  cardBorder: "#E0E0E0",
+  inputBg: "#FFFFFF",
+  tabBarBg: "#FFFFFF",
+  tabBorder: "#E0E0E0",
+  headerBg: "#FFFFFF",
+  liveBadge: "#E8F5E9",
+  statusRedBg: "#FFF5F5",
+  statusRedBorder: "#FFD6D6",
+  statusYellowBg: "#FFFAF0",
+  statusYellowBorder: "#FEF08A",
+  drawerHeaderBg: "#003A20",
+  navbarBg: "#003A20",
 };
+
+export const DARK_COLORS = {
+  primary: "#4CAF50",
+  danger: "#EF5350",
+  background: "#121212",
+  surface: "#1E1E1E",
+  textPrimary: "#E0E0E0",
+  textSecondary: "#9E9E9E",
+  border: "#333333",
+  videoBg: "#000000",
+  quickReplyBg: "rgba(255,255,255,0.1)",
+  tabInactive: "#9E9E9E",
+  success: "#66BB6A",
+  warning: "#FFA726",
+  overlay: "rgba(0,0,0,0.85)",
+  badgeRed: "#EF5350",
+  greenTranslucent: "rgba(76,175,80,0.15)",
+  whiteTranslucent: "rgba(255,255,255,0.15)",
+  blackTranslucent: "rgba(0,0,0,0.5)",
+  labelGray: "#BBBBBB",
+  lenseCard: "#0D1A0D",
+  cardBg: "#1E1E1E",
+  cardBorder: "#333333",
+  inputBg: "#2C2C2C",
+  tabBarBg: "#1E1E1E",
+  tabBorder: "#333333",
+  headerBg: "#1E1E1E",
+  liveBadge: "#1B3A1B",
+  statusRedBg: "#2D1515",
+  statusRedBorder: "#4A2222",
+  statusYellowBg: "#2D2A15",
+  statusYellowBorder: "#4A4422",
+  drawerHeaderBg: "#0D2818",
+  navbarBg: "#0D2818",
+};
+
+export const COLORS = LIGHT_COLORS;
 
 export const SPACING = {
   xs: 4,

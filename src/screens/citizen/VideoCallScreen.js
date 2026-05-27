@@ -21,6 +21,9 @@ import {
   listenIncidentById,
   cancelIncident,
 } from "../../services/incidentService";
+import { getCurrentAlias } from "../../services/userStore";
+import { useNotifications } from "../../context/NotificationContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 const { width, height } = Dimensions.get("window");
@@ -36,6 +39,7 @@ const QUICK_OPTIONS = [
 
 export default function VideoCallScreen({ route, navigation }) {
   const { incidentId } = route.params;
+  const { enterChat, leaveChat } = useNotifications();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [showChat, setShowChat] = useState(false);
@@ -45,6 +49,7 @@ export default function VideoCallScreen({ route, navigation }) {
   const [closeReason, setCloseReason] = useState("");
   const [incident, setIncident] = useState(null);
   const flatListRef = useRef(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const unsubMsg = listenMessages(incidentId, setMessages);
@@ -54,6 +59,19 @@ export default function VideoCallScreen({ route, navigation }) {
       unsubInc();
     };
   }, [incidentId]);
+
+  useEffect(() => {
+    if (showChat) {
+      enterChat(incidentId);
+    } else {
+      leaveChat();
+    }
+    return () => {
+      if (showChat) {
+        leaveChat();
+      }
+    };
+  }, [showChat, incidentId]);
 
   useEffect(() => {
     if (incident?.status === "CERRADO") {
@@ -114,19 +132,19 @@ export default function VideoCallScreen({ route, navigation }) {
   const isMine = (msg) => msg.senderId === auth.currentUser?.uid;
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
       {/* Área de Video Principal (Dividida visualmente para el prototipo) */}
       <View style={styles.videoContainer}>
         {/* Cabecera Flotante */}
-        <View style={styles.floatingHeader}>
+        <View style={[styles.floatingHeader, { top: 12 + insets.top }]}>
           <View style={styles.liveBadge}>
             <View style={styles.liveDot} />
             <Text style={styles.liveText}>EN VIVO</Text>
           </View>
           <Text style={styles.headerTitle}>S.O.S. CARABINEROS</Text>
-          <TouchableOpacity style={styles.senaBtn} onPress={() => Alert.alert("LENSE", "Traductor en progreso")}>
+          <TouchableOpacity style={styles.senaBtn} onPress={() => Alert.alert("LENSE", "Traductor en progreso")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="hand-right" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -138,7 +156,7 @@ export default function VideoCallScreen({ route, navigation }) {
         </View>
 
         {/* PiP (Picture in Picture) del Oficial */}
-        <View style={styles.pipContainer}>
+        <View style={[styles.pipContainer, { top: 60 + insets.top }]}>
           <View style={styles.pipVideo}>
             <MaterialCommunityIcons name="police-badge-outline" size={32} color="#FFFFFF" style={{opacity: 0.5}} />
             <View style={styles.pipBadge}>
@@ -185,7 +203,7 @@ export default function VideoCallScreen({ route, navigation }) {
               </View>
             )}
           />
-          <View style={styles.inputRow}>
+          <View style={[styles.inputRow, { paddingBottom: 12 + insets.bottom }]}>
             <TextInput
               style={styles.chatInput}
               value={input}
@@ -202,7 +220,7 @@ export default function VideoCallScreen({ route, navigation }) {
       )}
 
       {/* Dock Inferior de Controles */}
-      <View style={styles.controlDock}>
+      <View style={[styles.controlDock, { paddingBottom: 12 + insets.bottom }]}>
         <TouchableOpacity style={[styles.ctrlBtn, camFlipped && styles.ctrlBtnActive]} onPress={() => setCamFlipped(!camFlipped)}>
           <Ionicons name="camera-reverse" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -259,7 +277,7 @@ const styles = StyleSheet.create({
   
   videoContainer: { flex: 1, position: "relative", backgroundColor: "#111111" },
   floatingHeader: {
-    position: "absolute", top: 40, left: 0, right: 0,
+    position: "absolute", top: 12, left: 0, right: 0,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 20, zIndex: 10,
   },
@@ -267,12 +285,12 @@ const styles = StyleSheet.create({
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FFFFFF" },
   liveText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
   headerTitle: { fontSize: 14, fontWeight: "bold", color: "#FFFFFF", letterSpacing: 1, textShadowColor: 'rgba(0, 0, 0, 0.75)', textShadowOffset: {width: -1, height: 1}, textShadowRadius: 10 },
-  senaBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  senaBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
   
   mainVideo: { flex: 1, justifyContent: "center", alignItems: "center" },
   cameraLabel: { color: "rgba(255,255,255,0.2)", fontSize: 14, marginTop: 12, fontWeight: "bold", letterSpacing: 2 },
   
-  pipContainer: { position: "absolute", top: 100, right: 20, zIndex: 10 },
+  pipContainer: { position: "absolute", top: 60, right: 20, zIndex: 10 },
   pipVideo: {
     width: 100, height: 140, borderRadius: 12, borderWidth: 2, borderColor: "#004B2B",
     backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", overflow: "hidden",
@@ -292,7 +310,7 @@ const styles = StyleSheet.create({
   },
   pillLabel: { color: "#FFFFFF", fontSize: 13, fontWeight: "600" },
   
-  chatContainer: { backgroundColor: "#1A1A1A", height: 250, borderTopWidth: 1, borderTopColor: "#333" },
+  chatContainer: { backgroundColor: "#1A1A1A", height: "35%", borderTopWidth: 1, borderTopColor: "#333" },
   chatList: { padding: 16 },
   emptyChat: { color: "#666", fontSize: 13, textAlign: "center", marginTop: 20 },
   chatBubble: { maxWidth: "80%", padding: 12, borderRadius: 12, marginBottom: 8 },
@@ -305,13 +323,13 @@ const styles = StyleSheet.create({
   chatMetaMine: { color: "rgba(255,255,255,0.5)", textAlign: "right" },
   chatMetaOther: { color: "rgba(255,255,255,0.4)" },
   
-  inputRow: { flexDirection: "row", padding: 12, gap: 10, borderTopWidth: 1, borderTopColor: "#333" },
-  chatInput: { flex: 1, backgroundColor: "#2A2A2A", borderRadius: 20, paddingHorizontal: 16, color: "#FFFFFF", height: 44, fontSize: 14 },
+  inputRow: { flexDirection: "row", paddingTop: 12, paddingHorizontal: 12, gap: 10, borderTopWidth: 1, borderTopColor: "#333" },
+  chatInput: { flex: 1, backgroundColor: "#2A2A2A", borderRadius: 20, paddingHorizontal: 16, color: "#FFFFFF", height: 44, fontSize: 14, textAlignVertical: "center" },
   sendBtn: { width: 44, height: 44, backgroundColor: "#004B2B", borderRadius: 22, justifyContent: "center", alignItems: "center" },
   
   controlDock: {
     flexDirection: "row", justifyContent: "space-evenly", alignItems: "center",
-    paddingVertical: 20, paddingHorizontal: 10, backgroundColor: "#000000", borderTopWidth: 1, borderTopColor: "#222",
+    paddingTop: 20, paddingHorizontal: 10, backgroundColor: "#000000", borderTopWidth: 1, borderTopColor: "#222",
   },
   ctrlBtn: { width: 50, height: 50, borderRadius: 25, backgroundColor: "#222222", justifyContent: "center", alignItems: "center" },
   ctrlBtnActive: { backgroundColor: "#FFFFFF", borderColor: "#004B2B", borderWidth: 2 },

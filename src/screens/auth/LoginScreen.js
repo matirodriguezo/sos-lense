@@ -15,7 +15,7 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "fire
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../../firebase/firebaseConfig";
 import { ROLES } from "../../constants/roles";
-import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT } from "../../constants/theme";
+import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons"; // Agregado
 
 export default function LoginScreen({ navigation }) {
@@ -80,7 +80,7 @@ export default function LoginScreen({ navigation }) {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -117,21 +117,31 @@ export default function LoginScreen({ navigation }) {
               </Text>
               <View style={styles.passwordRow}>
                 <TextInput
-                  style={[styles.inputField, { flex: 1 }]}
+                  style={styles.inputFieldFlex}
                   placeholder="••••••••"
-                  placeholderTextColor={COLORS.border}
+                  placeholderTextColor={COLORS.textSecondary}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
                 />
                 {!isRegistering && (
-                  <Ionicons name="finger-print-outline" size={24} color="#A0A0A0" style={{ marginRight: 12 }} />
+                  <TouchableOpacity
+                    onPress={() => Alert.alert("Biometría", "Autenticación biométrica no disponible aún.")}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    accessibilityLabel="Autenticación biométrica"
+                  >
+                    <Ionicons name="finger-print-outline" size={22} color={COLORS.textSecondary} style={{ marginRight: 8 }} />
+                  </TouchableOpacity>
                 )}
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  accessibilityLabel={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                >
                   <Ionicons
                     name={showPassword ? "eye-off-outline" : "eye-outline"}
                     size={22}
-                    color="#A0A0A0"
+                    color={COLORS.textSecondary}
                   />
                 </TouchableOpacity>
               </View>
@@ -169,6 +179,7 @@ export default function LoginScreen({ navigation }) {
               <TouchableOpacity
                 style={styles.forgotLink}
                 onPress={() => Alert.alert("Restablecer", "Contacta a tu unidad.")}
+                hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
               >
                 <Text style={styles.forgotText}>¿Olvidé mi contraseña?</Text>
               </TouchableOpacity>
@@ -187,8 +198,12 @@ export default function LoginScreen({ navigation }) {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={{ alignItems: "center", marginBottom: 15 }} onPress={() => setIsRegistering(!isRegistering)}>
-              <Text style={{ fontSize: 14, color: "#004B2B", fontWeight: "bold" }}>
+            <TouchableOpacity
+              style={styles.switchLink}
+              onPress={() => setIsRegistering(!isRegistering)}
+              hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+            >
+              <Text style={styles.switchLinkText}>
                 {isRegistering ? "¿Ya tienes cuenta? Inicia sesión" : "¿No tienes cuenta? Regístrate"}
               </Text>
             </TouchableOpacity>
@@ -199,7 +214,11 @@ export default function LoginScreen({ navigation }) {
               </Text>
             </View>
 
-            <TouchableOpacity style={styles.officerLink} onPress={() => navigation.navigate("OfficerLogin")}>
+            <TouchableOpacity
+              style={styles.officerLink}
+              onPress={() => navigation.navigate("OfficerLogin")}
+              hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+            >
               <Text style={styles.officerLinkText}>Acceso Personal Carabineros</Text>
             </TouchableOpacity>
           </View>
@@ -210,106 +229,111 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F8F9FA" }, // Fondo gris muy claro
+  safeArea: { flex: 1, backgroundColor: COLORS.background },
   flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 40,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.xl,
   },
-  brandSection: { alignItems: "center", marginBottom: 40 },
+  brandSection: { alignItems: "center", marginBottom: SPACING.xl },
   shieldContainer: {
     width: 90,
     height: 100,
-    backgroundColor: "#004B2B",
+    backgroundColor: COLORS.primary,
     borderBottomLeftRadius: 45,
     borderBottomRightRadius: 45,
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
+    borderTopLeftRadius: RADIUS.sm,
+    borderTopRightRadius: RADIUS.sm,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 24,
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    marginBottom: SPACING.lg,
+    ...SHADOWS.card,
   },
-  shieldText: { color: "#FFF", fontSize: 10, fontWeight: "bold", marginTop: 4 },
-  shieldSubText: { color: "#FFF", fontSize: 8 },
+  shieldText: { color: "#FFFFFF", fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, marginTop: SPACING.xs },
+  shieldSubText: { color: "#FFFFFF", fontSize: FONT_SIZE.xxs },
   welcomeTitle: {
-    fontSize: 28,
+    fontSize: FONT_SIZE.xxl,
     fontWeight: "800",
-    color: "#1A1A1A",
-    marginBottom: 8,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.xs,
   },
   welcomeSubtitle: {
-    fontSize: 14,
-    color: "#666666",
+    fontSize: FONT_SIZE.base,
+    color: COLORS.textSecondary,
     textAlign: "center",
   },
-  formSection: { width: "100%", marginBottom: 32 },
+  formSection: { width: "100%", marginBottom: SPACING.lg },
   inputWrapper: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    backgroundColor: COLORS.inputBg,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginBottom: 16,
+    borderColor: COLORS.border,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.md,
   },
   inputLabelInside: {
-    fontSize: 12,
-    color: "#666666",
-    fontWeight: "600",
-    marginBottom: 4,
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.textSecondary,
+    fontWeight: FONT_WEIGHT.semiBold,
+    marginBottom: SPACING.xs,
   },
   inputField: {
-    fontSize: 16,
-    color: "#1A1A1A",
-    height: 30,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.textPrimary,
+    minHeight: 28,
+    includeFontPadding: false,
+  },
+  inputFieldFlex: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.textPrimary,
+    flex: 1,
+    minHeight: 28,
+    includeFontPadding: false,
   },
   passwordRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
   },
   forgotLink: { alignSelf: "flex-end" },
   forgotText: {
-    fontSize: 13,
-    color: "#004B2B",
-    fontWeight: "600",
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.primary,
+    fontWeight: FONT_WEIGHT.semiBold,
   },
   footerSection: { width: "100%" },
   primaryButton: {
-    backgroundColor: "#004B2B",
-    borderRadius: 25,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.pill,
     height: 56,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
-    elevation: 3,
-    shadowColor: "#004B2B",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    marginBottom: SPACING.md,
+    ...SHADOWS.sos,
   },
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.bold,
   },
-  switchMode: { alignItems: "center", marginBottom: 32 },
+  switchLink: { alignItems: "center", marginBottom: SPACING.md },
+  switchLinkText: {
+    fontSize: FONT_SIZE.base,
+    color: COLORS.primary,
+    fontWeight: FONT_WEIGHT.bold,
+  },
+  switchMode: { alignItems: "center", marginBottom: SPACING.xl },
   wcagText: {
-    fontSize: 12,
-    color: "#888888",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.textSecondary,
     textDecorationLine: "underline",
   },
   officerLink: { alignItems: "center" },
   officerLinkText: {
-    fontSize: 14,
-    color: "#004B2B",
-    fontWeight: "bold",
+    fontSize: FONT_SIZE.base,
+    color: COLORS.primary,
+    fontWeight: FONT_WEIGHT.bold,
   },
 });
