@@ -127,17 +127,18 @@ export default function DispatchPanelScreen({ navigation }) {
 
   const renderCard = ({ item }) => {
     const config = TYPE_CONFIG[item.type] || { icon: "alert-circle-outline", label: item.type || "Sin clasificar" };
-    const isAssigned = item.officerId === auth.currentUser?.uid;
-    const isActive = item.status === "ACTIVO";
+    const isAssignedToMe = item.officerId === auth.currentUser?.uid;
+    const isTakenByOther = !!item.officerId && !isAssignedToMe;
+    const isActive = item.status === "ACTIVO" || item.status === "NO_CLASIFICADO";
     const isEnCurso = item.status === "EN_CURSO";
     const statusKey = item.status || "NO_CLASIFICADO";
     const statusCfg = STATUS_CONFIG[statusKey] || { label: statusKey, color: "#666", bg: "#F5F5F5" };
     const isFinal = statusKey === "CERRADO" || statusKey === "ANULADO";
 
     const handleCardPress = () => {
-      if (isFinal) {
+      if (isFinal || isTakenByOther) {
         showStatusInfo(item, config);
-      } else if (isAssigned || isEnCurso) {
+      } else if (isAssignedToMe || isEnCurso) {
         navigation.navigate("IncidentManagement", { incidentId: item.id });
       } else {
         handleTakeProcedure(item.id);
@@ -146,9 +147,20 @@ export default function DispatchPanelScreen({ navigation }) {
 
     const showStatusInfo = (incident, cfg) => {
       const sCfg = STATUS_CONFIG[incident.status] || { label: incident.status, color: "#666" };
+      let message = "";
+      if (incident.status === "ANULADO") {
+        message = "Este caso fue cancelado por el ciudadano y no requiere gestión adicional.";
+      } else if (incident.status === "CERRADO") {
+        message = "Este caso ya fue finalizado por un oficial y no requiere gestión adicional.";
+      } else if (isTakenByOther) {
+        message = `Este caso está siendo gestionado por ${incident.officerAlias || "otro oficial"}.`;
+      } else {
+        message = "Este caso está activo y requiere atención.";
+      }
+
       Alert.alert(
         "Estado del Incidente",
-        `Folio: #${incident.id.slice(0, 8).toUpperCase()}\nTipo: ${cfg.label}\nEstado: ${sCfg.label}\n\nEste caso ${incident.status === "ANULADO" ? "fue cancelado por el ciudadano" : "ya fue finalizado por un oficial"} y no requiere gestión adicional.`,
+        `Folio: #${incident.id.slice(0, 8).toUpperCase()}\nTipo: ${cfg.label}\nEstado: ${sCfg.label}\n\n${message}`,
         [{ text: "Entendido" }]
       );
     };
@@ -188,12 +200,17 @@ export default function DispatchPanelScreen({ navigation }) {
             <Text style={[s.viewStatusBtnText, { color: colors.textSecondary }]}>Ver Estado →</Text>
           </TouchableOpacity>
         )}
-        {!isFinal && isActive && !isAssigned && (
+        {!isFinal && isTakenByOther && (
+          <TouchableOpacity style={[s.viewStatusBtn, { backgroundColor: colors.officerBg, borderTopColor: colors.border }]} onPress={() => showStatusInfo(item, config)}>
+            <Text style={[s.viewStatusBtnText, { color: colors.textSecondary }]}>Tomado por {item.officerAlias || "otro oficial"} →</Text>
+          </TouchableOpacity>
+        )}
+        {!isFinal && !isTakenByOther && !isAssignedToMe && (
           <TouchableOpacity style={[s.assignBtn, { backgroundColor: colors.primary }]} onPress={() => handleTakeProcedure(item.id)}>
             <Text style={[s.assignBtnText, { color: colors.white }]}>Tomar Procedimiento →</Text>
           </TouchableOpacity>
         )}
-        {!isFinal && (isAssigned || isEnCurso) && (
+        {!isFinal && isAssignedToMe && (
           <TouchableOpacity style={[s.enterBtn, { backgroundColor: colors.officerBg, borderTopColor: colors.border }]} onPress={() => navigation.navigate("IncidentManagement", { incidentId: item.id })}>
             <Text style={[s.enterBtnText, { color: colors.primary }]}>Gestionar Incidente →</Text>
           </TouchableOpacity>
