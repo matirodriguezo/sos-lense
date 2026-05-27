@@ -5,6 +5,8 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase/firebaseConfig";
 import { ROLES } from "../constants/roles";
 import { COLORS } from "../constants/theme";
+import { setCurrentAlias } from "../services/userStore";
+import { registerForPushNotifications } from "../services/notificationService";
 import AuthStack from "./AuthStack";
 import CitizenStack from "./CitizenStack";
 import OfficerTabs from "./OfficerTabs";
@@ -32,10 +34,11 @@ export default function AppNavigator() {
         }
 
         if (docSnap?.exists()) {
-          setRole(docSnap.data().role);
-        } else {
-          setRole(ROLES.CITIZEN);
+          const data = docSnap.data();
+          setRole(data.role);
+          setCurrentAlias(data.alias || "");
         }
+        registerForPushNotifications(firebaseUser.uid);
         setLoading(false);
       } else {
         setUser(null);

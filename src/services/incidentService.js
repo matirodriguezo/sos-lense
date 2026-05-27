@@ -14,15 +14,18 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
 
-export async function triggerSOS(citizenId, { latitude, longitude }) {
+export async function triggerSOS(citizenId, { latitude, longitude, address, citizenAlias }) {
   const docRef = await addDoc(collection(db, "incidents"), {
     citizenId,
+    citizenAlias: citizenAlias || "",
     officerId: null,
+    officerAlias: "",
     status: "NO_CLASIFICADO",
     type: "Por definir",
     location: new GeoPoint(latitude, longitude),
     latitude,
     longitude,
+    address: address || "",
     quick_requests: [],
     observations: "",
     closedReason: "",
@@ -37,6 +40,16 @@ export function listenAllActiveIncidents(callback) {
   const q = query(
     collection(db, "incidents"),
     where("status", "in", ["NO_CLASIFICADO", "ACTIVO", "EN_CURSO"])
+  );
+  return onSnapshot(q, (snapshot) => {
+    callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+  });
+}
+
+export function listenAllCancelled(callback) {
+  const q = query(
+    collection(db, "incidents"),
+    where("status", "==", "ANULADO")
   );
   return onSnapshot(q, (snapshot) => {
     callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -87,9 +100,10 @@ export function listenMessages(incidentId, callback) {
   });
 }
 
-export async function assignOfficer(incidentId, officerId) {
+export async function assignOfficer(incidentId, officerId, officerAlias = "") {
   await updateDoc(doc(db, "incidents", incidentId), {
     officerId,
+    officerAlias,
     status: "ACTIVO",
     updatedAt: serverTimestamp(),
   });

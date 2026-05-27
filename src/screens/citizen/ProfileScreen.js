@@ -59,7 +59,7 @@ export default function ProfileScreen({ navigation }) {
               {auth.currentUser?.email?.charAt(0).toUpperCase() || "U"}
             </Text>
           </View>
-          <Text style={styles.userName}>Ciudadano</Text>
+          <Text style={styles.userName}>{userData?.alias || "Ciudadano"}</Text>
           <Text style={styles.userEmail}>{auth.currentUser?.email}</Text>
         </View>
 
@@ -81,16 +81,20 @@ export default function ProfileScreen({ navigation }) {
         <View style={[styles.infoCard, SHADOWS.card]}>
           <Text style={styles.infoTitle}>Información de la cuenta</Text>
           <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Nombre / Alias</Text>
+            <Text style={styles.infoValue}>{userData?.alias || "—"}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>RUT</Text>
+            <Text style={styles.infoValue}>{userData?.rut || "—"}</Text>
+          </View>
+          <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Rol</Text>
             <Text style={styles.infoValue}>Ciudadano</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Email</Text>
             <Text style={styles.infoValue}>{auth.currentUser?.email}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>UID</Text>
-            <Text style={styles.infoValue}>#{auth.currentUser?.uid.slice(0, 8)}</Text>
           </View>
         </View>
 

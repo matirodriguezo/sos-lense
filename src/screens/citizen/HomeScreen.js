@@ -15,7 +15,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { signOut } from "firebase/auth";
 import * as Location from "expo-location";
 import { auth } from "../../firebase/firebaseConfig";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../../firebase/firebaseConfig";
 import { triggerSOS, listenCitizenHistory } from "../../services/incidentService";
+import { getCurrentAlias } from "../../services/userStore";
+import { INCIDENT_STATUS } from "../../constants/roles";
 import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -36,6 +40,8 @@ export default function HomeScreen({ navigation }) {
   const [isPressing, setIsPressing] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [lastIncidents, setLastIncidents] = useState([]);
+  const [userData, setUserData] = useState(null);
+  const [activeIncident, setActiveIncident] = useState(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const pressTimer = useRef(null);
@@ -44,8 +50,18 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     const user = auth.currentUser;
     if (user) {
+      getDoc(doc(db, "users", user.uid)).then((snap) => {
+        if (snap.exists()) setUserData(snap.data());
+      });
       const unsub = listenCitizenHistory(user.uid, (data) => {
         setLastIncidents(data.slice(0, HISTORY_PREVIEW_COUNT));
+        const active = data.find(
+          (inc) =>
+            inc.status === INCIDENT_STATUS.NO_CLASIFICADO ||
+            inc.status === INCIDENT_STATUS.ACTIVO ||
+            inc.status === INCIDENT_STATUS.EN_CURSO
+        );
+        setActiveIncident(active || null);
       });
       return unsub;
     }
@@ -94,6 +110,17 @@ export default function HomeScreen({ navigation }) {
     if (pressProgress > 30) Vibration.vibrate(50);
   };
 
+  const getAddress = async (latitude, longitude) => {
+    try {
+      const results = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (results && results.length > 0) {
+        const r = results[0];
+        return [r.street, r.name, r.city, r.region].filter(Boolean).join(", ");
+      }
+    } catch {}
+    return "";
+  };
+
   const executeSOS = async () => {
     if (loading) return;
     animateButton();
@@ -109,7 +136,9 @@ export default function HomeScreen({ navigation }) {
       const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = location.coords;
       const user = auth.currentUser;
-      const incidentId = await triggerSOS(user.uid, { latitude, longitude });
+      const citizenAlias = getCurrentAlias();
+      const address = await getAddress(latitude, longitude);
+      const incidentId = await triggerSOS(user.uid, { latitude, longitude, address, citizenAlias });
 
       navigation.navigate("Classification", { incidentId });
     } catch (e) {
@@ -132,7 +161,9 @@ export default function HomeScreen({ navigation }) {
       const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = location.coords;
       const user = auth.currentUser;
-      const incidentId = await triggerSOS(user.uid, { latitude, longitude });
+      const citizenAlias = getCurrentAlias();
+      const address = await getAddress(latitude, longitude);
+      const incidentId = await triggerSOS(user.uid, { latitude, longitude, address, citizenAlias });
       if (incidentId) {
         navigation.navigate("Classification", { incidentId });
       }
@@ -168,8 +199,9 @@ export default function HomeScreen({ navigation }) {
               <View style={styles.drawerAvatar}>
                 <Ionicons name="person-outline" size={32} color="#004B2B" />
               </View>
-              <Text style={styles.drawerName}>Ciudadano</Text>
-              <Text style={styles.drawerRut}>RUT: {auth.currentUser?.email?.split('@')[0]}</Text>
+              <Text style={styles.drawerName}>{userData?.alias || "Ciudadano"}</Text>
+              {userData?.rut && <Text style={styles.drawerRut}>RUT: {userData.rut}</Text>}
+              <Text style={styles.drawerEmail}>{auth.currentUser?.email}</Text>
             </View>
 
             <View style={styles.drawerBody}>
@@ -222,6 +254,22 @@ export default function HomeScreen({ navigation }) {
           </View>
         </TouchableOpacity>
 
+        {/* Active Call Banner */}
+        {activeIncident && (
+          <TouchableOpacity
+            style={styles.activeCallBanner}
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate("VideoCall", { incidentId: activeIncident.id })}
+          >
+            <View style={styles.activeCallDot} />
+            <View style={styles.activeCallInfo}>
+              <Text style={styles.activeCallTitle}>Llamada activa</Text>
+              <Text style={styles.activeCallSub}>Presiona para reingresar</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
+
         {/* SOS Button Area */}
         <View style={styles.sosSection}>
           <Animated.View style={[{ transform: [{ scale: scaleAnim }] }]}>
@@ -269,6 +317,7 @@ const styles = StyleSheet.create({
   drawerAvatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: "#E6F0EC", justifyContent: "center", alignItems: "center", marginBottom: 12 },
   drawerName: { color: "#FFFFFF", fontSize: 20, fontWeight: "bold" },
   drawerRut: { color: "#E0E0E0", fontSize: 13, marginTop: 4 },
+  drawerEmail: { color: "#A0A0A0", fontSize: 11, marginTop: 2 },
   drawerBody: { flex: 1, paddingTop: 20 },
   drawerItem: { flexDirection: "row", alignItems: "center", paddingVertical: 18, paddingHorizontal: 24, borderBottomWidth: 1, borderBottomColor: "#F0F0F0" },
   drawerItemText: { fontSize: 16, color: "#1A1A1A", marginLeft: 16, fontWeight: "500" },
@@ -286,6 +335,15 @@ const styles = StyleSheet.create({
   lenseTag: { position: "absolute", bottom: 12, left: 12, backgroundColor: "rgba(0,0,0,0.8)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
   lenseTagText: { color: "#FFFFFF", fontSize: 12, fontWeight: "bold" },
   
+  activeCallBanner: {
+    flexDirection: "row", alignItems: "center", backgroundColor: "#004B2B",
+    borderRadius: 12, padding: 16, marginTop: 24, gap: 12, width: "100%",
+    elevation: 4, shadowColor: "#004B2B", shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.3, shadowRadius: 4,
+  },
+  activeCallDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#4CAF50" },
+  activeCallInfo: { flex: 1 },
+  activeCallTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" },
+  activeCallSub: { color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 2 },
   sosSection: { flex: 1, justifyContent: "center", alignItems: "center" },
   sosButton: { width: 220, height: 220, borderRadius: 110, backgroundColor: "#D32F2F", justifyContent: "center", alignItems: "center", elevation: 12, shadowColor: "#D32F2F", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 10 },
   sosText: { fontSize: 44, fontWeight: "bold", color: "#FFFFFF", letterSpacing: 2, marginTop: 4 },

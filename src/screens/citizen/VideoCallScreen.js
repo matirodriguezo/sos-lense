@@ -180,7 +180,7 @@ export default function VideoCallScreen({ route, navigation }) {
               <View style={[styles.chatBubble, isMine(item) ? styles.chatBubbleMine : styles.chatBubbleOther]}>
                 <Text style={[styles.chatText, isMine(item) ? styles.chatTextMine : styles.chatTextOther]}>{item.text}</Text>
                 <Text style={[styles.chatMeta, isMine(item) ? styles.chatMetaMine : styles.chatMetaOther]}>
-                  {isMine(item) ? "Tú" : "Oficial"}
+                  {isMine(item) ? "Tú" : (incident?.officerAlias || "Oficial")}
                 </Text>
               </View>
             )}

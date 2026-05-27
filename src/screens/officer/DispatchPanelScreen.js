@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -11,8 +11,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { signOut } from "firebase/auth";
-import { auth } from "../../firebase/firebaseConfig";
-import { listenAllActiveIncidents, listenMyCases } from "../../services/incidentService";
+import { auth, db } from "../../firebase/firebaseConfig";
+import { doc, getDoc } from "firebase/firestore";
+import { listenAllActiveIncidents, listenAllCancelled, listenMyCases } from "../../services/incidentService";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 const STATUS_CONFIG = {
@@ -31,25 +32,58 @@ const TYPE_CONFIG = {
   OTRO: { icon: "alert-circle-outline", label: "Otro Incidente" },
 };
 
+const sortByTime = (a, b) => {
+  const tA = a.createdAt?.toMillis?.() || 0;
+  const tB = b.createdAt?.toMillis?.() || 0;
+  return tB - tA;
+};
+
+const getElapsedTime = (createdAt) => {
+  if (!createdAt) return "";
+  const created = createdAt.toMillis ? createdAt.toMillis() : createdAt;
+  const diffMs = Date.now() - created;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "< 1 min";
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffHr = Math.floor(diffMin / 60);
+  const remainingMin = diffMin % 60;
+  if (diffHr < 24) return `${diffHr}h ${remainingMin}m`;
+  const diffDays = Math.floor(diffHr / 24);
+  return `${diffDays}d ${diffHr % 24}h`;
+};
+
 export default function DispatchPanelScreen({ navigation }) {
   const [activeTab, setActiveTab] = useState("activos");
   const [activos, setActivos] = useState([]);
   const [myCases, setMyCases] = useState([]);
+  const [cancelados, setCancelados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  const [userData, setUserData] = useState(null);
 
   useEffect(() => {
+    getDoc(doc(db, "users", auth.currentUser?.uid)).then((snap) => {
+      if (snap.exists()) setUserData(snap.data());
+    });
     const unsubActive = listenAllActiveIncidents((data) => {
-      setActivos(data);
+      setActivos(data.sort(sortByTime));
       setLoading(false);
     });
     const unsubMyCases = listenMyCases(auth.currentUser.uid, (data) => {
-      setMyCases(data);
+      setMyCases(data.sort(sortByTime));
       setLoading(false);
     });
+    const unsubCancelled = listenAllCancelled((data) => {
+      setCancelados(data.sort(sortByTime));
+      setLoading(false);
+    });
+    const interval = setInterval(() => setNow(Date.now()), 30000);
     return () => {
       unsubActive();
       unsubMyCases();
+      unsubCancelled();
+      clearInterval(interval);
     };
   }, []);
 
@@ -120,9 +154,10 @@ export default function DispatchPanelScreen({ navigation }) {
             <Ionicons name={config.icon} size={24} color="#1A1A1A" />
           </View>
           <View style={styles.cardInfo}>
-            <Text style={styles.citizenName}>Usuario LENSE</Text>
-            <Text style={styles.locationText}>📍 {item.latitude?.toFixed(4)}, {item.longitude?.toFixed(4)}</Text>
+            <Text style={styles.citizenName}>{item.citizenAlias || "Usuario LENSE"}</Text>
+            <Text style={styles.locationText}>📍 {item.address || (item.latitude ? `${item.latitude?.toFixed(4)}, ${item.longitude?.toFixed(4)}` : "Ubicación no disponible")}</Text>
             <Text style={styles.folioText}>Folio #{item.id.slice(0, 8).toUpperCase()}</Text>
+            <Text style={styles.timeLabel}>⏱ {getElapsedTime(item.createdAt)}</Text>
           </View>
         </View>
 
@@ -145,7 +180,8 @@ export default function DispatchPanelScreen({ navigation }) {
     );
   };
 
-  const data = activeTab === "activos" ? activos : myCases;
+  const misCasosActivos = myCases.filter((c) => c.status !== "ANULADO" && c.status !== "CERRADO");
+  const data = activeTab === "activos" ? activos : activeTab === "cancelados" ? cancelados : misCasosActivos;
 
   if (loading) {
     return (
@@ -175,8 +211,9 @@ export default function DispatchPanelScreen({ navigation }) {
                 </View>
                 <View>
                   <Text style={styles.drawerRole}>OPERADOR ACTIVO</Text>
-                  <Text style={styles.drawerName}>Cabo 1ro M.</Text>
-                  <Text style={styles.drawerUnit}>Unidad: CENCO</Text>
+                  <Text style={styles.drawerName}>{userData?.alias || "Oficial"}</Text>
+                  {userData?.rut && <Text style={styles.drawerUnit}>Placa: {userData.rut}</Text>}
+                  <Text style={styles.drawerEmail}>{auth.currentUser?.email}</Text>
                 </View>
               </View>
               <View style={styles.statusPillsRow}>
@@ -257,7 +294,10 @@ export default function DispatchPanelScreen({ navigation }) {
           <Text style={[styles.tabText, activeTab === "activos" && styles.tabTextActive]}>Activos ({activos.length})</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.tab, activeTab === "mycases" && styles.tabActive]} onPress={() => setActiveTab("mycases")}>
-          <Text style={[styles.tabText, activeTab === "mycases" && styles.tabTextActive]}>Mis Casos ({myCases.length})</Text>
+          <Text style={[styles.tabText, activeTab === "mycases" && styles.tabTextActive]}>Mis Casos ({misCasosActivos.length})</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tab, activeTab === "cancelados" && styles.tabActive]} onPress={() => setActiveTab("cancelados")}>
+          <Text style={[styles.tabText, activeTab === "cancelados" && styles.tabTextActive]}>Cancelados ({cancelados.length})</Text>
         </TouchableOpacity>
       </View>
 
@@ -269,8 +309,12 @@ export default function DispatchPanelScreen({ navigation }) {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="shield-checkmark-outline" size={60} color="#E0E0E0" />
-            <Text style={styles.emptyTitle}>Sin incidentes pendientes</Text>
-            <Text style={styles.emptySub}>Mantente alerta. Los nuevos requerimientos aparecerán aquí.</Text>
+            <Text style={styles.emptyTitle}>
+              {activeTab === "activos" ? "Sin incidentes activos" : activeTab === "cancelados" ? "Sin cancelaciones" : "Sin casos asignados"}
+            </Text>
+            <Text style={styles.emptySub}>
+              {activeTab === "activos" ? "Los nuevos requerimientos aparecerán aquí." : activeTab === "cancelados" ? "No hay incidentes cancelados por usuarios." : "Los casos que tomes aparecerán aquí."}
+            </Text>
           </View>
         }
       />
@@ -290,6 +334,7 @@ const styles = StyleSheet.create({
   drawerRole: { color: "#A0A0A0", fontSize: 10, fontWeight: "bold", letterSpacing: 1 },
   drawerName: { color: "#FFFFFF", fontSize: 18, fontWeight: "bold" },
   drawerUnit: { color: "#E0E0E0", fontSize: 12 },
+  drawerEmail: { color: "#A0A0A0", fontSize: 11, marginTop: 2 },
   statusPillsRow: { flexDirection: "row", gap: 10, marginTop: 20 },
   statusPillGreen: { backgroundColor: "#004B2B", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: "#4CAF50" },
   statusPillDark: { backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },

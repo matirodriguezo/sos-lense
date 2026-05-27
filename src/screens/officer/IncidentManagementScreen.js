@@ -12,9 +12,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
+  Linking,
 } from "react-native";
 import { auth } from "../../firebase/firebaseConfig";
-import { listenIncidentById, listenMessages, sendMessage, addQuickRequest, assignOfficer, closeIncident } from "../../services/incidentService";
+import { listenIncidentById, listenMessages, sendMessage, addQuickRequest, assignOfficer, closeIncident, sendSystemMessage } from "../../services/incidentService";
+import { getCurrentAlias } from "../../services/userStore";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 const { width, height } = Dimensions.get("window");
@@ -40,7 +42,11 @@ export default function IncidentManagementScreen({ route, navigation }) {
   useEffect(() => {
     const unsubIncident = listenIncidentById(incidentId, (data) => {
       setIncident(data);
-      if (!data.officerId) assignOfficer(incidentId, auth.currentUser.uid);
+      if (!data.officerId) {
+        const officerAlias = getCurrentAlias();
+        assignOfficer(incidentId, auth.currentUser.uid, officerAlias);
+        sendSystemMessage(incidentId, `${officerAlias || "Un oficial"} ha tomado tu caso.`);
+      }
     });
     const unsubMessages = listenMessages(incidentId, setMessages);
 
@@ -78,6 +84,21 @@ export default function IncidentManagementScreen({ route, navigation }) {
   };
 
   const isMine = (msg) => msg.senderId === auth.currentUser?.uid;
+
+  const openMaps = () => {
+    const { latitude, longitude } = incident;
+    if (!latitude || !longitude) {
+      Alert.alert("Ubicación no disponible", "No se ha registrado la ubicación del ciudadano.");
+      return;
+    }
+    const scheme = Platform.OS === "ios" ? "maps:0,0?q=" : "geo:0,0?q=";
+    const url = Platform.OS === "ios"
+      ? `maps://app?daddr=${latitude},${longitude}`
+      : `geo:${latitude},${longitude}?q=${latitude},${longitude}`;
+    Linking.openURL(url).catch(() => {
+      Linking.openURL(`https://maps.google.com/maps?daddr=${latitude},${longitude}`);
+    });
+  };
 
   if (!incident) return null;
 
@@ -130,11 +151,13 @@ export default function IncidentManagementScreen({ route, navigation }) {
       </View>
 
       {/* Map Placeholder */}
-      <View style={styles.mapContainer}>
+      <TouchableOpacity style={styles.mapContainer} onPress={openMaps} activeOpacity={0.7}>
         <View style={styles.mapHeader}><Text style={styles.mapHeaderText}>● GPS ACTIVO</Text></View>
-        <Ionicons name="map-outline" size={40} color="rgba(255,255,255,0.1)" />
+        <Text style={styles.mapAddress} numberOfLines={2}>
+          {incident?.address || `${incident?.latitude?.toFixed(4)}, ${incident?.longitude?.toFixed(4)}`}
+        </Text>
         <View style={styles.etaBadge}><Text style={styles.etaText}>🚓 ETA: 3 min</Text></View>
-      </View>
+      </TouchableOpacity>
 
       {/* Dispatch Buttons */}
       <View style={styles.dispatchGrid}>
@@ -176,7 +199,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
                     renderItem={({ item }) => (
                     <View style={[styles.chatBubble, isMine(item) ? styles.chatBubbleMine : styles.chatBubbleOther]}>
                         <Text style={[styles.chatMeta, isMine(item) ? styles.chatMetaMine : styles.chatMetaOther]}>
-                            {isMine(item) ? "Tú" : "Ciudadano"}
+                            {isMine(item) ? "Tú" : (incident?.citizenAlias || "Ciudadano")}
                         </Text>
                         <Text style={[styles.chatText, isMine(item) ? styles.chatTextMine : styles.chatTextOther]}>{item.text}</Text>
                     </View>
@@ -226,6 +249,7 @@ const styles = StyleSheet.create({
   mapContainer: { marginHorizontal: 16, height: 120, backgroundColor: "#DDE3E9", borderRadius: 12, justifyContent: "center", alignItems: "center", position: "relative", overflow: "hidden" },
   mapHeader: { position: "absolute", top: 8, left: 8, backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
   mapHeaderText: { color: "#4CAF50", fontSize: 10, fontWeight: "bold" },
+  mapAddress: { color: "#333", fontSize: 12, fontWeight: "600", textAlign: "center", paddingHorizontal: 40, marginTop: 4 },
   etaBadge: { position: "absolute", bottom: 8, right: 8, backgroundColor: "#1976D2", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
   etaText: { color: "#FFFFFF", fontSize: 11, fontWeight: "bold" },
 

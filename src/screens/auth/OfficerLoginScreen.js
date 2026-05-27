@@ -19,6 +19,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function OfficerLoginScreen({ navigation }) {
   const [rut, setRut] = useState("");
+  const [alias, setAlias] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -44,8 +45,8 @@ export default function OfficerLoginScreen({ navigation }) {
   };
 
   const handleRegister = async () => {
-    if (!rut || !password) {
-      Alert.alert("Error", "Completa todos los campos");
+    if (!rut || !password || !alias) {
+      Alert.alert("Error", "Completa todos los campos (placa, nombre/grado y contraseña)");
       return;
     }
     if (password.length < 6) {
@@ -63,6 +64,7 @@ export default function OfficerLoginScreen({ navigation }) {
         email: buildEmail(),
         role: ROLES.OFFICER,
         rut: rut || "",
+        alias: alias.trim(),
         createdAt: new Date().toISOString(),
       });
       Alert.alert("Cuenta creada", "Acceso habilitado para personal autorizado");
@@ -126,6 +128,22 @@ export default function OfficerLoginScreen({ navigation }) {
                 />
               </TouchableOpacity>
             </View>
+
+            {isRegistering && (
+              <>
+                <Text style={styles.inputLabelInside}>GRADO Y NOMBRE / ALIAS</Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.inputField}
+                    placeholder="Ej: Cabo 1ro José Martínez"
+                    placeholderTextColor="#A0A0A0"
+                    value={alias}
+                    onChangeText={setAlias}
+                    autoCapitalize="words"
+                  />
+                </View>
+              </>
+            )}
 
             {isRegistering && (
               <>

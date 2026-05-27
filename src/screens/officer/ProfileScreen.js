@@ -43,8 +43,8 @@ export default function ProfileScreen({ navigation }) {
             <MaterialCommunityIcons name="police-badge" size={48} color="#D4AF37" />
           </View>
           <View style={styles.serviceBadge}><Text style={styles.serviceBadgeText}>● En Servicio</Text></View>
-          <Text style={styles.userName}>Operador CENCO</Text>
-          <Text style={styles.userRank}>Cabo Primero</Text>
+          <Text style={styles.userName}>{userData?.alias || "Operador"}</Text>
+          {userData?.rut && <Text style={styles.userRank}>Placa: {userData.rut}</Text>}
         </View>
 
         <View style={styles.actionRow}>
@@ -56,6 +56,11 @@ export default function ProfileScreen({ navigation }) {
             <View style={styles.dataHeader}><MaterialCommunityIcons name="badge-account-outline" size={20} color="#A0A0A0"/> <Text style={styles.dataTitle}>NÚMERO DE PLACA / RUT</Text></View>
             <Text style={styles.dataValueBig}>{userData?.rut || "12.345.678-9"}</Text>
             <Text style={styles.dataSub}>Credencial Validada</Text>
+        </View>
+
+        <View style={styles.dataCard}>
+            <View style={styles.dataHeader}><Ionicons name="mail-outline" size={20} color="#A0A0A0"/> <Text style={styles.dataTitle}>EMAIL INSTITUCIONAL</Text></View>
+            <Text style={styles.dataValue}>{auth.currentUser?.email || "—"}</Text>
         </View>
 
         <View style={styles.dataCard}>

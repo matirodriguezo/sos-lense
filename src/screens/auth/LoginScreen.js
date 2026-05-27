@@ -20,6 +20,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons"; // Agrega
 
 export default function LoginScreen({ navigation }) {
   const [rut, setRut] = useState("");
+  const [alias, setAlias] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -45,8 +46,8 @@ export default function LoginScreen({ navigation }) {
   };
 
   const handleRegister = async () => {
-    if (!rut || !password) {
-      Alert.alert("Error", "Completa todos los campos");
+    if (!rut || !password || !alias) {
+      Alert.alert("Error", "Completa todos los campos (RUT, nombre/alias y contraseña)");
       return;
     }
     if (password.length < 6) {
@@ -64,6 +65,7 @@ export default function LoginScreen({ navigation }) {
         email: buildEmail(),
         role: ROLES.CITIZEN,
         rut: rut || "",
+        alias: alias.trim(),
         createdAt: new Date().toISOString(),
       });
       Alert.alert("Cuenta creada", "Bienvenido a S.O.S. Carabineros");
@@ -134,6 +136,20 @@ export default function LoginScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {isRegistering && (
+              <View style={styles.inputWrapper}>
+                <Text style={styles.inputLabelInside}>Nombre / Alias</Text>
+                <TextInput
+                  style={styles.inputField}
+                  placeholder="Ej: Benjamin Muñoz"
+                  placeholderTextColor={COLORS.textSecondary}
+                  value={alias}
+                  onChangeText={setAlias}
+                  autoCapitalize="words"
+                />
+              </View>
+            )}
 
             {isRegistering && (
               <View style={styles.inputWrapper}>
