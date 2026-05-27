@@ -9,6 +9,7 @@ import {
   StatusBar,
   Alert,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { signOut } from "firebase/auth";
