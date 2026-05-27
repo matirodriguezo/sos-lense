@@ -12,6 +12,7 @@ import {
   Alert,
   Modal,
   Image,
+  StatusBar,
 } from "react-native";
 import { auth } from "../../firebase/firebaseConfig";
 import {
