@@ -48,6 +48,7 @@ export default function HomeScreen({ navigation }) {
   const { unreadCount } = useNotifications();
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(0)).current;
   const pressTimer = useRef(null);
   const pressInterval = useRef(null);
   const insets = useSafeAreaInsets();
@@ -189,6 +190,26 @@ export default function HomeScreen({ navigation }) {
     ]);
   };
 
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 1200, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, []);
+
+  const ringScale = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.3],
+  });
+  const ringOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0],
+  });
+
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ["0%", "100%"],
@@ -284,24 +305,36 @@ export default function HomeScreen({ navigation }) {
 
         {/* SOS Button Area */}
         <View style={s.sosSection}>
-          <Animated.View style={[{ transform: [{ scale: scaleAnim }] }]}>
-            <TouchableOpacity
-              style={[s.sosButton, { backgroundColor: colors.danger, width: SOS_SIZE, height: SOS_SIZE, borderRadius: SOS_SIZE / 2, ...SHADOWS.sos }, loading && { opacity: 0.7 }]}
-              onPressIn={startSOSPress}
-              onPressOut={cancelSOSPress}
-              disabled={loading}
-              activeOpacity={0.9}
-              delayLongPress={2000}
-            >
-              <MaterialCommunityIcons name="broadcast" size={40} color={colors.white} style={{ marginBottom: -5 }} />
-              <Text style={s.sosText}>S.O.S</Text>
-            </TouchableOpacity>
-            {isPressing && (
-              <View style={s.progressContainer}>
-                <Animated.View style={[s.progressBar, { width: progressWidth }]} />
-              </View>
-            )}
-          </Animated.View>
+          <View style={{ width: SOS_SIZE, height: SOS_SIZE, alignItems: "center", justifyContent: "center" }}>
+            <Animated.View style={[s.pulseRing, {
+              width: SOS_SIZE * 1.3,
+              height: SOS_SIZE * 1.3,
+              borderRadius: (SOS_SIZE * 1.3) / 2,
+              backgroundColor: colors.danger,
+              opacity: ringOpacity,
+              transform: [{ scale: ringScale }],
+              left: -SOS_SIZE * 0.15,
+              top: -SOS_SIZE * 0.15,
+            }]} />
+            <Animated.View style={[{ transform: [{ scale: scaleAnim }] }]}>
+              <TouchableOpacity
+                style={[s.sosButton, { backgroundColor: colors.danger, width: SOS_SIZE, height: SOS_SIZE, borderRadius: SOS_SIZE / 2, ...SHADOWS.sos }, loading && { opacity: 0.7 }]}
+                onPressIn={startSOSPress}
+                onPressOut={cancelSOSPress}
+                disabled={loading}
+                activeOpacity={0.9}
+                delayLongPress={2000}
+              >
+                <MaterialCommunityIcons name="broadcast" size={40} color={colors.white} style={{ marginBottom: -5 }} />
+                <Text style={s.sosText}>S.O.S</Text>
+              </TouchableOpacity>
+              {isPressing && (
+                <View style={s.progressContainer}>
+                  <Animated.View style={[s.progressBar, { width: progressWidth }]} />
+                </View>
+              )}
+            </Animated.View>
+          </View>
           <Text style={[s.sosHint, { color: colors.textSecondary }]}>
             Mantenga presionado en caso de{"\n"}
             <Text style={[s.sosHintBold, { color: colors.textPrimary }]}>EMERGENCIA</Text>
@@ -365,6 +398,7 @@ const makeStyles = (colors, isDark) =>
     activeCallBadgeText: { color: colors.white, fontSize: 11, fontWeight: "700" },
     sosSection: { flex: 1, justifyContent: "center", alignItems: "center" },
     sosButton: { justifyContent: "center", alignItems: "center" },
+    pulseRing: { position: "absolute", justifyContent: "center", alignItems: "center" },
     sosText: { fontSize: 40, fontWeight: FONT_WEIGHT.bold, color: colors.white, letterSpacing: 2, marginTop: SPACING.xs },
     progressContainer: { width: 140, height: 6, backgroundColor: isDark ? colors.whiteTranslucent : "rgba(0,0,0,0.3)", borderRadius: 3, marginTop: 16, alignSelf: "center" },
     progressBar: { height: "100%", backgroundColor: isDark ? colors.white : "#000000", borderRadius: 3 },
