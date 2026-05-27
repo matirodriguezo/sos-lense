@@ -2,16 +2,16 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
-  FlatList,
   StyleSheet,
   Dimensions,
-  StatusBar,
-  Alert,
+  TextInput,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
+  Alert,
   Modal,
+  Image,
 } from "react-native";
 import { auth } from "../../firebase/firebaseConfig";
 import {
@@ -30,12 +30,12 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 const { width, height } = Dimensions.get("window");
 
 const QUICK_OPTIONS = [
-  { icon: "medical-outline", label: "Necesito Ambulancia" },
-  { icon: "shield-outline", label: "Robo en progreso" },
-  { icon: "hand-left-outline", label: "Necesito intérprete" },
-  { icon: "car-outline", label: "Accidente de tránsito" },
-  { icon: "walk-outline", label: "El sospechoso huyó" },
-  { icon: "checkmark-circle-outline", label: "Estoy bien" },
+  { icon: "medical-outline", label: "Necesito Ambulancia", gifPath: null },
+  { icon: "shield-outline", label: "Robo en progreso", gifPath: null },
+  { icon: "hand-left-outline", label: "Necesito intérprete", gifPath: null },
+  { icon: "car-outline", label: "Accidente de tránsito", gifPath: null },
+  { icon: "walk-outline", label: "El sospechoso huyó", gifPath: null },
+  { icon: "checkmark-circle-outline", label: "Estoy bien", gifPath: null },
 ];
 
 export default function VideoCallScreen({ route, navigation }) {
@@ -181,7 +181,11 @@ export default function VideoCallScreen({ route, navigation }) {
           keyExtractor={(item) => item.label}
           renderItem={({ item }) => (
             <TouchableOpacity style={[s.quickPill, { backgroundColor: colors.quickReplyBg, borderColor: colors.whiteTranslucent }]} onPress={() => handleQuickRequest(item.label)} activeOpacity={0.7}>
-              <Ionicons name={item.icon} size={16} color={colors.white} style={{ marginRight: 6 }} />
+              {item.gifPath ? (
+                <Image source={item.gifPath} style={s.pillGif} resizeMode="contain" />
+              ) : (
+                <Ionicons name={item.icon} size={16} color={colors.white} style={{ marginRight: 6 }} />
+              )}
               <Text style={s.pillLabel}>{item.label}</Text>
             </TouchableOpacity>
           )}
@@ -312,6 +316,9 @@ const makeStyles = (colors) =>
     quickPill: {
       flexDirection: "row", alignItems: "center",
       paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1,
+    },
+    pillGif: {
+      width: 20, height: 20, marginRight: 6,
     },
     pillLabel: { color: colors.white, fontSize: 13, fontWeight: "600" },
     

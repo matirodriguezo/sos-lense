@@ -7,6 +7,7 @@ import {
   Dimensions,
   StatusBar,
   Alert,
+  Image,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { doc, updateDoc } from "firebase/firestore";
@@ -16,10 +17,10 @@ import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 
 const INCIDENT_OPTIONS = [
-  { id: "ACCIDENTE", icon: "car-outline", label: "Accidente de Tránsito" },
-  { id: "ROBO", icon: "shield-half-outline", label: "Robo o Asalto" },
-  { id: "VIOLENCIA", icon: "home-outline", label: "Violencia Intrafamiliar" },
-  { id: "MEDICA", icon: "pulse-outline", label: "Emergencia Médica" },
+  { id: "ACCIDENTE", icon: "car-outline", label: "Accidente de Tránsito", gifPath: require("../../assets/gifs/Accidente de transito.gif") },
+  { id: "ROBO", icon: "shield-half-outline", label: "Robo o Asalto", gifPath: require("../../assets/gifs/Robo o Asalto.gif") },
+  { id: "VIOLENCIA", icon: "home-outline", label: "Violencia Intrafamiliar", gifPath: require("../../assets/gifs/Violencia.gif") },
+  { id: "MEDICA", icon: "pulse-outline", label: "Emergencia Médica", gifPath: require("../../assets/gifs/Emergencia Medica.gif") },
 ];
 
 export default function ClassificationScreen({ route, navigation }) {
@@ -118,12 +119,20 @@ export default function ClassificationScreen({ route, navigation }) {
                     <Ionicons name="checkmark" size={14} color={colors.white} />
                   </View>
                 )}
-                <Ionicons 
-                  name={item.icon} 
-                  size={42} 
-                  color={isSelected ? colors.primary : colors.iconMuted}
-                  style={{ marginBottom: 12 }} 
-                />
+                {item.gifPath ? (
+                  <Image 
+                    source={item.gifPath}
+                    style={s.gifIcon}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <Ionicons 
+                    name={item.icon} 
+                    size={42} 
+                    color={isSelected ? colors.primary : colors.iconMuted}
+                    style={{ marginBottom: 12 }} 
+                  />
+                )}
                 <Text style={[s.cardLabel, { color: colors.textPrimary }, isSelected && { color: colors.primary }]}>
                   {item.label}
                 </Text>
@@ -183,6 +192,9 @@ const makeStyles = (colors) =>
     checkBadge: {
       position: "absolute", top: 10, right: 10, width: 20, height: 20,
       borderRadius: 10, justifyContent: "center", alignItems: "center",
+    },
+    gifIcon: {
+      width: 50, height: 50, marginBottom: 12,
     },
     cardLabel: { fontSize: 13, fontWeight: "600", textAlign: "center", paddingHorizontal: 8 },
     

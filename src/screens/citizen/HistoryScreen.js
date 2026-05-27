@@ -3,10 +3,11 @@ import {
   View,
   Text,
   FlatList,
-  StyleSheet,
-  ActivityIndicator,
   TouchableOpacity,
+  StyleSheet,
   Alert,
+  ActivityIndicator,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../firebase/firebaseConfig";
@@ -16,11 +17,11 @@ import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 
 const TYPE_CONFIG = {
-  ACCIDENTE: { icon: "car-outline", label: "Accidente de Tránsito" },
-  ROBO: { icon: "shield-half-outline", label: "Robo o Asalto" },
-  VIOLENCIA: { icon: "home-outline", label: "Violencia Intrafamiliar" },
-  MEDICA: { icon: "pulse-outline", label: "Emergencia Médica" },
-  OTRO: { icon: "alert-circle-outline", label: "Otro Incidente" },
+  ACCIDENTE: { icon: "car-outline", label: "Accidente de Tránsito", gifPath: require("../../assets/gifs/Accidente de transito.gif") },
+  ROBO: { icon: "shield-half-outline", label: "Robo o Asalto", gifPath: require("../../assets/gifs/Robo o Asalto.gif") },
+  VIOLENCIA: { icon: "home-outline", label: "Violencia Intrafamiliar", gifPath: require("../../assets/gifs/Violencia.gif") },
+  MEDICA: { icon: "pulse-outline", label: "Emergencia Médica", gifPath: require("../../assets/gifs/Emergencia Medica.gif") },
+  OTRO: { icon: "alert-circle-outline", label: "Otro Incidente", gifPath: null },
 };
 
 const getStatusColor = (status) => {
@@ -119,7 +120,11 @@ export default function HistoryScreen({ navigation }) {
       <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={s.cardRow}>
           <View style={[s.cardIconWrap, { backgroundColor: colors.greenTranslucent }, isActive && { backgroundColor: statusColor + "20" }]}>
-            <Ionicons name={config.icon} size={28} color={isActive ? statusColor : colors.primary} />
+            {config.gifPath ? (
+              <Image source={config.gifPath} style={s.cardGif} resizeMode="contain" />
+            ) : (
+              <Ionicons name={config.icon} size={28} color={isActive ? statusColor : colors.primary} />
+            )}
           </View>
           <View style={s.cardContent}>
             <View style={s.cardHeaderRow}>
@@ -272,6 +277,7 @@ const makeStyles = (colors) =>
       width: 50, height: 50, borderRadius: 10,
       justifyContent: "center", alignItems: "center",
     },
+    cardGif: { width: 32, height: 32 },
     cardContent: { flex: 1 },
     cardHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
     cardTitle: { fontSize: 15, fontWeight: "bold", flex: 1 },

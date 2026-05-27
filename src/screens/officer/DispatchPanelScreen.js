@@ -5,9 +5,10 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
+  Dimensions,
   StatusBar,
   Alert,
+  Image,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { signOut } from "firebase/auth";
@@ -27,11 +28,11 @@ const STATUS_CONFIG = {
 };
 
 const TYPE_CONFIG = {
-  ACCIDENTE: { icon: "car-outline", label: "Accidente de Tránsito" },
-  ROBO: { icon: "shield-half-outline", label: "Robo o Asalto" },
-  VIOLENCIA: { icon: "home-outline", label: "Violencia Intrafamiliar" },
-  MEDICA: { icon: "pulse-outline", label: "Emergencia Médica" },
-  OTRO: { icon: "alert-circle-outline", label: "Otro Incidente" },
+  ACCIDENTE: { icon: "car-outline", label: "Accidente de Tránsito", gifPath: require("../../assets/gifs/Accidente de transito.gif") },
+  ROBO: { icon: "shield-half-outline", label: "Robo o Asalto", gifPath: require("../../assets/gifs/Robo o Asalto.gif") },
+  VIOLENCIA: { icon: "home-outline", label: "Violencia Intrafamiliar", gifPath: require("../../assets/gifs/Violencia.gif") },
+  MEDICA: { icon: "pulse-outline", label: "Emergencia Médica", gifPath: require("../../assets/gifs/Emergencia Medica.gif") },
+  OTRO: { icon: "alert-circle-outline", label: "Otro Incidente", gifPath: null },
 };
 
 const sortByTime = (a, b) => {
@@ -185,7 +186,11 @@ export default function DispatchPanelScreen({ navigation }) {
 
         <View style={s.cardBody}>
           <View style={[s.iconBox, { backgroundColor: colors.officerBg }]}>
-            <Ionicons name={config.icon} size={24} color={colors.textPrimary} />
+            {config.gifPath ? (
+              <Image source={config.gifPath} style={s.cardGif} resizeMode="contain" />
+            ) : (
+              <Ionicons name={config.icon} size={24} color={colors.textPrimary} />
+            )}
           </View>
           <View style={s.cardInfo}>
             <Text style={[s.citizenName, { color: colors.textPrimary }]}>{item.citizenAlias || "Usuario LENSE"}</Text>
@@ -438,6 +443,7 @@ const makeStyles = (colors) =>
     timeLabel: { fontSize: 12, fontWeight: "bold" },
     cardBody: { flexDirection: "row", padding: 16, alignItems: "center" },
     iconBox: { width: 48, height: 48, borderRadius: 12, justifyContent: "center", alignItems: "center", marginRight: 16 },
+    cardGif: { width: 32, height: 32 },
     cardInfo: { flex: 1 },
     citizenName: { fontSize: 16, fontWeight: "bold" },
     locationText: { fontSize: 13, marginTop: 4 },
