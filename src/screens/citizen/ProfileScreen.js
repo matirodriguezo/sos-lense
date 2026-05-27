@@ -73,7 +73,7 @@ export default function ProfileScreen({ navigation }) {
         <View style={[s.themeRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name={isDark ? "moon" : "sunny"} size={20} color={colors.textPrimary} />
           <Text style={[s.themeLabel, { color: colors.textPrimary }]}>Modo oscuro</Text>
-          <Switch value={isDark} onValueChange={toggleTheme} trackColor={{ false: "#ccc", true: colors.primary }} thumbColor="#fff" />
+          <Switch value={isDark} onValueChange={toggleTheme} trackColor={{ false: colors.textSecondary, true: colors.primary }} thumbColor={colors.white} />
         </View>
 
         <View style={s.statsRow}>

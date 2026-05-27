@@ -1,15 +1,16 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { View, Text, StyleSheet } from "react-native";
+import { useTheme } from "../context/ThemeContext";
 import OfficerStack from "./OfficerStack";
 import MapScreen from "../screens/officer/MapScreen";
 import ChatScreen from "../screens/officer/ChatScreen";
 import ProfileScreen from "../screens/officer/ProfileScreen";
-import { COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
+import { FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
 import { useNotifications } from "../context/NotificationContext";
 
 const Tab = createBottomTabNavigator();
 
-function TabIcon({ label, focused, badge }) {
+function TabIcon({ label, focused, badge, colors }) {
   const icons = {
     Emergencia: "🆘",
     Mapa: "🗺️",
@@ -17,13 +18,13 @@ function TabIcon({ label, focused, badge }) {
     Perfil: "👤",
   };
   return (
-    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+    <View style={[styles.iconWrap, focused && { backgroundColor: colors.greenTranslucent }]}>
       <Text style={[styles.icon, focused && styles.iconActive]}>
         {icons[label] || "•"}
       </Text>
       {badge > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{badge > 9 ? "9+" : badge}</Text>
+        <View style={[styles.badge, { backgroundColor: colors.badgeRed }]}>
+          <Text style={[styles.badgeText, { color: colors.white }]}>{badge > 9 ? "9+" : badge}</Text>
         </View>
       )}
     </View>
@@ -32,6 +33,7 @@ function TabIcon({ label, focused, badge }) {
 
 export default function OfficerTabs() {
   const { unreadCount } = useNotifications();
+  const { colors } = useTheme();
 
   return (
     <Tab.Navigator
@@ -42,12 +44,20 @@ export default function OfficerTabs() {
             label={route.name}
             focused={focused}
             badge={route.name === "Chat" ? unreadCount : 0}
+            colors={colors}
           />
         ),
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.tabInactive,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.tabInactive,
         tabBarLabelStyle: styles.tabLabel,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: {
+          backgroundColor: colors.tabBarBg,
+          borderTopWidth: 1,
+          borderTopColor: colors.tabBorder,
+          height: 62,
+          paddingBottom: 8,
+          paddingTop: 6,
+        },
       })}
     >
       <Tab.Screen
@@ -75,14 +85,6 @@ export default function OfficerTabs() {
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: COLORS.surface,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    height: 62,
-    paddingBottom: 8,
-    paddingTop: 6,
-  },
   tabLabel: {
     fontSize: FONT_SIZE.xxs,
     fontWeight: FONT_WEIGHT.medium,
@@ -96,9 +98,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     position: "relative",
   },
-  iconWrapActive: {
-    backgroundColor: COLORS.greenTranslucent,
-  },
   icon: { fontSize: 20, opacity: 0.5 },
   iconActive: { opacity: 1 },
   badge: {
@@ -108,10 +107,9 @@ const styles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: "#D32F2F",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 4,
   },
-  badgeText: { color: "#fff", fontSize: 10, fontWeight: "700" },
+  badgeText: { fontSize: 10, fontWeight: "700" },
 });

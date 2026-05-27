@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -15,10 +15,12 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "fire
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../../firebase/firebaseConfig";
 import { ROLES } from "../../constants/roles";
-import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons"; // Agregado
+import { useTheme } from "../../context/ThemeContext";
+import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function LoginScreen({ navigation }) {
+  const { colors } = useTheme();
   const [rut, setRut] = useState("");
   const [alias, setAlias] = useState("");
   const [password, setPassword] = useState("");
@@ -26,6 +28,8 @@ export default function LoginScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const s = useMemo(() => makeStyles(colors), [colors]);
 
   const buildEmail = () =>
     rut.includes("@") ? rut : `${rut.replace(/[.\-]/g, "")}@ciudadano.sos.cl`;
@@ -77,49 +81,49 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[s.safeArea, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
-        style={styles.flex}
+        style={s.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.brandSection}>
-            <View style={styles.shieldContainer}>
-              <MaterialCommunityIcons name="shield-check" size={40} color="#FFFFFF" />
-              <Text style={styles.shieldText}>CARABINEROS</Text>
-              <Text style={styles.shieldSubText}>DE CHILE</Text>
+          <View style={s.brandSection}>
+            <View style={[s.shieldContainer, { backgroundColor: colors.primary, ...SHADOWS.card }]}>
+              <MaterialCommunityIcons name="shield-check" size={40} color={colors.white} />
+              <Text style={s.shieldText}>CARABINEROS</Text>
+              <Text style={s.shieldSubText}>DE CHILE</Text>
             </View>
-            <Text style={styles.welcomeTitle}>Bienvenido</Text>
-            <Text style={styles.welcomeSubtitle}>
+            <Text style={[s.welcomeTitle, { color: colors.textPrimary }]}>Bienvenido</Text>
+            <Text style={[s.welcomeSubtitle, { color: colors.textSecondary }]}>
               Plataforma de emergencia para la Comunidad Sorda
             </Text>
           </View>
 
-          <View style={styles.formSection}>
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabelInside}>RUT</Text>
+          <View style={s.formSection}>
+            <View style={[s.inputWrapper, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+              <Text style={[s.inputLabelInside, { color: colors.textSecondary }]}>RUT</Text>
               <TextInput
-                style={styles.inputField}
+                style={[s.inputField, { color: colors.textPrimary }]}
                 placeholder="Ej: 12.345.678-9"
-                placeholderTextColor={COLORS.textSecondary}
+                placeholderTextColor={colors.textSecondary}
                 value={rut}
                 onChangeText={setRut}
                 autoCapitalize="none"
               />
             </View>
 
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabelInside}>
+            <View style={[s.inputWrapper, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+              <Text style={[s.inputLabelInside, { color: colors.textSecondary }]}>
                 {isRegistering ? "Crea una Contraseña" : "Clave Única"}
               </Text>
-              <View style={styles.passwordRow}>
+              <View style={s.passwordRow}>
                 <TextInput
-                  style={styles.inputFieldFlex}
+                  style={[s.inputFieldFlex, { color: colors.textPrimary }]}
                   placeholder="••••••••"
-                  placeholderTextColor={COLORS.textSecondary}
+                  placeholderTextColor={colors.textSecondary}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
@@ -130,7 +134,7 @@ export default function LoginScreen({ navigation }) {
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                     accessibilityLabel="Autenticación biométrica"
                   >
-                    <Ionicons name="finger-print-outline" size={22} color={COLORS.textSecondary} style={{ marginRight: 8 }} />
+                    <Ionicons name="finger-print-outline" size={22} color={colors.textSecondary} style={{ marginRight: 8 }} />
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -141,19 +145,19 @@ export default function LoginScreen({ navigation }) {
                   <Ionicons
                     name={showPassword ? "eye-off-outline" : "eye-outline"}
                     size={22}
-                    color={COLORS.textSecondary}
+                    color={colors.textSecondary}
                   />
                 </TouchableOpacity>
               </View>
             </View>
 
             {isRegistering && (
-              <View style={styles.inputWrapper}>
-                <Text style={styles.inputLabelInside}>Nombre / Alias</Text>
+              <View style={[s.inputWrapper, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                <Text style={[s.inputLabelInside, { color: colors.textSecondary }]}>Nombre / Alias</Text>
                 <TextInput
-                  style={styles.inputField}
+                  style={[s.inputField, { color: colors.textPrimary }]}
                   placeholder="Ej: Benjamin Muñoz"
-                  placeholderTextColor={COLORS.textSecondary}
+                  placeholderTextColor={colors.textSecondary}
                   value={alias}
                   onChangeText={setAlias}
                   autoCapitalize="words"
@@ -162,12 +166,12 @@ export default function LoginScreen({ navigation }) {
             )}
 
             {isRegistering && (
-              <View style={styles.inputWrapper}>
-                <Text style={styles.inputLabelInside}>Confirmar Contraseña</Text>
+              <View style={[s.inputWrapper, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                <Text style={[s.inputLabelInside, { color: colors.textSecondary }]}>Confirmar Contraseña</Text>
                 <TextInput
-                  style={styles.inputField}
+                  style={[s.inputField, { color: colors.textPrimary }]}
                   placeholder="Repite la contraseña"
-                  placeholderTextColor={COLORS.textSecondary}
+                  placeholderTextColor={colors.textSecondary}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   secureTextEntry={!showPassword}
@@ -177,49 +181,49 @@ export default function LoginScreen({ navigation }) {
 
             {!isRegistering && (
               <TouchableOpacity
-                style={styles.forgotLink}
+                style={s.forgotLink}
                 onPress={() => Alert.alert("Restablecer", "Contacta a tu unidad.")}
                 hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
               >
-                <Text style={styles.forgotText}>¿Olvidé mi contraseña?</Text>
+                <Text style={[s.forgotText, { color: colors.primary }]}>¿Olvidé mi contraseña?</Text>
               </TouchableOpacity>
             )}
           </View>
 
-          <View style={styles.footerSection}>
+          <View style={s.footerSection}>
             <TouchableOpacity
-              style={[styles.primaryButton, loading && { opacity: 0.6 }]}
+              style={[s.primaryButton, { backgroundColor: colors.primary, ...SHADOWS.sos }, loading && { opacity: 0.6 }]}
               onPress={isRegistering ? handleRegister : handleLogin}
               disabled={loading}
               activeOpacity={0.8}
             >
-              <Text style={styles.primaryButtonText}>
+              <Text style={s.primaryButtonText}>
                 {loading ? "Procesando..." : isRegistering ? "Crear Cuenta" : "Ingresar con Clave Única"}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.switchLink}
+              style={s.switchLink}
               onPress={() => setIsRegistering(!isRegistering)}
               hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
             >
-              <Text style={styles.switchLinkText}>
+              <Text style={[s.switchLinkText, { color: colors.primary }]}>
                 {isRegistering ? "¿Ya tienes cuenta? Inicia sesión" : "¿No tienes cuenta? Regístrate"}
               </Text>
             </TouchableOpacity>
 
-            <View style={styles.switchMode}>
-              <Text style={styles.wcagText}>
+            <View style={s.switchMode}>
+              <Text style={[s.wcagText, { color: colors.textSecondary }]}>
                 Cumple con estándares de accesibilidad WCAG 2.1
               </Text>
             </View>
 
             <TouchableOpacity
-              style={styles.officerLink}
+              style={s.officerLink}
               onPress={() => navigation.navigate("OfficerLogin")}
               hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
             >
-              <Text style={styles.officerLinkText}>Acceso Personal Carabineros</Text>
+              <Text style={[s.officerLinkText, { color: colors.primary }]}>Acceso Personal Carabineros</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -228,112 +232,98 @@ export default function LoginScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.background },
-  flex: { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.xl,
-  },
-  brandSection: { alignItems: "center", marginBottom: SPACING.xl },
-  shieldContainer: {
-    width: 90,
-    height: 100,
-    backgroundColor: COLORS.primary,
-    borderBottomLeftRadius: 45,
-    borderBottomRightRadius: 45,
-    borderTopLeftRadius: RADIUS.sm,
-    borderTopRightRadius: RADIUS.sm,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: SPACING.lg,
-    ...SHADOWS.card,
-  },
-  shieldText: { color: "#FFFFFF", fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, marginTop: SPACING.xs },
-  shieldSubText: { color: "#FFFFFF", fontSize: FONT_SIZE.xxs },
-  welcomeTitle: {
-    fontSize: FONT_SIZE.xxl,
-    fontWeight: "800",
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.xs,
-  },
-  welcomeSubtitle: {
-    fontSize: FONT_SIZE.base,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-  },
-  formSection: { width: "100%", marginBottom: SPACING.lg },
-  inputWrapper: {
-    backgroundColor: COLORS.inputBg,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  inputLabelInside: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.textSecondary,
-    fontWeight: FONT_WEIGHT.semiBold,
-    marginBottom: SPACING.xs,
-  },
-  inputField: {
-    fontSize: FONT_SIZE.md,
-    color: COLORS.textPrimary,
-    minHeight: 28,
-    includeFontPadding: false,
-  },
-  inputFieldFlex: {
-    fontSize: FONT_SIZE.md,
-    color: COLORS.textPrimary,
-    flex: 1,
-    minHeight: 28,
-    includeFontPadding: false,
-  },
-  passwordRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  forgotLink: { alignSelf: "flex-end" },
-  forgotText: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.primary,
-    fontWeight: FONT_WEIGHT.semiBold,
-  },
-  footerSection: { width: "100%" },
-  primaryButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.pill,
-    height: 56,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: SPACING.md,
-    ...SHADOWS.sos,
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.bold,
-  },
-  switchLink: { alignItems: "center", marginBottom: SPACING.md },
-  switchLinkText: {
-    fontSize: FONT_SIZE.base,
-    color: COLORS.primary,
-    fontWeight: FONT_WEIGHT.bold,
-  },
-  switchMode: { alignItems: "center", marginBottom: SPACING.xl },
-  wcagText: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.textSecondary,
-    textDecorationLine: "underline",
-  },
-  officerLink: { alignItems: "center" },
-  officerLinkText: {
-    fontSize: FONT_SIZE.base,
-    color: COLORS.primary,
-    fontWeight: FONT_WEIGHT.bold,
-  },
-});
+const makeStyles = (colors) =>
+  StyleSheet.create({
+    safeArea: { flex: 1 },
+    flex: { flex: 1 },
+    scroll: {
+      flexGrow: 1,
+      justifyContent: "center",
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.xl,
+    },
+    brandSection: { alignItems: "center", marginBottom: SPACING.xl },
+    shieldContainer: {
+      width: 90,
+      height: 100,
+      borderBottomLeftRadius: 45,
+      borderBottomRightRadius: 45,
+      borderTopLeftRadius: RADIUS.sm,
+      borderTopRightRadius: RADIUS.sm,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: SPACING.lg,
+    },
+    shieldText: { color: colors.white, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, marginTop: SPACING.xs },
+    shieldSubText: { color: colors.white, fontSize: FONT_SIZE.xxs },
+    welcomeTitle: {
+      fontSize: FONT_SIZE.xxl,
+      fontWeight: "800",
+      marginBottom: SPACING.xs,
+    },
+    welcomeSubtitle: {
+      fontSize: FONT_SIZE.base,
+      textAlign: "center",
+    },
+    formSection: { width: "100%", marginBottom: SPACING.lg },
+    inputWrapper: {
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      marginBottom: SPACING.md,
+    },
+    inputLabelInside: {
+      fontSize: FONT_SIZE.xs,
+      fontWeight: FONT_WEIGHT.semiBold,
+      marginBottom: SPACING.xs,
+    },
+    inputField: {
+      fontSize: FONT_SIZE.md,
+      minHeight: 28,
+      includeFontPadding: false,
+    },
+    inputFieldFlex: {
+      fontSize: FONT_SIZE.md,
+      flex: 1,
+      minHeight: 28,
+      includeFontPadding: false,
+    },
+    passwordRow: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    forgotLink: { alignSelf: "flex-end" },
+    forgotText: {
+      fontSize: FONT_SIZE.sm,
+      fontWeight: FONT_WEIGHT.semiBold,
+    },
+    footerSection: { width: "100%" },
+    primaryButton: {
+      borderRadius: RADIUS.pill,
+      height: 56,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: SPACING.md,
+    },
+    primaryButtonText: {
+      color: colors.white,
+      fontSize: FONT_SIZE.md,
+      fontWeight: FONT_WEIGHT.bold,
+    },
+    switchLink: { alignItems: "center", marginBottom: SPACING.md },
+    switchLinkText: {
+      fontSize: FONT_SIZE.base,
+      fontWeight: FONT_WEIGHT.bold,
+    },
+    switchMode: { alignItems: "center", marginBottom: SPACING.xl },
+    wcagText: {
+      fontSize: FONT_SIZE.xs,
+      textDecorationLine: "underline",
+    },
+    officerLink: { alignItems: "center" },
+    officerLinkText: {
+      fontSize: FONT_SIZE.base,
+      fontWeight: FONT_WEIGHT.bold,
+    },
+  });

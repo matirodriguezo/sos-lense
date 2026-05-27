@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -15,15 +15,19 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { listenIncidentById, closeIncident, sendMessage } from "../../services/incidentService";
 import { auth } from "../../firebase/firebaseConfig";
-import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useTheme } from "../../context/ThemeContext";
+import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function CloseIncidentScreen({ route, navigation }) {
+  const { colors, isDark } = useTheme();
   const { incidentId } = route.params;
   const [incident, setIncident] = useState(null);
   const [observations, setObservations] = useState("");
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const s = useMemo(() => makeStyles(colors), [colors]);
 
   useEffect(() => {
     const unsub = listenIncidentById(incidentId, setIncident);
@@ -56,74 +60,74 @@ export default function CloseIncidentScreen({ route, navigation }) {
   if (!incident) return null;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.navbarBg} />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <SafeAreaView style={[s.safeArea, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.drawerHeaderBg} />
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
       
-      {/* Header Institucional */}
-      <View style={styles.header}>
-        <View style={styles.headerIconBox}><Ionicons name="document-text" size={24} color="#D4AF37" /></View>
-        <View style={styles.headerTexts}>
-            <Text style={styles.headerSub}>Caso #{incidentId.slice(0, 8).toUpperCase()}</Text>
-            <Text style={styles.headerTitle}>Clasificación Final</Text>
+      {/* Header */}
+      <View style={[s.header, { backgroundColor: colors.drawerHeaderBg }]}>
+        <View style={[s.headerIconBox, { backgroundColor: colors.whiteTranslucent }]}><Ionicons name="document-text" size={24} color={colors.gold} /></View>
+        <View style={s.headerTexts}>
+            <Text style={[s.headerSub, { color: colors.textSecondary }]}>Caso #{incidentId.slice(0, 8).toUpperCase()}</Text>
+            <Text style={[s.headerTitle, { color: colors.white }]}>Clasificación Final</Text>
         </View>
       </View>
-      <View style={styles.headerFooter}><Text style={styles.headerFooterText}>Complete el reporte para archivar el caso</Text></View>
+      <View style={[s.headerFooter, { backgroundColor: colors.drawerHeaderBg }]}><Text style={[s.headerFooterText, { color: colors.success }]}>Complete el reporte para archivar el caso</Text></View>
 
         {/* Resumen */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>RESUMEN DEL CASO</Text>
-          <View style={styles.grid}>
-            <View style={styles.gridItem}>
-                <Text style={styles.gridLabel}>Tipo</Text>
-                <View style={styles.row}><View style={styles.dot}/> <Text style={styles.gridValue}>{incident.type}</Text></View>
+        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[s.cardTitle, { color: colors.textSecondary }]}>RESUMEN DEL CASO</Text>
+          <View style={s.grid}>
+            <View style={s.gridItem}>
+                <Text style={[s.gridLabel, { color: colors.textSecondary }]}>Tipo</Text>
+                <View style={s.row}><View style={[s.dot, { backgroundColor: colors.danger }]}/> <Text style={[s.gridValue, { color: colors.textPrimary }]}>{incident.type}</Text></View>
             </View>
-            <View style={styles.gridItem}>
-                <Text style={styles.gridLabel}>Ciudadano</Text>
-                <Text style={styles.gridValue}>Usuario LENSE</Text>
+            <View style={s.gridItem}>
+                <Text style={[s.gridLabel, { color: colors.textSecondary }]}>Ciudadano</Text>
+                <Text style={[s.gridValue, { color: colors.textPrimary }]}>Usuario LENSE</Text>
             </View>
-            <View style={styles.gridItem}>
-                <Text style={styles.gridLabel}>Ubicación</Text>
-                <Text style={styles.gridValue}>{incident.latitude?.toFixed(4)}, {incident.longitude?.toFixed(4)}</Text>
+            <View style={s.gridItem}>
+                <Text style={[s.gridLabel, { color: colors.textSecondary }]}>Ubicación</Text>
+                <Text style={[s.gridValue, { color: colors.textPrimary }]}>{incident.latitude?.toFixed(4)}, {incident.longitude?.toFixed(4)}</Text>
             </View>
           </View>
         </View>
 
-        {/* Formulario */}
-        <Text style={styles.inputLabel}>RESULTADO DEL PROCEDIMIENTO *</Text>
-        <View style={styles.pickerFake}>
+        {/* Form */}
+        <Text style={[s.inputLabel, { color: colors.textPrimary }]}>RESULTADO DEL PROCEDIMIENTO *</Text>
+        <View style={[s.pickerFake, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
             <TextInput 
-                style={styles.inputText}
+                style={[s.inputText, { color: colors.textPrimary }]}
                 value={reason}
                 onChangeText={setReason}
                 placeholder="Ej: Resuelto, Derivado a unidad, Falsa alarma..."
-                placeholderTextColor={COLORS.textSecondary}
+                placeholderTextColor={colors.textSecondary}
             />
         </View>
 
-        <Text style={styles.inputLabel}>OBSERVACIONES DEL OFICIAL</Text>
-        <View style={styles.textAreaBox}>
+        <Text style={[s.inputLabel, { color: colors.textPrimary }]}>OBSERVACIONES DEL OFICIAL</Text>
+        <View style={[s.textAreaBox, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
             <TextInput
-                style={styles.textArea}
+                style={[s.textArea, { color: colors.textPrimary }]}
                 value={observations}
                 onChangeText={setObservations}
                 placeholder="Describa el desarrollo del procedimiento, medidas tomadas y resultado final..."
-                placeholderTextColor={COLORS.textSecondary}
+                placeholderTextColor={colors.textSecondary}
                 multiline
                 textAlignVertical="top"
             />
         </View>
 
         {/* Warning & Submit */}
-        <View style={styles.footerArea}>
-            <TouchableOpacity style={[styles.submitBtn, loading && {opacity: 0.5}]} onPress={handleClose} disabled={loading} activeOpacity={0.7}>
-                <Text style={styles.submitBtnText}>{loading ? "Archivando..." : "Guardar y Cerrar Caso"}</Text>
+        <View style={s.footerArea}>
+            <TouchableOpacity style={[s.submitBtn, { backgroundColor: colors.primary }, loading && {opacity: 0.5}]} onPress={handleClose} disabled={loading} activeOpacity={0.7}>
+                <Text style={[s.submitBtnText, { color: colors.white }]}>{loading ? "Archivando..." : "Guardar y Cerrar Caso"}</Text>
             </TouchableOpacity>
             
-            <View style={styles.warningBox}>
-                <Ionicons name="warning" size={20} color="#B45309" />
-                <Text style={styles.warningText}>Esta acción es irreversible. El caso será archivado y enviado al registro institucional.</Text>
+            <View style={[s.warningBox, { backgroundColor: colors.warningBg, borderColor: colors.warningBorder }]}>
+                <Ionicons name="warning" size={20} color={colors.warningAmber} />
+                <Text style={s.warningText}>Esta acción es irreversible. El caso será archivado y enviado al registro institucional.</Text>
             </View>
         </View>
       </ScrollView>
@@ -132,37 +136,38 @@ export default function CloseIncidentScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.background },
-  flex: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xl },
-  header: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.navbarBg, padding: SPACING.lg, paddingTop: 30 },
-  headerIconBox: { width: 44, height: 44, borderRadius: RADIUS.sm, backgroundColor: COLORS.whiteTranslucent, justifyContent: "center", alignItems: "center", marginRight: SPACING.md },
-  headerSub: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
-  headerTitle: { color: "#FFFFFF", fontSize: FONT_SIZE.xl, fontWeight: "900" },
-  headerTexts: { flex: 1 },
-  headerFooter: { backgroundColor: COLORS.navbarBg, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg },
-  headerFooterText: { color: COLORS.success, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semiBold },
-  
-  card: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.lg, ...SHADOWS.card },
-  cardTitle: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, color: COLORS.textSecondary, letterSpacing: 1, marginBottom: SPACING.md },
-  grid: { flexDirection: "row", flexWrap: "wrap", rowGap: SPACING.lg },
-  gridItem: { width: "50%" },
-  gridLabel: { fontSize: FONT_SIZE.xxs, color: COLORS.textSecondary, marginBottom: SPACING.xxs },
-  gridValue: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: COLORS.textPrimary },
-  row: { flexDirection: "row", alignItems: "center" },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.danger, marginRight: SPACING.xs },
-  
-  inputLabel: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, color: COLORS.textPrimary, letterSpacing: 0.5, marginBottom: SPACING.sm },
-  pickerFake: { backgroundColor: COLORS.inputBg, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: SPACING.md, height: 50, justifyContent: "center", marginBottom: SPACING.lg },
-  inputText: { fontSize: FONT_SIZE.base, color: COLORS.textPrimary, includeFontPadding: false },
-  textAreaBox: { backgroundColor: COLORS.inputBg, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.border, padding: SPACING.md, height: 120 },
-  textArea: { flex: 1, fontSize: FONT_SIZE.base, color: COLORS.textPrimary, lineHeight: 20 },
-  
-  footerArea: { marginTop: "auto", marginBottom: SPACING.lg },
-  submitBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, height: 56, justifyContent: "center", alignItems: "center", marginBottom: SPACING.md },
-  submitBtnText: { color: "#FFFFFF", fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-  
-  warningBox: { flexDirection: "row", backgroundColor: "#FFFBEB", borderRadius: RADIUS.sm, padding: SPACING.md, borderWidth: 1, borderColor: "#FEF08A", alignItems: "center" },
-  warningText: { flex: 1, fontSize: FONT_SIZE.xs, color: "#B45309", marginLeft: SPACING.sm, lineHeight: 16 },
-});
+const makeStyles = (colors) =>
+  StyleSheet.create({
+    safeArea: { flex: 1 },
+    flex: { flex: 1 },
+    scrollContent: { flexGrow: 1, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xl },
+    header: { flexDirection: "row", alignItems: "center", padding: SPACING.lg, paddingTop: 30 },
+    headerIconBox: { width: 44, height: 44, borderRadius: RADIUS.sm, justifyContent: "center", alignItems: "center", marginRight: SPACING.md },
+    headerSub: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
+    headerTitle: { fontSize: FONT_SIZE.xl, fontWeight: "900" },
+    headerTexts: { flex: 1 },
+    headerFooter: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg },
+    headerFooterText: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semiBold },
+    
+    card: { borderRadius: RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.lg, borderWidth: 1, shadowColor: colors.textPrimary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+    cardTitle: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, letterSpacing: 1, marginBottom: SPACING.md },
+    grid: { flexDirection: "row", flexWrap: "wrap", rowGap: SPACING.lg },
+    gridItem: { width: "50%" },
+    gridLabel: { fontSize: FONT_SIZE.xxs, marginBottom: SPACING.xxs },
+    gridValue: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold },
+    row: { flexDirection: "row", alignItems: "center" },
+    dot: { width: 8, height: 8, borderRadius: 4, marginRight: SPACING.xs },
+    
+    inputLabel: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, letterSpacing: 0.5, marginBottom: SPACING.sm },
+    pickerFake: { borderRadius: RADIUS.sm, borderWidth: 1, paddingHorizontal: SPACING.md, height: 50, justifyContent: "center", marginBottom: SPACING.lg },
+    inputText: { fontSize: FONT_SIZE.base, includeFontPadding: false },
+    textAreaBox: { borderRadius: RADIUS.sm, borderWidth: 1, padding: SPACING.md, height: 120 },
+    textArea: { flex: 1, fontSize: FONT_SIZE.base, lineHeight: 20 },
+    
+    footerArea: { marginTop: "auto", marginBottom: SPACING.lg },
+    submitBtn: { borderRadius: RADIUS.md, height: 56, justifyContent: "center", alignItems: "center", marginBottom: SPACING.md },
+    submitBtnText: { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
+    
+    warningBox: { flexDirection: "row", borderRadius: RADIUS.sm, padding: SPACING.md, borderWidth: 1, alignItems: "center" },
+    warningText: { flex: 1, fontSize: FONT_SIZE.xs, color: colors.warningAmber, marginLeft: SPACING.sm, lineHeight: 16 },
+  });

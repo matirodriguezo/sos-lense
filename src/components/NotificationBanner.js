@@ -32,7 +32,7 @@ export default function NotificationBanner() {
         },
       ]}
     >
-      <View style={styles.iconWrap}>
+      <View style={[styles.iconWrap, { backgroundColor: colors.greenTranslucent }]}>
         <Ionicons name="chatbubble-ellipses" size={20} color={colors.primary} />
       </View>
       <View style={styles.textWrap}>
@@ -44,7 +44,7 @@ export default function NotificationBanner() {
         </Text>
       </View>
       <View style={[styles.badge, { backgroundColor: colors.danger }]}>
-        <Text style={styles.badgeText}>1</Text>
+        <Text style={[styles.badgeText, { color: colors.white }]}>1</Text>
       </View>
     </Animated.View>
   );
@@ -72,7 +72,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(0,75,43,0.1)",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -89,5 +88,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     marginLeft: 8,
   },
-  badgeText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+  badgeText: { fontSize: 11, fontWeight: "700" },
 });

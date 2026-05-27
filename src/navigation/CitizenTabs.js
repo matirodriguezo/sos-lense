@@ -1,33 +1,43 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { View, Text, StyleSheet } from "react-native";
+import { useTheme } from "../context/ThemeContext";
 import HomeScreen from "../screens/citizen/HomeScreen";
 import HistoryScreen from "../screens/citizen/HistoryScreen";
 import ProfileScreen from "../screens/citizen/ProfileScreen";
-import { COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
+import { FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
 
 const Tab = createBottomTabNavigator();
 
-function TabIcon({ label, focused }) {
+function TabIcon({ label, focused, colors }) {
   const icons = { Inicio: "🏠", Historial: "📋", Perfil: "👤" };
   return (
-    <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
+    <View style={[styles.iconContainer, focused && { backgroundColor: colors.greenTranslucent }]}>
       <Text style={styles.icon}>{icons[label] || "•"}</Text>
     </View>
   );
 }
 
 export default function CitizenTabs() {
+  const { colors } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused }) => (
-          <TabIcon label={route.name} focused={focused} />
+          <TabIcon label={route.name} focused={focused} colors={colors} />
         ),
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.tabInactive,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.tabInactive,
         tabBarLabelStyle: styles.tabLabel,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: {
+          backgroundColor: colors.tabBarBg,
+          borderTopWidth: 1,
+          borderTopColor: colors.tabBorder,
+          height: 60,
+          paddingBottom: 6,
+          paddingTop: 6,
+        },
       })}
     >
       <Tab.Screen
@@ -50,14 +60,6 @@ export default function CitizenTabs() {
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: COLORS.surface,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    height: 60,
-    paddingBottom: 6,
-    paddingTop: 6,
-  },
   tabLabel: {
     fontSize: FONT_SIZE.xs,
     fontWeight: FONT_WEIGHT.semiBold,
@@ -68,9 +70,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
-  },
-  iconContainerActive: {
-    backgroundColor: "rgba(0, 75, 43, 0.1)",
   },
   icon: { fontSize: 20 },
 });

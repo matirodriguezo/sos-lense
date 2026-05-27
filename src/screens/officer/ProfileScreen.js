@@ -41,14 +41,14 @@ export default function ProfileScreen({ navigation }) {
         </TouchableOpacity>
         <Text style={[s.headerTitle, { color: colors.primary }]}>S.O.S. CARABINEROS</Text>
         <View style={[s.miniAvatar, { backgroundColor: colors.drawerHeaderBg }]}>
-          <MaterialCommunityIcons name="police-badge" size={16} color="#D4AF37" />
+          <MaterialCommunityIcons name="police-badge" size={16} color={colors.gold} />
         </View>
       </View>
 
       <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={s.avatarSection}>
           <View style={[s.avatarLarge, { backgroundColor: colors.drawerHeaderBg, borderColor: colors.primary }]}>
-            <MaterialCommunityIcons name="police-badge" size={48} color="#D4AF37" />
+            <MaterialCommunityIcons name="police-badge" size={48} color={colors.gold} />
           </View>
           <View style={[s.serviceBadge, { borderColor: colors.background }]}><Text style={s.serviceBadgeText}>● En Servicio</Text></View>
           <Text style={[s.userName, { color: colors.textPrimary }]}>{userData?.alias || "Operador"}</Text>
@@ -58,7 +58,7 @@ export default function ProfileScreen({ navigation }) {
         <View style={[s.themeRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name={isDark ? "moon" : "sunny"} size={20} color={colors.textPrimary} />
           <Text style={[s.themeLabel, { color: colors.textPrimary }]}>Modo oscuro</Text>
-          <Switch value={isDark} onValueChange={toggleTheme} trackColor={{ false: "#ccc", true: colors.primary }} thumbColor="#fff" />
+          <Switch value={isDark} onValueChange={toggleTheme} trackColor={{ false: colors.textSecondary, true: colors.primary }} thumbColor={colors.white} />
         </View>
 
         <View style={[s.dataCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -106,8 +106,8 @@ const makeStyles = (colors) =>
     scrollContent: { flexGrow: 1, padding: 24, paddingBottom: 40 },
     avatarSection: { alignItems: "center", marginBottom: 24 },
     avatarLarge: { width: 100, height: 100, borderRadius: 50, justifyContent: "center", alignItems: "center", borderWidth: 3 },
-    serviceBadge: { backgroundColor: "#4CAF50", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginTop: -12, borderWidth: 2 },
-    serviceBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "bold" },
+    serviceBadge: { backgroundColor: colors.success, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginTop: -12, borderWidth: 2 },
+    serviceBadgeText: { color: colors.white, fontSize: 10, fontWeight: "bold" },
     userName: { fontSize: 22, fontWeight: "bold", marginTop: 12 },
     userRank: { fontSize: 14, fontWeight: "600", marginTop: 4 },
 

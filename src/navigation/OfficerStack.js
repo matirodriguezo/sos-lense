@@ -1,5 +1,6 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
+import { useTheme } from "../context/ThemeContext";
+import { FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
 import DispatchPanelScreen from "../screens/officer/DispatchPanelScreen";
 import IncidentManagementScreen from "../screens/officer/IncidentManagementScreen";
 import CloseIncidentScreen from "../screens/officer/CloseIncidentScreen";
@@ -7,11 +8,13 @@ import CloseIncidentScreen from "../screens/officer/CloseIncidentScreen";
 const Stack = createNativeStackNavigator();
 
 export default function OfficerStack() {
+  const { colors } = useTheme();
+
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: COLORS.surface },
-        headerTintColor: COLORS.primary,
+        headerStyle: { backgroundColor: colors.headerBg },
+        headerTintColor: colors.primary,
         headerTitleStyle: {
           fontWeight: FONT_WEIGHT.bold,
           fontSize: FONT_SIZE.md,

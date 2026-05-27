@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -12,9 +12,8 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase/firebaseConfig";
 import { cancelIncident } from "../../services/incidentService";
+import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
-
-// Card sizing uses percentage-based widths for responsiveness
 
 const INCIDENT_OPTIONS = [
   { id: "ACCIDENTE", icon: "car-outline", label: "Accidente de Tránsito" },
@@ -24,10 +23,13 @@ const INCIDENT_OPTIONS = [
 ];
 
 export default function ClassificationScreen({ route, navigation }) {
+  const { colors, isDark } = useTheme();
   const { incidentId } = route.params;
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const insets = useSafeAreaInsets();
+
+  const s = useMemo(() => makeStyles(colors), [colors]);
 
   const classifyAndNavigate = async (id) => {
     setSelected(id);
@@ -40,7 +42,6 @@ export default function ClassificationScreen({ route, navigation }) {
         updatedAt: new Date().toISOString(),
       });
 
-      // Simulación visual rápida de carga antes de entrar al video
       setTimeout(() => {
         navigation.replace("VideoCall", { incidentId });
       }, 1000);
@@ -71,55 +72,59 @@ export default function ClassificationScreen({ route, navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <SafeAreaView style={[s.safeArea, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.headerBg} />
 
       {/* Navbar */}
-      <View style={[styles.navbar, { paddingTop: 12 + insets.top }]}>
-        <TouchableOpacity style={styles.closeButton} onPress={confirmCancel}>
-          <Ionicons name="close" size={28} color="#1A1A1A" />
+      <View style={[s.navbar, { backgroundColor: colors.headerBg, borderBottomColor: colors.border, paddingTop: 12 + insets.top }]}>
+        <TouchableOpacity style={s.closeButton} onPress={confirmCancel}>
+          <Ionicons name="close" size={28} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.stepText}>Paso 1 de 2</Text>
-        <Text style={styles.sosLabel}>S.O.S.</Text>
+        <Text style={[s.stepText, { color: colors.textPrimary }]}>Paso 1 de 2</Text>
+        <Text style={[s.sosLabel, { color: colors.primary }]}>S.O.S.</Text>
       </View>
 
-      <View style={styles.content}>
+      <View style={s.content}>
         {/* LENSE Video Mini */}
-        <TouchableOpacity style={styles.lenseMini} activeOpacity={0.9}>
-          <View style={styles.playMini}>
-            <Ionicons name="play" size={20} color="#FFFFFF" style={{ marginLeft: 3 }} />
+        <TouchableOpacity style={[s.lenseMini, { backgroundColor: colors.lenseCard }]} activeOpacity={0.9}>
+          <View style={[s.playMini, { backgroundColor: colors.whiteTranslucent, borderColor: colors.whiteTranslucent }]}>
+            <Ionicons name="play" size={20} color={colors.white} style={{ marginLeft: 3 }} />
           </View>
         </TouchableOpacity>
 
-        <Text style={styles.questionTitle}>¿Qué pasó?</Text>
-        <Text style={styles.questionSub}>
+        <Text style={[s.questionTitle, { color: colors.textPrimary }]}>¿Qué pasó?</Text>
+        <Text style={[s.questionSub, { color: colors.textSecondary }]}>
           Seleccione la categoría de su emergencia
         </Text>
 
         {/* 2x2 Grid */}
-        <View style={styles.grid}>
+        <View style={s.grid}>
           {INCIDENT_OPTIONS.map((item) => {
             const isSelected = selected === item.id;
             return (
               <TouchableOpacity
                 key={item.id}
-                style={[styles.card, isSelected && styles.cardSelected]}
+                style={[
+                  s.card,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  isSelected && { borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.greenTranslucent },
+                ]}
                 onPress={() => classifyAndNavigate(item.id)}
                 disabled={submitting}
                 activeOpacity={0.7}
               >
                 {isSelected && (
-                  <View style={styles.checkBadge}>
-                    <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                  <View style={[s.checkBadge, { backgroundColor: colors.primary }]}>
+                    <Ionicons name="checkmark" size={14} color={colors.white} />
                   </View>
                 )}
                 <Ionicons 
                   name={item.icon} 
                   size={42} 
-                  color={isSelected ? "#004B2B" : "#4A4A4A"} 
+                  color={isSelected ? colors.primary : colors.iconMuted}
                   style={{ marginBottom: 12 }} 
                 />
-                <Text style={[styles.cardLabel, isSelected && styles.cardLabelSelected]}>
+                <Text style={[s.cardLabel, { color: colors.textPrimary }, isSelected && { color: colors.primary }]}>
                   {item.label}
                 </Text>
               </TouchableOpacity>
@@ -127,16 +132,16 @@ export default function ClassificationScreen({ route, navigation }) {
           })}
         </View>
 
-        <TouchableOpacity style={styles.otherLink} onPress={() => classifyAndNavigate("OTRO")} disabled={submitting}>
-          <Text style={styles.otherLinkText}>No sé / Otro tipo de emergencia</Text>
+        <TouchableOpacity style={s.otherLink} onPress={() => classifyAndNavigate("OTRO")} disabled={submitting}>
+          <Text style={[s.otherLinkText, { color: colors.primary }]}>No sé / Otro tipo de emergencia</Text>
         </TouchableOpacity>
       </View>
 
       {/* Bottom Fixed Area */}
-      <View style={[styles.bottomArea, { paddingBottom: 20 + insets.bottom }]}>
+      <View style={[s.bottomArea, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: 20 + insets.bottom }]}>
         {submitting && (
-          <View style={styles.confirmButton}>
-            <Text style={styles.confirmButtonText}>Actualizando...</Text>
+          <View style={[s.confirmButton, { backgroundColor: colors.primary }]}>
+            <Text style={s.confirmButtonText}>Actualizando...</Text>
           </View>
         )}
       </View>
@@ -144,49 +149,47 @@ export default function ClassificationScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F8F9FA" },
-  navbar: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    backgroundColor: "#FFFFFF", paddingHorizontal: 20, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: "#E0E0E0",
-  },
-  closeButton: { width: 44, height: 44, justifyContent: "center", alignItems: "center" },
-  stepText: { fontSize: 16, fontWeight: "bold", color: "#1A1A1A" },
-  sosLabel: { fontSize: 16, fontWeight: "900", color: "#004B2B", letterSpacing: 1 },
-  
-  content: { flex: 1, paddingHorizontal: 24, paddingTop: 24 },
-  lenseMini: {
-    width: "100%", height: 120, borderRadius: 12, backgroundColor: "#151F1A",
-    justifyContent: "center", alignItems: "center", marginBottom: 24,
-  },
-  playMini: {
-    width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.5)",
-  },
-  
-  questionTitle: { fontSize: 26, fontWeight: "bold", color: "#1A1A1A", marginBottom: 4 },
-  questionSub: { fontSize: 14, color: "#666666", marginBottom: 24 },
-  
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 16 },
-  card: {
-    width: "47%", aspectRatio: 1.05, backgroundColor: "#FFFFFF",
-    borderRadius: 12, justifyContent: "center", alignItems: "center",
-    borderWidth: 1, borderColor: "#E0E0E0", position: "relative",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
-  cardSelected: { borderWidth: 2, borderColor: "#004B2B", backgroundColor: "#F2F7F5" },
-  checkBadge: {
-    position: "absolute", top: 10, right: 10, width: 20, height: 20,
-    borderRadius: 10, backgroundColor: "#004B2B", justifyContent: "center", alignItems: "center",
-  },
-  cardLabel: { fontSize: 13, fontWeight: "600", color: "#1A1A1A", textAlign: "center", paddingHorizontal: 8 },
-  cardLabelSelected: { color: "#004B2B" },
-  
-  otherLink: { alignItems: "center", marginTop: 32 },
-  otherLinkText: { fontSize: 14, color: "#004B2B", fontWeight: "bold", textDecorationLine: "underline" },
-  
-  bottomArea: { paddingHorizontal: 24, paddingVertical: 20, backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#E0E0E0" },
-  confirmButton: { backgroundColor: "#004B2B", borderRadius: 12, height: 54, justifyContent: "center", alignItems: "center" },
-  confirmButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold" },
-});
+const makeStyles = (colors) =>
+  StyleSheet.create({
+    safeArea: { flex: 1 },
+    navbar: {
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1,
+    },
+    closeButton: { width: 44, height: 44, justifyContent: "center", alignItems: "center" },
+    stepText: { fontSize: 16, fontWeight: "bold" },
+    sosLabel: { fontSize: 16, fontWeight: "900", letterSpacing: 1 },
+    
+    content: { flex: 1, paddingHorizontal: 24, paddingTop: 24 },
+    lenseMini: {
+      width: "100%", height: 120, borderRadius: 12,
+      justifyContent: "center", alignItems: "center", marginBottom: 24,
+    },
+    playMini: {
+      width: 48, height: 48, borderRadius: 24,
+      justifyContent: "center", alignItems: "center", borderWidth: 1,
+    },
+    
+    questionTitle: { fontSize: 26, fontWeight: "bold", marginBottom: 4 },
+    questionSub: { fontSize: 14, marginBottom: 24 },
+    
+    grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 16 },
+    card: {
+      width: "47%", aspectRatio: 1.05,
+      borderRadius: 12, justifyContent: "center", alignItems: "center",
+      borderWidth: 1, position: "relative",
+      shadowColor: colors.textPrimary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
+    },
+    checkBadge: {
+      position: "absolute", top: 10, right: 10, width: 20, height: 20,
+      borderRadius: 10, justifyContent: "center", alignItems: "center",
+    },
+    cardLabel: { fontSize: 13, fontWeight: "600", textAlign: "center", paddingHorizontal: 8 },
+    
+    otherLink: { alignItems: "center", marginTop: 32 },
+    otherLinkText: { fontSize: 14, fontWeight: "bold", textDecorationLine: "underline" },
+    
+    bottomArea: { paddingHorizontal: 24, paddingVertical: 20, borderTopWidth: 1 },
+    confirmButton: { borderRadius: 12, height: 54, justifyContent: "center", alignItems: "center" },
+    confirmButtonText: { color: colors.white, fontSize: 16, fontWeight: "bold" },
+  });

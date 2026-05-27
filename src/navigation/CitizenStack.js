@@ -1,17 +1,20 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useTheme } from "../context/ThemeContext";
 import CitizenTabs from "./CitizenTabs";
 import ClassificationScreen from "../screens/citizen/ClassificationScreen";
 import VideoCallScreen from "../screens/citizen/VideoCallScreen";
-import { COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
+import { FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
 
 const Stack = createNativeStackNavigator();
 
 export default function CitizenStack() {
+  const { colors } = useTheme();
+
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: COLORS.surface },
-        headerTintColor: COLORS.primary,
+        headerStyle: { backgroundColor: colors.headerBg },
+        headerTintColor: colors.primary,
         headerTitleStyle: {
           fontWeight: FONT_WEIGHT.bold,
           fontSize: FONT_SIZE.md,

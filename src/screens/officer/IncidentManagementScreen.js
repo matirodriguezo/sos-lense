@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import {
 import { auth } from "../../firebase/firebaseConfig";
 import { listenIncidentById, listenMessages, sendMessage, addQuickRequest, assignOfficer, closeIncident, sendSystemMessage } from "../../services/incidentService";
 import { getCurrentAlias } from "../../services/userStore";
+import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -30,6 +31,7 @@ const DISPATCH_OPTIONS = [
 ];
 
 export default function IncidentManagementScreen({ route, navigation }) {
+  const { colors } = useTheme();
   const { incidentId } = route.params;
   const { enterChat, leaveChat } = useNotifications();
   const insets = useSafeAreaInsets();
@@ -43,6 +45,8 @@ export default function IncidentManagementScreen({ route, navigation }) {
   const [showChatModal, setShowChatModal] = useState(false);
   const flatListRef = useRef(null);
   const intervalRef = useRef(null);
+
+  const s = useMemo(() => makeStyles(colors), [colors]);
 
   useEffect(() => {
     enterChat(incidentId);
@@ -111,119 +115,119 @@ export default function IncidentManagementScreen({ route, navigation }) {
   if (!incident) return null;
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <StatusBar barStyle="light-content" backgroundColor="#0B1319" />
+    <KeyboardAvoidingView style={[s.container, { backgroundColor: colors.videoCallBg }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.videoCallBg} />
 
       {/* Top Bar */}
-      <View style={[styles.header, { paddingTop: 12 + insets.top }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#E0E0E0" />
+      <View style={[s.header, { paddingTop: 12 + insets.top }]}>
+        <TouchableOpacity style={[s.backBtn, { backgroundColor: colors.whiteTranslucent }]} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color={colors.white} />
         </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerSub}>Procedimiento</Text>
-          <Text style={styles.headerTitle}>#{incidentId.slice(0, 8).toUpperCase()}</Text>
+        <View style={s.headerTitleContainer}>
+          <Text style={[s.headerSub, { color: colors.whiteTranslucent }]}>Procedimiento</Text>
+          <Text style={[s.headerTitle, { color: colors.white }]}>#{incidentId.slice(0, 8).toUpperCase()}</Text>
         </View>
-        <View style={styles.statusBadge}><Text style={styles.statusBadgeText}>● EN CURSO</Text></View>
+        <View style={[s.statusBadge, { backgroundColor: colors.badgeRed }]}><Text style={[s.statusBadgeText, { color: colors.white }]}>● EN CURSO</Text></View>
       </View>
 
       {/* Split Video Layout */}
-      <View style={[styles.videoSplitContainer, { height: VIDEO_HEIGHT }]}>
+      <View style={[s.videoSplitContainer, { height: VIDEO_HEIGHT }]}>
         {/* Citizen Feed */}
-        <View style={[styles.videoBox, { backgroundColor: "#3A1A1A", borderColor: "#D32F2F" }]}>
-          <View style={styles.videoTopTag}><Text style={styles.videoTopTagText}>● EN VIVO</Text></View>
-          <Ionicons name="person" size={100} color="rgba(255,255,255,0.1)" />
-          <View style={[styles.videoBottomTag, { backgroundColor: "#D32F2F" }]}>
-            <Text style={styles.videoBottomTagText}>CIUDADANO · LENSE</Text>
+        <View style={[s.videoBox, { backgroundColor: colors.videoCallBg, borderColor: colors.badgeRed }]}>
+          <View style={s.videoTopTag}><Text style={[s.videoTopTagText, { color: colors.badgeRed }]}>● EN VIVO</Text></View>
+          <Ionicons name="person" size={100} color={colors.whiteTranslucent} />
+          <View style={[s.videoBottomTag, { backgroundColor: colors.badgeRed }]}>
+            <Text style={s.videoBottomTagText}>CIUDADANO · LENSE</Text>
           </View>
         </View>
 
         {/* Officer Feed */}
-        <View style={[styles.videoBox, { backgroundColor: "#1A2E1A", borderColor: "#004B2B" }]}>
-          <View style={[styles.videoTopTag, {backgroundColor: 'transparent'}]}><Ionicons name={isMuted ? "mic-off" : "mic"} size={16} color="#4CAF50" /></View>
-          <MaterialCommunityIcons name="police-badge" size={100} color="rgba(255,255,255,0.1)" />
-          <View style={[styles.videoBottomTag, { backgroundColor: "#004B2B" }]}>
-            <MaterialCommunityIcons name="police-badge-outline" size={12} color="#D4AF37" style={{marginRight: 4}} />
-            <Text style={styles.videoBottomTagText}>OPERADOR · LENSE</Text>
+        <View style={[s.videoBox, { backgroundColor: colors.videoCallBg, borderColor: colors.primary }]}>
+          <View style={s.videoTopTag}><Ionicons name={isMuted ? "mic-off" : "mic"} size={16} color={colors.success} /></View>
+          <MaterialCommunityIcons name="police-badge" size={100} color={colors.whiteTranslucent} />
+          <View style={[s.videoBottomTag, { backgroundColor: colors.primary }]}>
+            <MaterialCommunityIcons name="police-badge-outline" size={12} color={colors.gold} style={{marginRight: 4}} />
+            <Text style={s.videoBottomTagText}>OPERADOR · LENSE</Text>
           </View>
         </View>
       </View>
 
-      {/* Controls */}
-      <View style={styles.mediaControls}>
-        <TouchableOpacity style={styles.circleBtn} onPress={() => setIsMuted(!isMuted)}>
-          <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color="#E0E0E0" />
+        {/* Controls */}
+      <View style={[s.mediaControls, { backgroundColor: colors.videoCallBg }]}>
+        <TouchableOpacity style={[s.circleBtn, { backgroundColor: colors.whiteTranslucent }]} onPress={() => setIsMuted(!isMuted)}>
+          <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={colors.white} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.circleBtn} onPress={() => setIsCamOff(!isCamOff)}>
-          <Ionicons name={isCamOff ? "videocam-off" : "videocam"} size={22} color="#E0E0E0" />
+        <TouchableOpacity style={[s.circleBtn, { backgroundColor: colors.whiteTranslucent }]} onPress={() => setIsCamOff(!isCamOff)}>
+          <Ionicons name={isCamOff ? "videocam-off" : "videocam"} size={22} color={colors.white} />
         </TouchableOpacity>
       </View>
 
       {/* Map Placeholder */}
-      <TouchableOpacity style={styles.mapContainer} onPress={openMaps} activeOpacity={0.7}>
-        <View style={styles.mapHeader}><Text style={styles.mapHeaderText}>● GPS ACTIVO</Text></View>
-        <Text style={styles.mapAddress} numberOfLines={2}>
+      <TouchableOpacity style={[s.mapContainer, { backgroundColor: colors.mapPlaceholderBg }]} onPress={openMaps} activeOpacity={0.7}>
+        <View style={s.mapHeader}><Text style={s.mapHeaderText}>● GPS ACTIVO</Text></View>
+        <Text style={[s.mapAddress, { color: colors.textPrimary }]} numberOfLines={2}>
           {incident?.address || `${incident?.latitude?.toFixed(4)}, ${incident?.longitude?.toFixed(4)}`}
         </Text>
-        <View style={styles.etaBadge}><Text style={styles.etaText}>🚓 ETA: 3 min</Text></View>
+        <View style={s.etaBadge}><Text style={s.etaText}>🚓 ETA: 3 min</Text></View>
       </TouchableOpacity>
 
       {/* Dispatch Buttons */}
-      <View style={styles.dispatchGrid}>
+      <View style={s.dispatchGrid}>
         {DISPATCH_OPTIONS.map((item) => (
-          <TouchableOpacity key={item.id} style={[styles.dispatchBox, {backgroundColor: item.color}]} onPress={() => handleDispatch(item.label)}>
-            <MaterialCommunityIcons name={item.icon} size={28} color="#FFFFFF" style={{marginBottom: 8}} />
-            <Text style={styles.dispatchBoxText}>{item.label}</Text>
+          <TouchableOpacity key={item.id} style={[s.dispatchBox, {backgroundColor: item.color}]} onPress={() => handleDispatch(item.label)}>
+            <MaterialCommunityIcons name={item.icon} size={28} color={colors.white} style={{marginBottom: 8}} />
+            <Text style={s.dispatchBoxText}>{item.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
       {/* Finalize Button */}
-      <View style={[styles.footer, { paddingBottom: 16 + insets.bottom }]}>
-        <TouchableOpacity style={styles.finalizeBtn} onPress={() => navigation.replace("CloseIncident", { incidentId })}>
-          <Text style={styles.finalizeText}>■ Finalizar Procedimiento</Text>
+      <View style={[s.footer, { paddingBottom: 16 + insets.bottom }]}>
+        <TouchableOpacity style={[s.finalizeBtn, { backgroundColor: colors.badgeRed }]} onPress={() => navigation.replace("CloseIncident", { incidentId })}>
+          <Text style={[s.finalizeText, { color: colors.white }]}>■ Finalizar Procedimiento</Text>
         </TouchableOpacity>
       </View>
 
       {/* Chat Bottom Sheet Modal */}
       <Modal visible={showChatModal} transparent animationType="slide">
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <View style={[styles.chatSheet, { paddingBottom: 20 + insets.bottom }]}>
-                <View style={styles.chatSheetHeader}>
+        <KeyboardAvoidingView style={[s.modalOverlay, { backgroundColor: colors.overlay }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <View style={[s.chatSheet, { backgroundColor: colors.surface, paddingBottom: 20 + insets.bottom }]}>
+                <View style={s.chatSheetHeader}>
                     <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                        <Ionicons name="chatbubble-ellipses-outline" size={20} color="#FFFFFF" style={{marginRight: 8}}/>
-                        <Text style={styles.chatSheetTitle}>Chat de Emergencia</Text>
+                        <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} style={{marginRight: 8}}/>
+                        <Text style={[s.chatSheetTitle, { color: colors.textPrimary }]}>Chat de Emergencia</Text>
                     </View>
-                    <TouchableOpacity onPress={() => setShowChatModal(false)}><Ionicons name="close" size={24} color="#A0A0A0" /></TouchableOpacity>
+                    <TouchableOpacity onPress={() => setShowChatModal(false)}><Ionicons name="close" size={24} color={colors.textSecondary} /></TouchableOpacity>
                 </View>
-                <Text style={styles.chatSheetSub}>🤟 Canal de respaldo — texto alternativo a LENSE</Text>
+                <Text style={[s.chatSheetSub, { color: colors.textSecondary }]}>🤟 Canal de respaldo — texto alternativo a LENSE</Text>
                 
                 <FlatList
                     ref={flatListRef}
                     data={messages}
                     keyExtractor={(item) => item.id}
-                    style={styles.chatList}
+                    style={s.chatList}
                     onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-                    ListEmptyComponent={<Text style={styles.emptyChat}>Sin mensajes.</Text>}
+                    ListEmptyComponent={<Text style={[s.emptyChat, { color: colors.textSecondary }]}>Sin mensajes.</Text>}
                     renderItem={({ item }) => (
-                    <View style={[styles.chatBubble, isMine(item) ? styles.chatBubbleMine : styles.chatBubbleOther]}>
-                        <Text style={[styles.chatMeta, isMine(item) ? styles.chatMetaMine : styles.chatMetaOther]}>
+                    <View style={[s.chatBubble, isMine(item) ? [s.chatBubbleMine, { backgroundColor: colors.primary }] : [s.chatBubbleOther, { backgroundColor: colors.border }]]}>
+                        <Text style={[s.chatMeta, isMine(item) ? { color: colors.whiteTranslucent, textAlign: "right" } : { color: colors.textSecondary }]}>
                             {isMine(item) ? "Tú" : (incident?.citizenAlias || "Ciudadano")}
                         </Text>
-                        <Text style={[styles.chatText, isMine(item) ? styles.chatTextMine : styles.chatTextOther]}>{item.text}</Text>
+                        <Text style={[s.chatText, isMine(item) ? { color: colors.white } : { color: colors.textPrimary }]}>{item.text}</Text>
                     </View>
                     )}
                 />
-                <View style={styles.inputRow}>
+                <View style={s.inputRow}>
                     <TextInput
-                    style={styles.chatInput}
+                    style={[s.chatInput, { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border }]}
                     value={input}
                     onChangeText={setInput}
                     placeholder="Escriba un mensaje..."
-                    placeholderTextColor="#666"
+                    placeholderTextColor={colors.textSecondary}
                     onSubmitEditing={handleSend}
                     />
-                    <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
-                        <Ionicons name="send" size={18} color="#FFFFFF" />
+                    <TouchableOpacity style={[s.sendBtn, { backgroundColor: colors.primary }]} onPress={handleSend}>
+                        <Ionicons name="send" size={18} color={colors.white} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -234,59 +238,55 @@ export default function IncidentManagementScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0B1319" }, // Dark tech background
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 50, paddingBottom: 16 },
-  backBtn: { width: 44, height: 44, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
-  headerTitleContainer: { alignItems: "center" },
-  headerSub: { color: "#A0A0A0", fontSize: 12, fontWeight: "bold" },
-  headerTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "900", letterSpacing: 1 },
-  statusBadge: { backgroundColor: "#D32F2F", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
-  statusBadgeText: { color: "#FFFFFF", fontSize: 10, fontWeight: "bold", letterSpacing: 0.5 },
+const makeStyles = (colors) =>
+  StyleSheet.create({
+    container: { flex: 1 },
+    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 50, paddingBottom: 16 },
+    backBtn: { width: 44, height: 44, borderRadius: 8, justifyContent: "center", alignItems: "center" },
+    headerTitleContainer: { alignItems: "center" },
+    headerSub: { fontSize: 12, fontWeight: "bold" },
+    headerTitle: { fontSize: 18, fontWeight: "900", letterSpacing: 1 },
+    statusBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
+    statusBadgeText: { fontSize: 10, fontWeight: "bold", letterSpacing: 0.5 },
 
-  videoSplitContainer: { flexDirection: "row", gap: 12, paddingHorizontal: 16, height: 220 },
-  videoBox: { flex: 1, borderRadius: 16, borderWidth: 1, justifyContent: "center", alignItems: "center", position: "relative", overflow: "hidden" },
-  videoTopTag: { position: "absolute", top: 12, left: 12 },
-  videoTopTagText: { color: "#D32F2F", fontSize: 10, fontWeight: "bold" },
-  videoBottomTag: { position: "absolute", bottom: 12, flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  videoBottomTagText: { color: "#FFFFFF", fontSize: 10, fontWeight: "bold" },
+    videoSplitContainer: { flexDirection: "row", gap: 12, paddingHorizontal: 16 },
+    videoBox: { flex: 1, borderRadius: 16, borderWidth: 1, justifyContent: "center", alignItems: "center", position: "relative", overflow: "hidden" },
+    videoTopTag: { position: "absolute", top: 12, left: 12 },
+    videoTopTagText: { fontSize: 10, fontWeight: "bold" },
+    videoBottomTag: { position: "absolute", bottom: 12, flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+    videoBottomTagText: { color: colors.white, fontSize: 10, fontWeight: "bold" },
 
-  mediaControls: { flexDirection: "row", justifyContent: "center", gap: 24, paddingVertical: 16 },
-  circleBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
+    mediaControls: { flexDirection: "row", justifyContent: "center", gap: 24, paddingVertical: 16 },
+    circleBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
 
-  mapContainer: { marginHorizontal: 16, height: 120, backgroundColor: "#DDE3E9", borderRadius: 12, justifyContent: "center", alignItems: "center", position: "relative", overflow: "hidden" },
-  mapHeader: { position: "absolute", top: 8, left: 8, backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-  mapHeaderText: { color: "#4CAF50", fontSize: 10, fontWeight: "bold" },
-  mapAddress: { color: "#333", fontSize: 12, fontWeight: "600", textAlign: "center", paddingHorizontal: 40, marginTop: 4 },
-  etaBadge: { position: "absolute", bottom: 8, right: 8, backgroundColor: "#1976D2", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-  etaText: { color: "#FFFFFF", fontSize: 11, fontWeight: "bold" },
+    mapContainer: { marginHorizontal: 16, height: 120, borderRadius: 12, justifyContent: "center", alignItems: "center", position: "relative", overflow: "hidden" },
+    mapHeader: { position: "absolute", top: 8, left: 8, backgroundColor: colors.blackTranslucent, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+    mapHeaderText: { color: colors.success, fontSize: 10, fontWeight: "bold" },
+    mapAddress: { fontSize: 12, fontWeight: "600", textAlign: "center", paddingHorizontal: 40, marginTop: 4 },
+    etaBadge: { position: "absolute", bottom: 8, right: 8, backgroundColor: colors.blueDispatch, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+    etaText: { color: colors.white, fontSize: 11, fontWeight: "bold" },
 
-  dispatchGrid: { flexDirection: "row", gap: 12, paddingHorizontal: 16, marginTop: 16 },
-  dispatchBox: { flex: 1, borderRadius: 12, paddingVertical: 16, alignItems: "center", justifyContent: "center" },
-  dispatchBoxText: { color: "#FFFFFF", fontSize: 11, fontWeight: "bold", textAlign: "center", paddingHorizontal: 4 },
+    dispatchGrid: { flexDirection: "row", gap: 12, paddingHorizontal: 16, marginTop: 16 },
+    dispatchBox: { flex: 1, borderRadius: 12, paddingVertical: 16, alignItems: "center", justifyContent: "center" },
+    dispatchBoxText: { color: colors.white, fontSize: 11, fontWeight: "bold", textAlign: "center", paddingHorizontal: 4 },
 
-  footer: { padding: 16, marginTop: "auto" },
-  finalizeBtn: { backgroundColor: "#D32F2F", borderRadius: 12, height: 56, justifyContent: "center", alignItems: "center" },
-  finalizeText: { color: "#FFFFFF", fontSize: 16, fontWeight: "bold", letterSpacing: 1 },
+    footer: { padding: 16, marginTop: "auto" },
+    finalizeBtn: { borderRadius: 12, height: 56, justifyContent: "center", alignItems: "center" },
+    finalizeText: { fontSize: 16, fontWeight: "bold", letterSpacing: 1 },
 
-  // Chat Sheet
-  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
-  chatSheet: { backgroundColor: "#1E2A38", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, height: "60%" },
-  chatSheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  chatSheetTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "bold" },
-  chatSheetSub: { color: "#A0A0A0", fontSize: 12, marginBottom: 16 },
-  chatList: { flex: 1 },
-  emptyChat: { color: "#666", textAlign: "center", marginTop: 20 },
-  chatBubble: { maxWidth: "85%", padding: 12, borderRadius: 12, marginBottom: 12 },
-  chatBubbleMine: { backgroundColor: "#004B2B", alignSelf: "flex-end", borderBottomRightRadius: 4 },
-  chatBubbleOther: { backgroundColor: "#334155", alignSelf: "flex-start", borderBottomLeftRadius: 4 },
-  chatMeta: { fontSize: 10, marginBottom: 4, fontWeight: "bold" },
-  chatMetaMine: { color: "rgba(255,255,255,0.5)", textAlign: "right" },
-  chatMetaOther: { color: "#A0A0A0" },
-  chatText: { fontSize: 14, lineHeight: 20 },
-  chatTextMine: { color: "#FFFFFF" },
-  chatTextOther: { color: "#FFFFFF" },
-  inputRow: { flexDirection: "row", gap: 12, marginTop: 16 },
-  chatInput: { flex: 1, backgroundColor: "#0F172A", borderRadius: 8, paddingHorizontal: 16, color: "#FFFFFF", height: 48, borderWidth: 1, borderColor: "#334155", textAlignVertical: "center" },
-  sendBtn: { width: 48, height: 48, backgroundColor: "#004B2B", borderRadius: 8, justifyContent: "center", alignItems: "center" },
-});
+    modalOverlay: { flex: 1, justifyContent: "flex-end" },
+    chatSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, height: "60%" },
+    chatSheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+    chatSheetTitle: { fontSize: 18, fontWeight: "bold" },
+    chatSheetSub: { fontSize: 12, marginBottom: 16 },
+    chatList: { flex: 1 },
+    emptyChat: { textAlign: "center", marginTop: 20 },
+    chatBubble: { maxWidth: "85%", padding: 12, borderRadius: 12, marginBottom: 12 },
+    chatBubbleMine: { alignSelf: "flex-end", borderBottomRightRadius: 4 },
+    chatBubbleOther: { alignSelf: "flex-start", borderBottomLeftRadius: 4 },
+    chatMeta: { fontSize: 10, marginBottom: 4, fontWeight: "bold" },
+    chatText: { fontSize: 14, lineHeight: 20 },
+    inputRow: { flexDirection: "row", gap: 12, marginTop: 16 },
+    chatInput: { flex: 1, borderRadius: 8, paddingHorizontal: 16, height: 48, borderWidth: 1, textAlignVertical: "center" },
+    sendBtn: { width: 48, height: 48, borderRadius: 8, justifyContent: "center", alignItems: "center" },
+  });

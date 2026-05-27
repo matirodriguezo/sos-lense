@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../firebase/firebaseConfig";
 import { listenCitizenHistory, cancelIncident, sendMessage } from "../../services/incidentService";
 import { INCIDENT_STATUS } from "../../constants/roles";
+import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 
 const TYPE_CONFIG = {
@@ -45,9 +46,12 @@ const getStatusText = (status) => {
 };
 
 export default function HistoryScreen({ navigation }) {
+  const { colors } = useTheme();
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("activas");
+
+  const s = useMemo(() => makeStyles(colors), [colors]);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -112,61 +116,61 @@ export default function HistoryScreen({ navigation }) {
       item.status === INCIDENT_STATUS.EN_CURSO;
 
     return (
-      <View style={styles.card}>
-        <View style={styles.cardRow}>
-          <View style={[styles.cardIconWrap, isActive && { backgroundColor: statusColor + "20" }]}>
-            <Ionicons name={config.icon} size={28} color={isActive ? statusColor : "#004B2B"} />
+      <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={s.cardRow}>
+          <View style={[s.cardIconWrap, { backgroundColor: colors.greenTranslucent }, isActive && { backgroundColor: statusColor + "20" }]}>
+            <Ionicons name={config.icon} size={28} color={isActive ? statusColor : colors.primary} />
           </View>
-          <View style={styles.cardContent}>
-            <View style={styles.cardHeaderRow}>
-              <Text style={styles.cardTitle}>{config.label}</Text>
-              <View style={[styles.statusBadge, { backgroundColor: statusColor + "18" }]}>
-                <Text style={[styles.statusText, { color: statusColor }]}>
+          <View style={s.cardContent}>
+            <View style={s.cardHeaderRow}>
+              <Text style={[s.cardTitle, { color: colors.textPrimary }]}>{config.label}</Text>
+              <View style={[s.statusBadge, { backgroundColor: statusColor + "18" }]}>
+                <Text style={[s.statusText, { color: statusColor }]}>
                   {getStatusText(item.status)}
                 </Text>
               </View>
             </View>
-            <Text style={styles.cardFolio}>Folio #{item.id.slice(0, 7).toUpperCase()}</Text>
+            <Text style={[s.cardFolio, { color: colors.textSecondary }]}>Folio #{item.id.slice(0, 7).toUpperCase()}</Text>
 
-            <View style={styles.locationRow}>
-              <Ionicons name="location-outline" size={14} color="#666666" />
-              <Text style={styles.locationText} numberOfLines={1}>
+            <View style={s.locationRow}>
+              <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+              <Text style={[s.locationText, { color: colors.emptyText }]} numberOfLines={1}>
                 {item.address || (item.latitude ? `${item.latitude?.toFixed(4)}, ${item.longitude?.toFixed(4)}` : "Sin ubicación")}
               </Text>
             </View>
 
             {item.officerAlias && (
-              <View style={styles.officerRow}>
-                <Ionicons name="police-badge-outline" size={14} color="#004B2B" />
-                <Text style={styles.officerText}>{item.officerAlias}</Text>
+              <View style={s.officerRow}>
+                <Ionicons name="police-badge-outline" size={14} color={colors.primary} />
+                <Text style={[s.officerText, { color: colors.primary }]}>{item.officerAlias}</Text>
               </View>
             )}
           </View>
         </View>
 
         {isActive && (
-          <View style={styles.actionsRow}>
+          <View style={[s.actionsRow, { borderTopColor: colors.border }]}>
             <TouchableOpacity
-              style={styles.rejoinBtn}
+              style={[s.rejoinBtn, { backgroundColor: colors.primary }]}
               onPress={() => handleRejoin(item)}
             >
-              <Ionicons name="videocam-outline" size={16} color="#FFFFFF" />
-              <Text style={styles.rejoinBtnText}>Reingresar</Text>
+              <Ionicons name="videocam-outline" size={16} color={colors.white} />
+              <Text style={[s.rejoinBtnText, { color: colors.white }]}>Reingresar</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.cancelBtn}
+              style={[s.cancelBtn, { backgroundColor: colors.statusRedBg, borderColor: colors.statusRedBorder }]}
               onPress={() => handleCancel(item)}
             >
-              <Ionicons name="close-outline" size={16} color="#D32F2F" />
-              <Text style={styles.cancelBtnText}>Anular</Text>
+              <Ionicons name="close-outline" size={16} color={colors.badgeRed} />
+              <Text style={[s.cancelBtnText, { color: colors.badgeRed }]}>Anular</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {!isActive && item.closedReason && (
-          <View style={styles.reasonRow}>
-            <Text style={styles.reasonLabel}>Motivo:</Text>
-            <Text style={styles.reasonText}>{item.closedReason}</Text>
+          <View style={[s.reasonRow, { borderTopColor: colors.border }]}>
+            <Text style={[s.reasonLabel, { color: colors.emptyText }]}>Motivo:</Text>
+            <Text style={[s.reasonText, { color: colors.textSecondary }]}>{item.closedReason}</Text>
           </View>
         )}
       </View>
@@ -175,36 +179,36 @@ export default function HistoryScreen({ navigation }) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#004B2B" />
+      <SafeAreaView style={[s.safeArea, { backgroundColor: colors.background }]}>
+        <View style={s.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.navbar}>
+    <SafeAreaView style={[s.safeArea, { backgroundColor: colors.background }]}>
+      <View style={[s.navbar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={{ width: 36 }} />
-        <Text style={styles.navTitle}>Mis Incidentes</Text>
+        <Text style={[s.navTitle, { color: colors.textPrimary }]}>Mis Incidentes</Text>
         <View style={{ width: 36 }} />
       </View>
 
-      <View style={styles.tabRow}>
+      <View style={[s.tabRow, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === "activas" && styles.tabActive]}
+          style={[s.tab, activeTab === "activas" && { borderBottomColor: colors.primary }]}
           onPress={() => setActiveTab("activas")}
         >
-          <Text style={[styles.tabText, activeTab === "activas" && styles.tabTextActive]}>
+          <Text style={[s.tabText, { color: colors.textSecondary }, activeTab === "activas" && { color: colors.primary, fontWeight: "bold" }]}>
             Activas ({activeIncidents.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === "historial" && styles.tabActive]}
+          style={[s.tab, activeTab === "historial" && { borderBottomColor: colors.primary }]}
           onPress={() => setActiveTab("historial")}
         >
-          <Text style={[styles.tabText, activeTab === "historial" && styles.tabTextActive]}>
+          <Text style={[s.tabText, { color: colors.textSecondary }, activeTab === "historial" && { color: colors.primary, fontWeight: "bold" }]}>
             Historial ({closedIncidents.length})
           </Text>
         </TouchableOpacity>
@@ -214,18 +218,18 @@ export default function HistoryScreen({ navigation }) {
         data={data}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        contentContainerStyle={data.length === 0 ? styles.emptyContainer : styles.list}
+        contentContainerStyle={data.length === 0 ? s.emptyContainer : s.list}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
+          <View style={s.emptyState}>
             <Ionicons
               name={activeTab === "activas" ? "checkmark-circle-outline" : "document-text-outline"}
               size={64}
-              color="#E0E0E0"
+              color={colors.border}
             />
-            <Text style={styles.emptyTitle}>
+            <Text style={[s.emptyTitle, { color: colors.textSecondary }]}>
               {activeTab === "activas" ? "Sin incidentes activos" : "Sin historial"}
             </Text>
-            <Text style={styles.emptySub}>
+            <Text style={[s.emptySub, { color: colors.emptyText }]}>
               {activeTab === "activas"
                 ? "No tienes llamadas SOS activas en este momento."
                 : "Los incidentes cerrados aparecerán aquí."}
@@ -237,65 +241,63 @@ export default function HistoryScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F8F9FA" },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+const makeStyles = (colors) =>
+  StyleSheet.create({
+    safeArea: { flex: 1 },
+    loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
 
-  navbar: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    backgroundColor: "#FFFFFF", paddingHorizontal: 20, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: "#E0E0E0",
-  },
-  navTitle: { fontSize: 16, fontWeight: "bold", color: "#1A1A1A" },
+    navbar: {
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1,
+    },
+    navTitle: { fontSize: 16, fontWeight: "bold" },
 
-  tabRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#E0E0E0", backgroundColor: "#FFFFFF" },
-  tab: { flex: 1, paddingVertical: 12, alignItems: "center", borderBottomWidth: 3, borderBottomColor: "transparent" },
-  tabActive: { borderBottomColor: "#004B2B" },
-  tabText: { fontSize: 14, color: "#666666", fontWeight: "600" },
-  tabTextActive: { color: "#004B2B", fontWeight: "bold" },
+    tabRow: { flexDirection: "row", borderBottomWidth: 1 },
+    tab: { flex: 1, paddingVertical: 12, alignItems: "center", borderBottomWidth: 3, borderBottomColor: "transparent" },
+    tabText: { fontSize: 14, fontWeight: "600" },
 
-  list: { padding: 20 },
-  emptyContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  emptyState: { alignItems: "center", paddingHorizontal: 32 },
-  emptyTitle: { fontSize: 18, fontWeight: "bold", color: "#666666", marginTop: 16 },
-  emptySub: { fontSize: 14, color: "#A0A0A0", marginTop: 8, textAlign: "center" },
+    list: { padding: 20 },
+    emptyContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+    emptyState: { alignItems: "center", paddingHorizontal: 32 },
+    emptyTitle: { fontSize: 18, fontWeight: "bold", marginTop: 16 },
+    emptySub: { fontSize: 14, marginTop: 8, textAlign: "center" },
 
-  card: {
-    backgroundColor: "#FFFFFF", borderRadius: 12, padding: 16,
-    marginBottom: 12, borderWidth: 1, borderColor: "#E0E0E0",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
-  cardRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  cardIconWrap: {
-    width: 50, height: 50, borderRadius: 10,
-    backgroundColor: "#F2F7F5", justifyContent: "center", alignItems: "center",
-  },
-  cardContent: { flex: 1 },
-  cardHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
-  cardTitle: { fontSize: 15, fontWeight: "bold", color: "#1A1A1A", flex: 1 },
-  cardFolio: { fontSize: 12, color: "#666666", marginBottom: 6, fontWeight: "600" },
-  locationRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
-  locationText: { fontSize: 12, color: "#A0A0A0", marginLeft: 4, flex: 1 },
-  officerRow: { flexDirection: "row", alignItems: "center", marginTop: 4, gap: 4 },
-  officerText: { fontSize: 12, color: "#004B2B", fontWeight: "600" },
+    card: {
+      borderRadius: 12, padding: 16,
+      marginBottom: 12, borderWidth: 1,
+      shadowColor: colors.textPrimary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
+    },
+    cardRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+    cardIconWrap: {
+      width: 50, height: 50, borderRadius: 10,
+      justifyContent: "center", alignItems: "center",
+    },
+    cardContent: { flex: 1 },
+    cardHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
+    cardTitle: { fontSize: 15, fontWeight: "bold", flex: 1 },
+    cardFolio: { fontSize: 12, marginBottom: 6, fontWeight: "600" },
+    locationRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
+    locationText: { fontSize: 12, marginLeft: 4, flex: 1 },
+    officerRow: { flexDirection: "row", alignItems: "center", marginTop: 4, gap: 4 },
+    officerText: { fontSize: 12, fontWeight: "600" },
 
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  statusText: { fontSize: 10, fontWeight: "bold", textTransform: "uppercase" },
+    statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+    statusText: { fontSize: 10, fontWeight: "bold", textTransform: "uppercase" },
 
-  actionsRow: { flexDirection: "row", gap: 12, marginTop: 16, borderTopWidth: 1, borderTopColor: "#F0F0F0", paddingTop: 12 },
-  rejoinBtn: {
-    flex: 1, flexDirection: "row", backgroundColor: "#004B2B", borderRadius: 8,
-    paddingVertical: 12, justifyContent: "center", alignItems: "center", gap: 6,
-  },
-  rejoinBtnText: { color: "#FFFFFF", fontSize: 14, fontWeight: "bold" },
-  cancelBtn: {
-    flex: 1, flexDirection: "row", backgroundColor: "#FFF0F0", borderRadius: 8,
-    paddingVertical: 12, justifyContent: "center", alignItems: "center", gap: 6,
-    borderWidth: 1, borderColor: "#FFD6D6",
-  },
-  cancelBtnText: { color: "#D32F2F", fontSize: 14, fontWeight: "bold" },
+    actionsRow: { flexDirection: "row", gap: 12, marginTop: 16, borderTopWidth: 1, paddingTop: 12 },
+    rejoinBtn: {
+      flex: 1, flexDirection: "row", borderRadius: 8,
+      paddingVertical: 12, justifyContent: "center", alignItems: "center", gap: 6,
+    },
+    rejoinBtnText: { fontSize: 14, fontWeight: "bold" },
+    cancelBtn: {
+      flex: 1, flexDirection: "row", borderRadius: 8,
+      paddingVertical: 12, justifyContent: "center", alignItems: "center", gap: 6,
+      borderWidth: 1,
+    },
+    cancelBtnText: { fontSize: 14, fontWeight: "bold" },
 
-  reasonRow: { marginTop: 12, borderTopWidth: 1, borderTopColor: "#F0F0F0", paddingTop: 12 },
-  reasonLabel: { fontSize: 11, color: "#A0A0A0", fontWeight: "bold", marginBottom: 4 },
-  reasonText: { fontSize: 13, color: "#666666", fontStyle: "italic" },
-});
+    reasonRow: { marginTop: 12, borderTopWidth: 1, paddingTop: 12 },
+    reasonLabel: { fontSize: 11, fontWeight: "bold", marginBottom: 4 },
+    reasonText: { fontSize: 13, fontStyle: "italic" },
+  });

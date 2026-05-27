@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -15,10 +15,12 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "fire
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../../firebase/firebaseConfig";
 import { ROLES } from "../../constants/roles";
-import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
+import { useTheme } from "../../context/ThemeContext";
+import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function OfficerLoginScreen({ navigation }) {
+  const { colors } = useTheme();
   const [rut, setRut] = useState("");
   const [alias, setAlias] = useState("");
   const [password, setPassword] = useState("");
@@ -26,6 +28,8 @@ export default function OfficerLoginScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const s = useMemo(() => makeStyles(colors), [colors]);
 
   const buildEmail = () =>
     rut.includes("@") ? rut : `${rut.replace(/[.\-]/g, "")}@carabineros.cl`;
@@ -77,46 +81,46 @@ export default function OfficerLoginScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[s.safeArea, { backgroundColor: colors.drawerHeaderBg }]}>
       <KeyboardAvoidingView
-        style={styles.flex}
+        style={s.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
           
           {/* Header & Brand */}
-          <View style={styles.brandSection}>
-            <View style={styles.logoCircle}>
-              <MaterialCommunityIcons name="star-circle" size={50} color="#D4AF37" />
+          <View style={s.brandSection}>
+            <View style={s.logoCircle}>
+              <MaterialCommunityIcons name="star-circle" size={50} color={colors.gold} />
             </View>
-            <Text style={styles.republicText}>REPÚBLICA DE CHILE</Text>
-            <Text style={styles.welcomeTitle}>S.O.S. CARABINEROS</Text>
-            <View style={styles.divider} />
-            <Text style={styles.portalText}>PORTAL DE OPERADORES</Text>
+            <Text style={[s.republicText, { color: colors.textSecondary }]}>REPÚBLICA DE CHILE</Text>
+            <Text style={s.welcomeTitle}>S.O.S. CARABINEROS</Text>
+            <View style={s.divider} />
+            <Text style={[s.portalText, { color: colors.gold }]}>PORTAL DE OPERADORES</Text>
           </View>
 
           {/* Form Card Overlay */}
-          <View style={styles.cardContainer}>
-            <Text style={styles.inputLabelInside}>NÚMERO DE PLACA / RUT</Text>
-            <View style={styles.inputWrapper}>
+          <View style={[s.cardContainer, { backgroundColor: colors.surface }]}>
+            <Text style={[s.inputLabelInside, { color: colors.labelGray }]}>NÚMERO DE PLACA / RUT</Text>
+            <View style={[s.inputWrapper, { borderColor: colors.border }]}>
               <TextInput
-                style={styles.inputFieldFlex}
+                style={[s.inputFieldFlex, { color: colors.textPrimary }]}
                 placeholder="Ej: 12.345.678-9"
-                placeholderTextColor={COLORS.textSecondary}
+                placeholderTextColor={colors.textSecondary}
                 value={rut}
                 onChangeText={setRut}
                 autoCapitalize="none"
               />
             </View>
 
-            <Text style={styles.inputLabelInside}>
+            <Text style={[s.inputLabelInside, { color: colors.labelGray }]}>
               {isRegistering ? "CREAR CONTRASEÑA" : "CONTRASEÑA DE SISTEMA"}
             </Text>
-            <View style={styles.inputWrapper}>
+            <View style={[s.inputWrapper, { borderColor: colors.border }]}>
               <TextInput
-                style={styles.inputFieldFlex}
+                style={[s.inputFieldFlex, { color: colors.textPrimary }]}
                 placeholder="••••••••"
-                placeholderTextColor={COLORS.textSecondary}
+                placeholderTextColor={colors.textSecondary}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -129,19 +133,19 @@ export default function OfficerLoginScreen({ navigation }) {
                 <Ionicons
                   name={showPassword ? "eye-off-outline" : "eye-outline"}
                   size={22}
-                  color={COLORS.textSecondary}
+                  color={colors.textSecondary}
                 />
               </TouchableOpacity>
             </View>
 
             {isRegistering && (
               <>
-                <Text style={styles.inputLabelInside}>GRADO Y NOMBRE / ALIAS</Text>
-                <View style={styles.inputWrapper}>
+                <Text style={[s.inputLabelInside, { color: colors.labelGray }]}>GRADO Y NOMBRE / ALIAS</Text>
+                <View style={[s.inputWrapper, { borderColor: colors.border }]}>
                   <TextInput
-                    style={styles.inputFieldFlex}
+                    style={[s.inputFieldFlex, { color: colors.textPrimary }]}
                     placeholder="Ej: Cabo 1ro José Martínez"
-                    placeholderTextColor={COLORS.textSecondary}
+                    placeholderTextColor={colors.textSecondary}
                     value={alias}
                     onChangeText={setAlias}
                     autoCapitalize="words"
@@ -152,12 +156,12 @@ export default function OfficerLoginScreen({ navigation }) {
 
             {isRegistering && (
               <>
-                <Text style={styles.inputLabelInside}>CONFIRMAR CONTRASEÑA</Text>
-                <View style={styles.inputWrapper}>
+                <Text style={[s.inputLabelInside, { color: colors.labelGray }]}>CONFIRMAR CONTRASEÑA</Text>
+                <View style={[s.inputWrapper, { borderColor: colors.border }]}>
                   <TextInput
-                    style={styles.inputFieldFlex}
+                    style={[s.inputFieldFlex, { color: colors.textPrimary }]}
                     placeholder="Repite la contraseña"
-                    placeholderTextColor={COLORS.textSecondary}
+                    placeholderTextColor={colors.textSecondary}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     secureTextEntry={!showPassword}
@@ -167,45 +171,45 @@ export default function OfficerLoginScreen({ navigation }) {
             )}
 
             {!isRegistering && (
-              <View style={styles.checkboxRow}>
-                <Ionicons name="square-outline" size={20} color={COLORS.textSecondary} />
-                <Text style={styles.checkboxText}>Mantener sesión activa en turno</Text>
+              <View style={s.checkboxRow}>
+                <Ionicons name="square-outline" size={20} color={colors.textSecondary} />
+                <Text style={[s.checkboxText, { color: colors.textSecondary }]}>Mantener sesión activa en turno</Text>
               </View>
             )}
 
             <TouchableOpacity
-              style={[styles.primaryButton, loading && { opacity: 0.6 }]}
+              style={[s.primaryButton, { backgroundColor: colors.primary }, loading && { opacity: 0.6 }]}
               onPress={isRegistering ? handleRegister : handleLogin}
               disabled={loading}
               activeOpacity={0.8}
             >
-              <Text style={styles.primaryButtonText}>
+              <Text style={s.primaryButtonText}>
                 {loading ? "Verificando..." : isRegistering ? "Registrar Personal" : "Iniciar Turno"}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => setIsRegistering(!isRegistering)}
-              style={styles.switchLink}
+              style={s.switchLink}
               hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
             >
-               <Text style={styles.switchLinkText}>{isRegistering ? "Cancelar registro" : "¿Nuevo operador? Regístrate"}</Text>
+               <Text style={[s.switchLinkText, { color: colors.textSecondary }]}>{isRegistering ? "Cancelar registro" : "¿Nuevo operador? Regístrate"}</Text>
             </TouchableOpacity>
 
-            <View style={styles.footerInfoRow}>
-              <MaterialCommunityIcons name="shield-outline" size={16} color={COLORS.textSecondary} />
-              <Text style={styles.footerInfoText}>Sistema LENSE — Acceso Restringido</Text>
+            <View style={s.footerInfoRow}>
+              <MaterialCommunityIcons name="shield-outline" size={16} color={colors.textSecondary} />
+              <Text style={[s.footerInfoText, { color: colors.textSecondary }]}>Sistema LENSE — Acceso Restringido</Text>
             </View>
           </View>
 
           {/* Back to Citizen Flow */}
           <TouchableOpacity
-            style={styles.backToCitizen}
+            style={s.backToCitizen}
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }}
           >
-            <Ionicons name="arrow-back" size={18} color="#D4AF37" />
-            <Text style={styles.backToCitizenText}>Volver a portal ciudadano</Text>
+            <Ionicons name="arrow-back" size={18} color={colors.gold} />
+            <Text style={[s.backToCitizenText, { color: colors.gold }]}>Volver a portal ciudadano</Text>
           </TouchableOpacity>
 
         </ScrollView>
@@ -214,103 +218,99 @@ export default function OfficerLoginScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.navbarBg },
-  flex: { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.lg,
-  },
-  brandSection: { alignItems: "center", marginBottom: SPACING.xl },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 2,
-    borderColor: "#D4AF37",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: SPACING.md,
-  },
-  republicText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs, letterSpacing: 2, fontWeight: FONT_WEIGHT.semiBold, marginBottom: SPACING.xs },
-  welcomeTitle: {
-    fontSize: FONT_SIZE.xxl,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    letterSpacing: 1,
-  },
-  divider: {
-    width: 40,
-    height: 3,
-    backgroundColor: "#D4AF37",
-    marginVertical: SPACING.sm,
-  },
-  portalText: { color: "#D4AF37", fontSize: FONT_SIZE.base, letterSpacing: 2, fontWeight: FONT_WEIGHT.bold },
-  
-  cardContainer: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.xl,
-    padding: SPACING.lg,
-    elevation: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
-  inputLabelInside: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.labelGray,
-    fontWeight: FONT_WEIGHT.bold,
-    marginBottom: SPACING.sm,
-    letterSpacing: 0.5,
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.sm,
-    paddingHorizontal: SPACING.md,
-    height: 50,
-    marginBottom: SPACING.lg,
-  },
-  inputFieldFlex: {
-    fontSize: FONT_SIZE.md,
-    color: COLORS.textPrimary,
-    flex: 1,
-    height: "100%",
-    includeFontPadding: false,
-  },
-  checkboxRow: { flexDirection: "row", alignItems: "center", marginBottom: SPACING.lg },
-  checkboxText: { fontSize: FONT_SIZE.base, color: COLORS.textSecondary, marginLeft: SPACING.sm },
-  
-  primaryButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.md,
-    height: 54,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  primaryButtonText: { color: "#FFFFFF", fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-  
-  switchLink: { marginTop: SPACING.md, alignSelf: "center" },
-  switchLinkText: { fontSize: FONT_SIZE.base, color: COLORS.textSecondary },
-  
-  footerInfoRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: SPACING.xl,
-  },
-  footerInfoText: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginLeft: SPACING.xs },
-  
-  backToCitizen: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: SPACING.xl,
-  },
-  backToCitizenText: { color: "#D4AF37", fontSize: FONT_SIZE.base, marginLeft: SPACING.sm, fontWeight: FONT_WEIGHT.semiBold },
-});
+const makeStyles = (colors) =>
+  StyleSheet.create({
+    safeArea: { flex: 1 },
+    flex: { flex: 1 },
+    scroll: {
+      flexGrow: 1,
+      justifyContent: "center",
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.lg,
+    },
+    brandSection: { alignItems: "center", marginBottom: SPACING.xl },
+    logoCircle: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      borderWidth: 2,
+      borderColor: colors.gold,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: SPACING.md,
+    },
+    republicText: { fontSize: FONT_SIZE.xs, letterSpacing: 2, fontWeight: FONT_WEIGHT.semiBold, marginBottom: SPACING.xs },
+    welcomeTitle: {
+      fontSize: FONT_SIZE.xxl,
+      fontWeight: "900",
+      color: colors.white,
+      letterSpacing: 1,
+    },
+    divider: {
+      width: 40,
+      height: 3,
+      backgroundColor: colors.gold,
+      marginVertical: SPACING.sm,
+    },
+    portalText: { fontSize: FONT_SIZE.base, letterSpacing: 2, fontWeight: FONT_WEIGHT.bold },
+    
+    cardContainer: {
+      borderRadius: RADIUS.xl,
+      padding: SPACING.lg,
+      elevation: 10,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 5 },
+      shadowOpacity: 0.3,
+      shadowRadius: 10,
+    },
+    inputLabelInside: {
+      fontSize: FONT_SIZE.xs,
+      fontWeight: FONT_WEIGHT.bold,
+      marginBottom: SPACING.sm,
+      letterSpacing: 0.5,
+    },
+    inputWrapper: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderWidth: 1,
+      borderRadius: RADIUS.sm,
+      paddingHorizontal: SPACING.md,
+      height: 50,
+      marginBottom: SPACING.lg,
+    },
+    inputFieldFlex: {
+      fontSize: FONT_SIZE.md,
+      flex: 1,
+      height: "100%",
+      includeFontPadding: false,
+    },
+    checkboxRow: { flexDirection: "row", alignItems: "center", marginBottom: SPACING.lg },
+    checkboxText: { fontSize: FONT_SIZE.base, marginLeft: SPACING.sm },
+    
+    primaryButton: {
+      borderRadius: RADIUS.md,
+      height: 54,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    primaryButtonText: { color: colors.white, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
+    
+    switchLink: { marginTop: SPACING.md, alignSelf: "center" },
+    switchLinkText: { fontSize: FONT_SIZE.base },
+    
+    footerInfoRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      marginTop: SPACING.xl,
+    },
+    footerInfoText: { fontSize: FONT_SIZE.xs, marginLeft: SPACING.xs },
+    
+    backToCitizen: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      marginTop: SPACING.xl,
+    },
+    backToCitizenText: { fontSize: FONT_SIZE.base, marginLeft: SPACING.sm, fontWeight: FONT_WEIGHT.semiBold },
+  });
