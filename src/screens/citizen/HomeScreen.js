@@ -52,7 +52,7 @@ export default function HomeScreen({ navigation }) {
   const pressInterval = useRef(null);
   const insets = useSafeAreaInsets();
 
-  const s = useMemo(() => makeStyles(colors), [colors]);
+  const s = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -325,7 +325,7 @@ export default function HomeScreen({ navigation }) {
   );
 }
 
-const makeStyles = (colors) =>
+const makeStyles = (colors, isDark) =>
   StyleSheet.create({
     safeArea: { flex: 1 },
     overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.blackTranslucent, zIndex: 100 },
@@ -366,8 +366,8 @@ const makeStyles = (colors) =>
     sosSection: { flex: 1, justifyContent: "center", alignItems: "center" },
     sosButton: { justifyContent: "center", alignItems: "center" },
     sosText: { fontSize: 40, fontWeight: FONT_WEIGHT.bold, color: colors.white, letterSpacing: 2, marginTop: SPACING.xs },
-    progressContainer: { width: 140, height: 6, backgroundColor: colors.whiteTranslucent, borderRadius: 3, marginTop: 16, alignSelf: "center" },
-    progressBar: { height: "100%", backgroundColor: colors.white, borderRadius: 3 },
+    progressContainer: { width: 140, height: 6, backgroundColor: isDark ? colors.whiteTranslucent : "rgba(0,0,0,0.3)", borderRadius: 3, marginTop: 16, alignSelf: "center" },
+    progressBar: { height: "100%", backgroundColor: isDark ? colors.white : "#000000", borderRadius: 3 },
     sosHint: { fontSize: FONT_SIZE.base, textAlign: "center", marginTop: SPACING.xl, lineHeight: 22 },
     sosHintBold: { fontWeight: "900", letterSpacing: 1 },
     
