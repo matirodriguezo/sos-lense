@@ -108,16 +108,16 @@ export default function ProfileScreen({ navigation }) {
           style={[s.historyBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => navigation.navigate("Historial")}
         >
-          <Text style={s.historyBtnIcon}>📋</Text>
+          <Ionicons name="document-text-outline" size={22} color={colors.primary} />
           <Text style={[s.historyBtnText, { color: colors.textPrimary }]}>Ver historial de incidentes</Text>
-          <Text style={[s.historyBtnArrow, { color: colors.textSecondary }]}>→</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.iconMuted} />
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[s.logoutBtn, { backgroundColor: colors.surface, borderColor: colors.danger }]}
           onPress={handleLogout}
         >
-          <Text style={s.logoutIcon}>🚪</Text>
+          <Ionicons name="log-out-outline" size={22} color={colors.danger} />
           <Text style={[s.logoutText, { color: colors.danger }]}>Cerrar Sesión</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -167,15 +167,12 @@ const makeStyles = (colors) =>
     infoValue: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semiBold },
     historyBtn: {
       flexDirection: "row", alignItems: "center",
-      borderRadius: RADIUS.md, padding: SPACING.md, borderWidth: 1, marginBottom: SPACING.md,
+      borderRadius: RADIUS.md, padding: SPACING.md, borderWidth: 1, marginBottom: SPACING.md, gap: SPACING.sm,
     },
-    historyBtnIcon: { fontSize: 20, marginRight: SPACING.md },
     historyBtnText: { flex: 1, fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.medium },
-    historyBtnArrow: { fontSize: FONT_SIZE.lg },
     logoutBtn: {
       flexDirection: "row", alignItems: "center", justifyContent: "center",
       borderRadius: RADIUS.md, padding: SPACING.md, borderWidth: 1, gap: SPACING.sm,
     },
-    logoutIcon: { fontSize: 18 },
     logoutText: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semiBold },
   });

@@ -1,5 +1,7 @@
-import { useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, Animated, StyleSheet } from "react-native";
+import { useEffect, useRef, useCallback } from "react";
+import { View, Text, TouchableOpacity, Animated, StyleSheet, Platform } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNotifications } from "../context/NotificationContext";
 import { useTheme } from "../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,66 +9,86 @@ import { Ionicons } from "@expo/vector-icons";
 export default function NotificationBanner() {
   const { banner } = useNotifications();
   const { colors } = useTheme();
-  const slideAnim = useRef(new Animated.Value(-100)).current;
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const slideAnim = useRef(new Animated.Value(-120)).current;
 
   useEffect(() => {
     if (banner) {
-      Animated.sequence([
-        Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-      ]).start();
+      slideAnim.setValue(-120);
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 18,
+        stiffness: 180,
+      }).start();
     } else {
-      Animated.timing(slideAnim, { toValue: -100, duration: 200, useNativeDriver: true }).start();
+      Animated.timing(slideAnim, {
+        toValue: -120,
+        duration: 150,
+        useNativeDriver: true,
+      }).start();
     }
   }, [banner]);
+
+  const handlePress = useCallback(() => {
+    if (!banner?.route) return;
+    navigation.navigate(banner.route, banner.params);
+  }, [banner, navigation]);
 
   if (!banner) return null;
 
   return (
     <Animated.View
       style={[
-        styles.container,
+        s.root,
         {
+          top: insets.top + 8,
+          left: 12,
+          right: 12,
           transform: [{ translateY: slideAnim }],
           backgroundColor: colors.surface,
           borderColor: colors.primary,
+          shadowColor: "#000",
         },
       ]}
     >
-      <View style={[styles.iconWrap, { backgroundColor: colors.greenTranslucent }]}>
-        <Ionicons name="chatbubble-ellipses" size={20} color={colors.primary} />
-      </View>
-      <View style={styles.textWrap}>
-        <Text style={[styles.sender, { color: colors.textPrimary }]} numberOfLines={1}>
-          {banner.senderName}
-        </Text>
-        <Text style={[styles.preview, { color: colors.textSecondary }]} numberOfLines={1}>
-          {banner.text}
-        </Text>
-      </View>
-      <View style={[styles.badge, { backgroundColor: colors.danger }]}>
-        <Text style={[styles.badgeText, { color: colors.white }]}>1</Text>
-      </View>
+      <TouchableOpacity activeOpacity={0.85} onPress={handlePress} style={s.touchable}>
+        <View style={[s.iconWrap, { backgroundColor: colors.greenTranslucent }]}>
+          <Ionicons name="chatbubble-ellipses" size={20} color={colors.primary} />
+        </View>
+        <View style={s.textWrap}>
+          <Text style={[s.sender, { color: colors.textPrimary }]} numberOfLines={1}>
+            {banner.senderName}
+          </Text>
+          <Text style={[s.preview, { color: colors.textSecondary }]} numberOfLines={1}>
+            {banner.text}
+          </Text>
+        </View>
+        <View style={[s.badge, { backgroundColor: colors.danger }]}>
+          <Text style={[s.badgeText, { color: colors.white }]}>1</Text>
+        </View>
+      </TouchableOpacity>
     </Animated.View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
+const s = StyleSheet.create({
+  root: {
     position: "absolute",
-    top: 50,
-    left: 12,
-    right: 12,
+    zIndex: 9999,
+    elevation: 20,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    overflow: "visible",
+  },
+  touchable: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 14,
     padding: 14,
-    borderWidth: 1,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    zIndex: 9999,
   },
   iconWrap: {
     width: 40,

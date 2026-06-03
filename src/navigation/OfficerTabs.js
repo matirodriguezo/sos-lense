@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { View, Text, StyleSheet } from "react-native";
 import { useTheme } from "../context/ThemeContext";
@@ -10,18 +11,21 @@ import { useNotifications } from "../context/NotificationContext";
 
 const Tab = createBottomTabNavigator();
 
+const TAB_ICONS = {
+  Emergencia: "alert-circle-outline",
+  Mapa: "map-outline",
+  Chat: "chatbubbles-outline",
+  Perfil: "person-outline",
+};
+
 function TabIcon({ label, focused, badge, colors }) {
-  const icons = {
-    Emergencia: "🆘",
-    Mapa: "🗺️",
-    Chat: "💬",
-    Perfil: "👤",
-  };
   return (
     <View style={[styles.iconWrap, focused && { backgroundColor: colors.greenTranslucent }]}>
-      <Text style={[styles.icon, focused && styles.iconActive]}>
-        {icons[label] || "•"}
-      </Text>
+      <Ionicons
+        name={TAB_ICONS[label]}
+        size={22}
+        color={focused ? colors.primary : colors.tabInactive}
+      />
       {badge > 0 && (
         <View style={[styles.badge, { backgroundColor: colors.badgeRed }]}>
           <Text style={[styles.badgeText, { color: colors.white }]}>{badge > 9 ? "9+" : badge}</Text>
@@ -98,8 +102,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     position: "relative",
   },
-  icon: { fontSize: 20, opacity: 0.5 },
-  iconActive: { opacity: 1 },
   badge: {
     position: "absolute",
     top: -4,

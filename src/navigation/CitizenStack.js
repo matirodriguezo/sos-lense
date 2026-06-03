@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useTheme } from "../context/ThemeContext";
 import CitizenTabs from "./CitizenTabs";
@@ -10,18 +11,19 @@ const Stack = createNativeStackNavigator();
 export default function CitizenStack() {
   const { colors } = useTheme();
 
+  const screenOptions = useMemo(() => ({
+    headerStyle: { backgroundColor: colors.headerBg },
+    headerTintColor: colors.primary,
+    headerTitleStyle: {
+      fontWeight: FONT_WEIGHT.bold,
+      fontSize: FONT_SIZE.md,
+    },
+    headerShadowVisible: false,
+    animation: "fade",
+  }), [colors]);
+
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.headerBg },
-        headerTintColor: colors.primary,
-        headerTitleStyle: {
-          fontWeight: FONT_WEIGHT.bold,
-          fontSize: FONT_SIZE.md,
-        },
-        headerShadowVisible: false,
-      }}
-    >
+    <Stack.Navigator screenOptions={screenOptions}>
       <Stack.Screen
         name="Home"
         component={CitizenTabs}
@@ -30,12 +32,12 @@ export default function CitizenStack() {
       <Stack.Screen
         name="Classification"
         component={ClassificationScreen}
-        options={{ headerShown: false }}
+        options={{ headerShown: false, animation: "slide_from_bottom" }}
       />
       <Stack.Screen
         name="VideoCall"
         component={VideoCallScreen}
-        options={{ headerShown: false }}
+        options={{ headerShown: false, animation: "fade" }}
       />
     </Stack.Navigator>
   );

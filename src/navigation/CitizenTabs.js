@@ -1,5 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import HomeScreen from "../screens/citizen/HomeScreen";
 import HistoryScreen from "../screens/citizen/HistoryScreen";
@@ -8,11 +9,20 @@ import { FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
 
 const Tab = createBottomTabNavigator();
 
+const TAB_ICONS = {
+  Inicio: "home-outline",
+  Historial: "time-outline",
+  Perfil: "person-outline",
+};
+
 function TabIcon({ label, focused, colors }) {
-  const icons = { Inicio: "🏠", Historial: "📋", Perfil: "👤" };
   return (
     <View style={[styles.iconContainer, focused && { backgroundColor: colors.greenTranslucent }]}>
-      <Text style={styles.icon}>{icons[label] || "•"}</Text>
+      <Ionicons
+        name={TAB_ICONS[label]}
+        size={22}
+        color={focused ? colors.primary : colors.tabInactive}
+      />
     </View>
   );
 }
@@ -71,5 +81,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  icon: { fontSize: 20 },
 });

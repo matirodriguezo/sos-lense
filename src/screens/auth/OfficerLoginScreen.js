@@ -113,6 +113,22 @@ export default function OfficerLoginScreen({ navigation }) {
               />
             </View>
 
+            {isRegistering && (
+              <>
+                <Text style={[s.inputLabelInside, { color: colors.labelGray }]}>GRADO Y NOMBRE / ALIAS</Text>
+                <View style={[s.inputWrapper, { borderColor: colors.border }]}>
+                  <TextInput
+                    style={[s.inputFieldFlex, { color: colors.textPrimary }]}
+                    placeholder="Ej: Cabo 1ro José Martínez"
+                    placeholderTextColor={colors.textSecondary}
+                    value={alias}
+                    onChangeText={setAlias}
+                    autoCapitalize="words"
+                  />
+                </View>
+              </>
+            )}
+
             <Text style={[s.inputLabelInside, { color: colors.labelGray }]}>
               {isRegistering ? "CREAR CONTRASEÑA" : "CONTRASEÑA DE SISTEMA"}
             </Text>
@@ -137,22 +153,6 @@ export default function OfficerLoginScreen({ navigation }) {
                 />
               </TouchableOpacity>
             </View>
-
-            {isRegistering && (
-              <>
-                <Text style={[s.inputLabelInside, { color: colors.labelGray }]}>GRADO Y NOMBRE / ALIAS</Text>
-                <View style={[s.inputWrapper, { borderColor: colors.border }]}>
-                  <TextInput
-                    style={[s.inputFieldFlex, { color: colors.textPrimary }]}
-                    placeholder="Ej: Cabo 1ro José Martínez"
-                    placeholderTextColor={colors.textSecondary}
-                    value={alias}
-                    onChangeText={setAlias}
-                    autoCapitalize="words"
-                  />
-                </View>
-              </>
-            )}
 
             {isRegistering && (
               <>

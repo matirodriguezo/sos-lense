@@ -115,6 +115,20 @@ export default function LoginScreen({ navigation }) {
               />
             </View>
 
+            {isRegistering && (
+              <View style={[s.inputWrapper, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                <Text style={[s.inputLabelInside, { color: colors.textSecondary }]}>Nombre / Alias</Text>
+                <TextInput
+                  style={[s.inputField, { color: colors.textPrimary }]}
+                  placeholder="Ej: Benjamin Muñoz"
+                  placeholderTextColor={colors.textSecondary}
+                  value={alias}
+                  onChangeText={setAlias}
+                  autoCapitalize="words"
+                />
+              </View>
+            )}
+
             <View style={[s.inputWrapper, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Text style={[s.inputLabelInside, { color: colors.textSecondary }]}>
                 {isRegistering ? "Crea una Contraseña" : "Clave Única"}
@@ -150,20 +164,6 @@ export default function LoginScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
             </View>
-
-            {isRegistering && (
-              <View style={[s.inputWrapper, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-                <Text style={[s.inputLabelInside, { color: colors.textSecondary }]}>Nombre / Alias</Text>
-                <TextInput
-                  style={[s.inputField, { color: colors.textPrimary }]}
-                  placeholder="Ej: Benjamin Muñoz"
-                  placeholderTextColor={colors.textSecondary}
-                  value={alias}
-                  onChangeText={setAlias}
-                  autoCapitalize="words"
-                />
-              </View>
-            )}
 
             {isRegistering && (
               <View style={[s.inputWrapper, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>

@@ -2,9 +2,8 @@ import { NavigationContainer } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "./src/context/ThemeContext";
 import { NotificationProvider } from "./src/context/NotificationContext";
-import { NotificationContext } from "./src/context/NotificationContext";
 import NotificationBanner from "./src/components/NotificationBanner";
-import { useContext, Component, createRef } from "react";
+import { Component, createRef } from "react";
 import { View, Text, ScrollView } from "react-native";
 import AppNavigator from "./src/navigation/AppNavigator";
 
@@ -30,7 +29,7 @@ class ErrorBoundary extends Component {
       return (
         <View style={{ flex: 1, backgroundColor: "#1a1a1a", padding: 20, paddingTop: 60 }}>
           <Text style={{ color: "#ff4444", fontSize: 20, fontWeight: "bold", marginBottom: 12 }}>
-            💥 Error
+            Error
           </Text>
           <Text style={{ color: "#ffffff", fontSize: 14, marginBottom: 8 }}>
             {this.state.error?.message || String(this.state.error)}
@@ -48,12 +47,10 @@ class ErrorBoundary extends Component {
 }
 
 function AppInner() {
-  const { banner } = useContext(NotificationContext);
-
   return (
     <>
       <AppNavigator />
-      {banner && <NotificationBanner />}
+      <NotificationBanner />
     </>
   );
 }

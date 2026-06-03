@@ -45,7 +45,7 @@ export default function CloseIncidentScreen({ route, navigation }) {
       await closeIncident(incidentId, observations.trim(), reason.trim());
       await sendMessage(
         incidentId,
-        `🔴 INCIDENTE CERRADO. Resolución: ${reason.trim()}`,
+        `[CERRADO] INCIDENTE CERRADO. Resolución: ${reason.trim()}`,
         auth.currentUser.uid,
         "OFFICER"
       );

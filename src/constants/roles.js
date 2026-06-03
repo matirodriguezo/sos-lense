@@ -12,10 +12,10 @@ export const INCIDENT_STATUS = {
 };
 
 export const INCIDENT_TYPES = [
-  { id: "ROBO", label: "Robo", icon: "🔒" },
-  { id: "VIOLENCIA", label: "Violencia", icon: "⚠️" },
-  { id: "ACCIDENTE", label: "Accidente", icon: "🚗" },
-  { id: "OTRO", label: "Otro", icon: "❓" },
+  { id: "ROBO", label: "Robo", icon: "shield-outline" },
+  { id: "VIOLENCIA", label: "Violencia", icon: "alert-triangle-outline" },
+  { id: "ACCIDENTE", label: "Accidente", icon: "car-outline" },
+  { id: "OTRO", label: "Otro", icon: "help-circle-outline" },
 ];
 
 export const QUICK_REQUESTS = [

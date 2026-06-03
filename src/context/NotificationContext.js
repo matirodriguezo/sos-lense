@@ -16,9 +16,12 @@ export function NotificationProvider({ children }) {
   const incidentUnsub = useRef(null);
   const authUnsub = useRef(null);
 
-  const showBanner = useCallback((senderName, text) => {
+  const showBanner = useCallback((senderName, text, incidentId, role) => {
     if (bannerTimer.current) clearTimeout(bannerTimer.current);
-    setBanner({ senderName, text });
+    const navTarget = role === "OFFICER"
+      ? { route: "Emergencia", params: { screen: "IncidentManagement", params: { incidentId, autoOpenChat: true } } }
+      : { route: "VideoCall", params: { incidentId, autoOpenChat: true } };
+    setBanner({ senderName, text, incidentId, ...navTarget });
     bannerTimer.current = setTimeout(() => setBanner(null), 4000);
   }, []);
 
@@ -90,10 +93,9 @@ export function NotificationProvider({ children }) {
                     ? (incident.citizenAlias || "Ciudadano")
                     : (incident.officerAlias || "Oficial");
 
-                  // Always show banner (in-app) unless user is actively in this chat
                   if (activeChatIdRef.current !== incident.id) {
                     setUnreadCount((prev) => prev + 1);
-                    showBanner(senderName, msg.text);
+                    showBanner(senderName, msg.text, incident.id, role);
                   }
                 });
               });

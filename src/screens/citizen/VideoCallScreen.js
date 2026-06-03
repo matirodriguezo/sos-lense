@@ -41,11 +41,11 @@ const QUICK_OPTIONS = [
 
 export default function VideoCallScreen({ route, navigation }) {
   const { colors } = useTheme();
-  const { incidentId } = route.params;
+  const { incidentId, autoOpenChat } = route.params;
   const { enterChat, leaveChat } = useNotifications();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [showChat, setShowChat] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(autoOpenChat || false);
   const [isMuted, setIsMuted] = useState(false);
   const [camFlipped, setCamFlipped] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -66,17 +66,23 @@ export default function VideoCallScreen({ route, navigation }) {
   }, [incidentId]);
 
   useEffect(() => {
-    if (showChat) {
+    if (showChatModal) {
       enterChat(incidentId);
     } else {
       leaveChat();
     }
     return () => {
-      if (showChat) {
+      if (showChatModal) {
         leaveChat();
       }
     };
-  }, [showChat, incidentId]);
+  }, [showChatModal, incidentId]);
+
+  useEffect(() => {
+    if (route.params?.autoOpenChat) {
+      setShowChatModal(true);
+    }
+  }, [route.params]);
 
   useEffect(() => {
     if (incident?.status === "CERRADO") {
@@ -124,7 +130,7 @@ export default function VideoCallScreen({ route, navigation }) {
     }
     try {
       await cancelIncident(incidentId, closeReason.trim());
-      await sendMessage(incidentId, `🔴 Incidente cerrado: ${closeReason.trim()}`, auth.currentUser.uid, "CITIZEN");
+      await sendMessage(incidentId, `[CERRADO] Incidente cerrado: ${closeReason.trim()}`, auth.currentUser.uid, "CITIZEN");
       setShowCloseModal(false);
       Alert.alert("Cerrado", "Serás redirigido al inicio.", [
         { text: "OK", onPress: () => navigation.reset({ index: 0, routes: [{ name: "Home" }] }) },
@@ -140,9 +146,7 @@ export default function VideoCallScreen({ route, navigation }) {
     <KeyboardAvoidingView style={[s.container, { backgroundColor: colors.videoBg }]} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <StatusBar barStyle="light-content" backgroundColor={colors.videoBg} />
 
-      {/* Área de Video Principal */}
       <View style={[s.videoContainer, { backgroundColor: colors.videoBg }]}>
-        {/* Cabecera Flotante */}
         <View style={[s.floatingHeader, { top: 12 + insets.top }]}>
           <View style={[s.liveBadge, { backgroundColor: colors.badgeRed }]}>
             <View style={s.liveDot} />
@@ -154,13 +158,11 @@ export default function VideoCallScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Simulador de Cámara */}
         <View style={s.mainVideo}>
           <Ionicons name={camFlipped ? "camera-reverse-outline" : "camera-outline"} size={64} color={colors.whiteTranslucent} />
           <Text style={s.cameraLabel}>{camFlipped ? "CÁMARA TRASERA" : "CÁMARA FRONTAL"}</Text>
         </View>
 
-        {/* PiP del Oficial */}
         <View style={[s.pipContainer, { top: 60 + insets.top }]}>
           <View style={[s.pipVideo, { backgroundColor: colors.videoBg, borderColor: colors.primary }]}>
             <MaterialCommunityIcons name="police-badge-outline" size={32} color={colors.white} style={{opacity: 0.5}} />
@@ -172,7 +174,6 @@ export default function VideoCallScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* Scroll de Respuestas Rápidas */}
       <View style={[s.quickSection, { backgroundColor: colors.videoBg }]}>
         <FlatList
           data={QUICK_OPTIONS}
@@ -180,6 +181,10 @@ export default function VideoCallScreen({ route, navigation }) {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.quickList}
           keyExtractor={(item) => item.label}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={3}
+          removeClippedSubviews={Platform.OS === "android"}
           renderItem={({ item }) => (
             <TouchableOpacity style={[s.quickPill, { backgroundColor: colors.quickReplyBg, borderColor: colors.whiteTranslucent }]} onPress={() => handleQuickRequest(item.label)} activeOpacity={0.7}>
               {item.gifPath ? (
@@ -193,65 +198,75 @@ export default function VideoCallScreen({ route, navigation }) {
         />
       </View>
 
-      {/* Interfaz de Chat */}
-      {showChat && (
-        <View style={[s.chatContainer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={(item) => item.id}
-            style={s.chatList}
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-            ListEmptyComponent={<Text style={[s.emptyChat, { color: colors.textSecondary }]}>Escribe un mensaje a la central...</Text>}
-            renderItem={({ item }) => (
-              <View style={[s.chatBubble, isMine(item) ? [s.chatBubbleMine, { backgroundColor: colors.primary }] : [s.chatBubbleOther, { backgroundColor: colors.border }]]}>
-                <Text style={[s.chatText, { color: colors.white }, isMine(item) ? s.chatTextMine : { color: colors.textPrimary }]}>{item.text}</Text>
-                <Text style={[s.chatMeta, { color: colors.whiteTranslucent }, isMine(item) ? s.chatMetaMine : { color: colors.textSecondary }]}>
-                  {isMine(item) ? "Tú" : (incident?.officerAlias || "Oficial")}
-                </Text>
-              </View>
-            )}
-          />
-          <View style={[s.inputRow, { borderTopColor: colors.border, paddingBottom: 12 + insets.bottom }]}>
-            <TextInput
-              style={[s.chatInput, { backgroundColor: colors.inputBg, color: colors.textPrimary }]}
-              value={input}
-              onChangeText={setInput}
-              placeholder="Escribe un mensaje..."
-              placeholderTextColor={colors.textSecondary}
-              onSubmitEditing={handleSend}
-            />
-            <TouchableOpacity style={[s.sendBtn, { backgroundColor: colors.primary }]} onPress={handleSend}>
-              <Ionicons name="send" size={18} color={colors.white} />
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* Dock Inferior de Controles */}
       <View style={[s.controlDock, { backgroundColor: colors.videoBg, borderTopColor: colors.border, paddingBottom: 12 + insets.bottom }]}>
         <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: colors.quickReplyBg }, camFlipped && { backgroundColor: colors.white }]} onPress={() => setCamFlipped(!camFlipped)}>
           <Ionicons name="camera-reverse" size={24} color={camFlipped ? colors.textPrimary : colors.white} />
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: colors.quickReplyBg }, isMuted && { backgroundColor: colors.white }]} onPress={() => setIsMuted(!isMuted)}>
           <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color={isMuted ? colors.textPrimary : colors.white} />
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={[s.hangupBtn, { backgroundColor: colors.badgeRed }]} onPress={handleHangup}>
           <MaterialCommunityIcons name="phone-hangup" size={32} color={colors.white} />
         </TouchableOpacity>
-        
-        <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: colors.quickReplyBg }, showChat && { backgroundColor: colors.white }]} onPress={() => setShowChat(!showChat)}>
-          <Ionicons name="chatbubble-ellipses" size={24} color={showChat ? colors.textPrimary : colors.white} />
+
+        <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: colors.quickReplyBg }, showChatModal && { backgroundColor: colors.white }]} onPress={() => setShowChatModal(!showChatModal)}>
+          <Ionicons name="chatbubble-ellipses" size={24} color={showChatModal ? colors.textPrimary : colors.white} />
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={[s.ctrlBtnDanger, { backgroundColor: colors.badgeRed }]} onPress={() => setShowCloseModal(true)}>
           <Ionicons name="close" size={24} color={colors.white} />
         </TouchableOpacity>
       </View>
 
-      {/* Modal de Cierre */}
+      <Modal visible={showChatModal} transparent animationType="slide">
+        <KeyboardAvoidingView style={[s.modalOverlay, { backgroundColor: colors.overlay }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <View style={[s.chatSheet, { backgroundColor: colors.surface, paddingBottom: 20 + insets.bottom }]}>
+            <View style={s.chatSheetHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+                <Text style={[s.chatSheetTitle, { color: colors.textPrimary }]}>Chat de Emergencia</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowChatModal(false)}><Ionicons name="close" size={24} color={colors.textSecondary} /></TouchableOpacity>
+            </View>
+            <Text style={[s.chatSheetSub, { color: colors.textSecondary }]}>Canal de respaldo — texto alternativo a LENSE</Text>
+
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              style={s.chatList}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+              windowSize={5}
+              maxToRenderPerBatch={10}
+              ListEmptyComponent={<Text style={[s.emptyChat, { color: colors.textSecondary }]}>Sin mensajes.</Text>}
+              renderItem={({ item }) => (
+                <View style={[s.chatBubble, isMine(item) ? [s.chatBubbleMine, { backgroundColor: colors.primary }] : [s.chatBubbleOther, { backgroundColor: colors.border }]]}>
+                  <Text style={[s.chatMeta, isMine(item) ? { color: colors.whiteTranslucent, textAlign: "right" } : { color: colors.textSecondary }]}>
+                    {isMine(item) ? "Tú" : (incident?.officerAlias || "Oficial")}
+                  </Text>
+                  <Text style={[s.chatText, isMine(item) ? { color: colors.white } : { color: colors.textPrimary }]}>{item.text}</Text>
+                </View>
+              )}
+            />
+            <View style={s.inputRow}>
+              <TextInput
+                style={[s.chatInput, { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border }]}
+                value={input}
+                onChangeText={setInput}
+                placeholder="Escribe un mensaje..."
+                placeholderTextColor={colors.textSecondary}
+                onSubmitEditing={handleSend}
+              />
+              <TouchableOpacity style={[s.sendBtn, { backgroundColor: colors.primary }]} onPress={handleSend}>
+                <Ionicons name="send" size={18} color={colors.white} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       <Modal visible={showCloseModal} transparent animationType="fade">
         <View style={[s.modalOverlay, { backgroundColor: colors.overlay }]}>
           <View style={[s.modalContent, { backgroundColor: colors.surface }]}>
@@ -284,7 +299,7 @@ export default function VideoCallScreen({ route, navigation }) {
 const makeStyles = (colors) =>
   StyleSheet.create({
     container: { flex: 1 },
-    
+
     videoContainer: { flex: 1, position: "relative" },
     floatingHeader: {
       position: "absolute", left: 0, right: 0,
@@ -296,10 +311,10 @@ const makeStyles = (colors) =>
     liveText: { color: colors.white, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
     headerTitle: { fontSize: 14, fontWeight: "bold", color: colors.white, letterSpacing: 1, textShadowColor: colors.blackTranslucent, textShadowOffset: {width: -1, height: 1}, textShadowRadius: 10 },
     senaBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
-    
+
     mainVideo: { flex: 1, justifyContent: "center", alignItems: "center" },
     cameraLabel: { color: colors.whiteTranslucent, fontSize: 14, marginTop: 12, fontWeight: "bold", letterSpacing: 2 },
-    
+
     pipContainer: { position: "absolute", right: 20, zIndex: 10 },
     pipVideo: {
       width: 100, height: 140, borderRadius: 12, borderWidth: 2,
@@ -311,7 +326,7 @@ const makeStyles = (colors) =>
     },
     pipBadgeDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.success },
     pipBadgeText: { color: colors.white, fontSize: 8, fontWeight: "bold" },
-    
+
     quickSection: { paddingVertical: 12 },
     quickList: { paddingHorizontal: 16, gap: 10 },
     quickPill: {
@@ -322,22 +337,7 @@ const makeStyles = (colors) =>
       width: 20, height: 20, marginRight: 6,
     },
     pillLabel: { color: colors.white, fontSize: 13, fontWeight: "600" },
-    
-    chatContainer: { height: "35%", borderTopWidth: 1 },
-    chatList: { padding: 16 },
-    emptyChat: { fontSize: 13, textAlign: "center", marginTop: 20 },
-    chatBubble: { maxWidth: "80%", padding: 12, borderRadius: 12, marginBottom: 8 },
-    chatBubbleMine: { alignSelf: "flex-end", borderBottomRightRadius: 4 },
-    chatBubbleOther: { alignSelf: "flex-start", borderBottomLeftRadius: 4 },
-    chatText: { fontSize: 14, lineHeight: 20 },
-    chatTextMine: { color: colors.white },
-    chatMeta: { fontSize: 10, marginTop: 6, fontWeight: "bold" },
-    chatMetaMine: { textAlign: "right" },
-    
-    inputRow: { flexDirection: "row", paddingTop: 12, paddingHorizontal: 12, gap: 10, borderTopWidth: 1 },
-    chatInput: { flex: 1, borderRadius: 20, paddingHorizontal: 16, height: 44, fontSize: 14, textAlignVertical: "center" },
-    sendBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
-    
+
     controlDock: {
       flexDirection: "row", justifyContent: "space-evenly", alignItems: "center",
       paddingTop: 20, paddingHorizontal: 10, borderTopWidth: 1,
@@ -345,8 +345,23 @@ const makeStyles = (colors) =>
     ctrlBtn: { width: 50, height: 50, borderRadius: 25, justifyContent: "center", alignItems: "center" },
     ctrlBtnDanger: { width: 50, height: 50, borderRadius: 25, justifyContent: "center", alignItems: "center" },
     hangupBtn: { width: 64, height: 64, borderRadius: 32, justifyContent: "center", alignItems: "center" },
-    
-    modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24 },
+
+    modalOverlay: { flex: 1, justifyContent: "flex-end" },
+    chatSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, height: "60%" },
+    chatSheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+    chatSheetTitle: { fontSize: 18, fontWeight: "bold" },
+    chatSheetSub: { fontSize: 12, marginBottom: 16 },
+    chatList: { flex: 1 },
+    emptyChat: { textAlign: "center", marginTop: 20 },
+    chatBubble: { maxWidth: "85%", padding: 12, borderRadius: 12, marginBottom: 12 },
+    chatBubbleMine: { alignSelf: "flex-end", borderBottomRightRadius: 4 },
+    chatBubbleOther: { alignSelf: "flex-start", borderBottomLeftRadius: 4 },
+    chatMeta: { fontSize: 10, marginBottom: 4, fontWeight: "bold" },
+    chatText: { fontSize: 14, lineHeight: 20 },
+    inputRow: { flexDirection: "row", gap: 12, marginTop: 16 },
+    chatInput: { flex: 1, borderRadius: 8, paddingHorizontal: 16, height: 48, borderWidth: 1, textAlignVertical: "center" },
+    sendBtn: { width: 48, height: 48, borderRadius: 8, justifyContent: "center", alignItems: "center" },
+
     modalContent: { borderRadius: 16, padding: 24, width: "100%" },
     modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 8 },
     modalSub: { fontSize: 14, marginBottom: 20 },

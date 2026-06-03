@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../firebase/firebaseConfig";
@@ -28,7 +29,7 @@ const getStatusColor = (status) => {
   switch (status) {
     case "NO_CLASIFICADO": return "#F57C00";
     case "ACTIVO": return "#FFC107";
-    case "EN_CURSO": return "#004B2B";
+    case "EN_CURSO": return "#0B5E2E";
     case "CERRADO": return "#666666";
     case "ANULADO": return "#9E9E9E";
     default: return "#666666";
@@ -90,7 +91,7 @@ export default function HistoryScreen({ navigation }) {
               await cancelIncident(incident.id, "Anulado por el ciudadano desde historial");
               await sendMessage(
                 incident.id,
-                "🔴 Incidente anulado por el ciudadano.",
+                "[ANULADO] Incidente anulado por el ciudadano.",
                 auth.currentUser.uid,
                 "CITIZEN"
               );
@@ -224,6 +225,10 @@ export default function HistoryScreen({ navigation }) {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={data.length === 0 ? s.emptyContainer : s.list}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === "android"}
+        maxToRenderPerBatch={10}
+        initialNumToRender={6}
         ListEmptyComponent={
           <View style={s.emptyState}>
             <Ionicons

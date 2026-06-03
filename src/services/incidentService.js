@@ -130,7 +130,7 @@ export async function closeIncident(incidentId, observations, reason) {
     closedReason: reason || "",
     updatedAt: serverTimestamp(),
   });
-  await sendSystemMessage(incidentId, `🔴 INCIDENTE CERRADO POR CARABINEROS. Resolución: ${reason || "Sin especificar"}`);
+  await sendSystemMessage(incidentId, `INCIDENTE CERRADO POR CARABINEROS. Resolución: ${reason || "Sin especificar"}`);
 }
 
 export async function cancelIncident(incidentId, reason) {
@@ -141,7 +141,7 @@ export async function cancelIncident(incidentId, reason) {
     cancelled: true,
     updatedAt: serverTimestamp(),
   });
-  await sendSystemMessage(incidentId, `🚫 INCIDENTE ANULADO POR EL CIUDADANO. Motivo: ${reason || "Cancelación voluntaria"}`);
+  await sendSystemMessage(incidentId, `INCIDENTE ANULADO POR EL CIUDADANO. Motivo: ${reason || "Cancelación voluntaria"}`);
 }
 
 export async function sendSystemMessage(incidentId, text) {

@@ -32,7 +32,7 @@ const DISPATCH_OPTIONS = [
 
 export default function IncidentManagementScreen({ route, navigation }) {
   const { colors } = useTheme();
-  const { incidentId } = route.params;
+  const { incidentId, autoOpenChat } = route.params;
   const { enterChat, leaveChat } = useNotifications();
   const insets = useSafeAreaInsets();
   const VIDEO_HEIGHT = Math.min(height * 0.28, 240);
@@ -42,7 +42,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
   const [elapsed, setElapsed] = useState("00:00");
   const [isMuted, setIsMuted] = useState(false);
   const [isCamOff, setIsCamOff] = useState(false);
-  const [showChatModal, setShowChatModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(autoOpenChat || false);
   const flatListRef = useRef(null);
   const intervalRef = useRef(null);
 
@@ -73,6 +73,12 @@ export default function IncidentManagementScreen({ route, navigation }) {
 
     return () => { leaveChat(); unsubIncident(); unsubMessages(); if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [incidentId]);
+
+  useEffect(() => {
+    if (route.params?.autoOpenChat) {
+      setShowChatModal(true);
+    }
+  }, [route.params]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -173,7 +179,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
         <Text style={[s.mapAddress, { color: colors.textPrimary }]} numberOfLines={2}>
           {incident?.address || `${incident?.latitude?.toFixed(4)}, ${incident?.longitude?.toFixed(4)}`}
         </Text>
-        <View style={s.etaBadge}><Text style={s.etaText}>🚓 ETA: 3 min</Text></View>
+        <View style={s.etaBadge}><Text style={s.etaText}>ETA: 3 min</Text></View>
       </TouchableOpacity>
 
       {/* Dispatch Buttons */}
@@ -204,7 +210,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
                     </View>
                     <TouchableOpacity onPress={() => setShowChatModal(false)}><Ionicons name="close" size={24} color={colors.textSecondary} /></TouchableOpacity>
                 </View>
-                <Text style={[s.chatSheetSub, { color: colors.textSecondary }]}>🤟 Canal de respaldo — texto alternativo a LENSE</Text>
+                <Text style={[s.chatSheetSub, { color: colors.textSecondary }]}>Canal de respaldo — texto alternativo a LENSE</Text>
                 
                 <FlatList
                     ref={flatListRef}
@@ -212,6 +218,8 @@ export default function IncidentManagementScreen({ route, navigation }) {
                     keyExtractor={(item) => item.id}
                     style={s.chatList}
                     onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+                    windowSize={5}
+                    maxToRenderPerBatch={10}
                     ListEmptyComponent={<Text style={[s.emptyChat, { color: colors.textSecondary }]}>Sin mensajes.</Text>}
                     renderItem={({ item }) => (
                     <View style={[s.chatBubble, isMine(item) ? [s.chatBubbleMine, { backgroundColor: colors.primary }] : [s.chatBubbleOther, { backgroundColor: colors.border }]]}>

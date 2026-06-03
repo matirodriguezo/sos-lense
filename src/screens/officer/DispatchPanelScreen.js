@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
   Image,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { signOut } from "firebase/auth";
@@ -23,7 +24,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 const STATUS_CONFIG = {
   NO_CLASIFICADO: { label: "Sin clasificar", color: "#F57C00", bg: "#FFF3E0" },
   ACTIVO: { label: "Activo", color: "#D32F2F", bg: "#FFEBEE" },
-  EN_CURSO: { label: "En curso", color: "#004B2B", bg: "#E8F5E9" },
+  EN_CURSO: { label: "En curso", color: "#0B5E2E", bg: "#E8F5E9" },
   CERRADO: { label: "Finalizado", color: "#666666", bg: "#F5F5F5" },
   ANULADO: { label: "Anulado por usuario", color: "#9E9E9E", bg: "#EEEEEE" },
 };
@@ -195,9 +196,9 @@ export default function DispatchPanelScreen({ navigation }) {
           </View>
           <View style={s.cardInfo}>
             <Text style={[s.citizenName, { color: colors.textPrimary }]}>{item.citizenAlias || "Usuario LENSE"}</Text>
-            <Text style={[s.locationText, { color: colors.textSecondary }]}>📍 {item.address || (item.latitude ? `${item.latitude?.toFixed(4)}, ${item.longitude?.toFixed(4)}` : "Ubicación no disponible")}</Text>
+            <Text style={[s.locationText, { color: colors.textSecondary }]}>{item.address || (item.latitude ? `${item.latitude?.toFixed(4)}, ${item.longitude?.toFixed(4)}` : "Ubicación no disponible")}</Text>
             <Text style={[s.folioText, { color: colors.emptyText }]}>Folio #{item.id.slice(0, 8).toUpperCase()}</Text>
-            <Text style={[s.timeLabel, { color: colors.badgeRed }]}>⏱ {getElapsedTime(item.createdAt)}</Text>
+            <Text style={[s.timeLabel, { color: colors.badgeRed }]}>{getElapsedTime(item.createdAt)}</Text>
           </View>
         </View>
 
@@ -351,6 +352,10 @@ export default function DispatchPanelScreen({ navigation }) {
         keyExtractor={(item) => item.id}
         renderItem={renderCard}
         contentContainerStyle={data.length === 0 ? [s.emptyContainer, { paddingBottom: insets.bottom }] : [s.list, { paddingBottom: insets.bottom }]}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === "android"}
+        maxToRenderPerBatch={10}
+        initialNumToRender={6}
         ListEmptyComponent={
           <View style={s.emptyState}>
             <Ionicons name="shield-checkmark-outline" size={60} color={colors.border} />

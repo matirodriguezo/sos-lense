@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,18 +6,20 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../firebase/firebaseConfig";
 import { listenMyCases } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 const TYPE_CONFIG = {
-  ACCIDENTE: { icon: "🚗💥" },
-  ROBO: { icon: "🦹" },
-  VIOLENCIA: { icon: "⚔️" },
-  OTRO: { icon: "⚠️" },
+  ACCIDENTE: { icon: "car" },
+  ROBO: { icon: "shield" },
+  VIOLENCIA: { icon: "home" },
+  OTRO: { icon: "alert-circle" },
 };
 
 export default function ChatScreen({ navigation }) {
@@ -58,9 +60,13 @@ export default function ChatScreen({ navigation }) {
         data={incidents}
         keyExtractor={(item) => item.id}
         contentContainerStyle={incidents.length === 0 ? s.emptyContainer : s.list}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === "android"}
+        maxToRenderPerBatch={10}
+        initialNumToRender={6}
         ListEmptyComponent={
           <View style={s.emptyState}>
-            <Text style={s.emptyEmoji}>💬</Text>
+            <Ionicons name="chatbubbles-outline" size={48} color={colors.iconMuted} />
             <Text style={[s.emptyTitle, { color: colors.textSecondary }]}>Sin chats activos</Text>
             <Text style={[s.emptySub, { color: colors.textSecondary }]}>
               Los chats con ciudadanos aparecerán aquí cuando tomes un procedimiento.
@@ -68,7 +74,7 @@ export default function ChatScreen({ navigation }) {
           </View>
         }
         renderItem={({ item }) => {
-          const config = TYPE_CONFIG[item.type] || { icon: "⚠️" };
+          const config = TYPE_CONFIG[item.type] || { icon: "alert-circle" };
           return (
             <TouchableOpacity
               style={[s.chatCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
@@ -80,7 +86,7 @@ export default function ChatScreen({ navigation }) {
               }
             >
               <View style={[s.chatAvatar, { backgroundColor: colors.greenTranslucent }]}>
-                <Text style={s.chatAvatarText}>{config.icon}</Text>
+                <Ionicons name={config.icon} size={24} color={colors.primary} />
               </View>
               <View style={s.chatContent}>
                 <View style={s.chatHeader}>
@@ -93,7 +99,7 @@ export default function ChatScreen({ navigation }) {
                 </View>
                 <Text style={[s.chatFolio, { color: colors.textSecondary }]}>Folio #{item.id.slice(0, 7)}</Text>
                 <Text style={[s.chatLastMsg, { color: colors.textSecondary }]}>
-                  📍 {item.latitude?.toFixed(4)}, {item.longitude?.toFixed(4)}
+                  {item.latitude?.toFixed(4)}, {item.longitude?.toFixed(4)}
                 </Text>
               </View>
               <Text style={[s.chatArrow, { color: colors.textSecondary }]}>›</Text>
@@ -117,7 +123,6 @@ const makeStyles = (colors) =>
     list: { padding: SPACING.md },
     emptyContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
     emptyState: { alignItems: "center", paddingHorizontal: SPACING.xl },
-    emptyEmoji: { fontSize: 48, opacity: 0.4 },
     emptyTitle: { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginTop: SPACING.md },
     emptySub: { fontSize: FONT_SIZE.sm, marginTop: SPACING.xs, textAlign: "center" },
     chatCard: {
@@ -131,7 +136,6 @@ const makeStyles = (colors) =>
       justifyContent: "center", alignItems: "center",
       marginRight: SPACING.md,
     },
-    chatAvatarText: { fontSize: 20 },
     chatContent: { flex: 1 },
     chatHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     chatName: { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold },
