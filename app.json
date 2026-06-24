@@ -16,7 +16,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.sos.carabineros",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "S.O.S. Carabineros necesita tu ubicación para enviar alertas de emergencia a la central policial."
+        "NSLocationWhenInUseUsageDescription": "S.O.S. Carabineros necesita tu ubicación para enviar alertas de emergencia a la central policial.",
+        "NSCameraUsageDescription": "S.O.S. Carabineros necesita la cámara para videollamada con la central policial.",
+        "NSMicrophoneUsageDescription": "S.O.S. Carabineros necesita el micrófono para comunicación por voz con la central policial."
       }
     },
     "android": {
@@ -28,7 +30,9 @@
       "package": "com.sos.carabineros",
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "RECORD_AUDIO"
       ]
     },
     "plugins": [

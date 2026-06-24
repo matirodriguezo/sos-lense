@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000}
+#remote{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
+#local{position:absolute;bottom:100px;right:16px;width:90px;height:130px;object-fit:cover;border-radius:12px;border:2px solid #4ADE80;background:#1a1a2e;z-index:10}
+#loading{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center;flex-direction:column;gap:12px;color:rgba(255,255,255,0.6);font-size:14px;z-index:20;background:#000}
+.spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,0.1);border-top:3px solid #4ADE80;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="loading"><div class="spinner"></div><span>Conectando...</span></div>
+<button id="startBtn" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;padding:16px 32px;font-size:16px;border-radius:12px;border:none;background:#4ADE80;color:#000;font-weight:bold">Iniciar c\u00e1mara</button>
+<video id="remote" autoplay playsinline></video>
+<video id="local" autoplay muted playsinline></video>
+<script>
+(function(){
+var pc = null;
+var localStream = null;
+var started = false;
+var iceQueue = [];
+var config = { iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' }
+]};
+
+function post(type, data) {
+  try {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ t: type, d: data }));
+  } catch(e) {}
+}
+
+function flushIceQueue() {
+  while (iceQueue.length) {
+    var c = iceQueue.shift();
+    if (pc) pc.addIceCandidate(new RTCIceCandidate(c)).catch(function(){});
+  }
+}
+
+function createPeerConnection() {
+  if (pc) return;
+  try {
+    pc = new RTCPeerConnection(config);
+    pc.onicecandidate = function(e) {
+      if (e.candidate) post('ice', e.candidate);
+    };
+    pc.ontrack = function(e) {
+      var el = document.getElementById('remote');
+      if (el && e.streams[0]) { el.srcObject = e.streams[0]; post('remote_on'); }
+    };
+    pc.oniceconnectionstatechange = function() {
+      if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+        post('disconnected');
+      }
+    };
+    if (localStream) {
+      localStream.getTracks().forEach(function(t) { pc.addTrack(t, localStream); });
+    }
+  } catch(e) {
+    post('error', 'pc: ' + e.message);
+  }
+}
+
+function startCamera() {
+  var l = document.getElementById('loading');
+  var b = document.getElementById('startBtn');
+  if (b) b.style.display = 'none';
+  if (l) l.style.display = 'flex';
+  var p = navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+  var called = false;
+  var timer = setTimeout(function() {
+    if (!called) { called = true; showError('La c\u00e1mara no responde'); }
+  }, 10000);
+  p.then(function(s) {
+    if (called) return;
+    clearTimeout(timer);
+    called = true;
+    localStream = s;
+    var el = document.getElementById('local');
+    if (el) el.srcObject = s;
+    if (l) l.style.display = 'none';
+    post('ready');
+    if (pc) {
+      s.getTracks().forEach(function(t) { pc.addTrack(t, s); });
+    }
+  }).catch(function(e) {
+    if (called) return;
+    clearTimeout(timer);
+    called = true;
+    showError(e.name + ': ' + e.message);
+  });
+}
+
+window.init = function() {
+  if (started) return;
+  started = true;
+  if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+    post('error', 'mediaDevices no disponible');
+    return;
+  }
+  startCamera();
+};
+
+window._onSignaling = function(msg) {
+  if (msg.type === 'makeOffer') {
+    createPeerConnection();
+    if (!pc) return;
+    pc.createOffer()
+      .then(function(offer) { return pc.setLocalDescription(offer); })
+      .then(function() {
+        var sd = pc.localDescription;
+        if (sd) post('offer', { type: sd.type, sdp: sd.sdp });
+      })
+      .catch(function(e) { post('error', 'offer: ' + e.message); });
+  } else if (msg.type === 'offer') {
+    if (pc && pc.signalingState !== 'stable') return;
+    createPeerConnection();
+    if (!pc) return;
+    pc.setRemoteDescription(new RTCSessionDescription(msg.data))
+      .then(function() { flushIceQueue(); return pc.createAnswer(); })
+      .then(function(answer) { return pc.setLocalDescription(answer); })
+      .then(function() {
+        var sd = pc.localDescription;
+        if (sd) post('answer', { type: sd.type, sdp: sd.sdp });
+      })
+      .catch(function(e) { post('error', 'answer: ' + e.message); });
+  } else if (msg.type === 'answer') {
+    if (!pc || pc.signalingState === 'stable') return;
+    pc.setRemoteDescription(new RTCSessionDescription(msg.data))
+      .then(function() { flushIceQueue(); })
+      .catch(function(e) { post('error', 'remote: ' + e.message); });
+  } else if (msg.type === 'ice') {
+    if (!pc || !pc.remoteDescription) { iceQueue.push(msg.data); return; }
+    pc.addIceCandidate(new RTCIceCandidate(msg.data)).catch(function(){});
+  }
+};
+
+window._hangUp = function() {
+  if (pc) { pc.close(); pc = null; }
+  if (localStream) { localStream.getTracks().forEach(function(t) { t.stop(); }); localStream = null; }
+  iceQueue = [];
+  started = false;
+  post('hangup');
+};
+
+document.getElementById('startBtn').onclick = startCamera;
+})();
+</script>
+</body>
+</html>

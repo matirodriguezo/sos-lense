@@ -1,18 +1,18 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   TextInput,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   Alert,
   Modal,
-  Image,
   StatusBar,
+  PermissionsAndroid,
+  ActivityIndicator,
 } from "react-native";
 import { auth } from "../../firebase/firebaseConfig";
 import {
@@ -22,21 +22,20 @@ import {
   listenIncidentById,
   cancelIncident,
 } from "../../services/incidentService";
-import { getCurrentAlias } from "../../services/userStore";
+import { sendOffer, sendAnswer, sendIceCandidate, listenSignaling, clearSignaling } from "../../services/signalingService";
+import WebRTCView from "../../components/WebRTCView";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-
-const { width, height } = Dimensions.get("window");
+import { Ionicons } from "@expo/vector-icons";
 
 const QUICK_OPTIONS = [
-  { icon: "medical-outline", label: "Necesito Ambulancia", gifPath: null },
-  { icon: "shield-outline", label: "Robo en progreso", gifPath: null },
-  { icon: "hand-left-outline", label: "Necesito intérprete", gifPath: null },
-  { icon: "car-outline", label: "Accidente de tránsito", gifPath: null },
-  { icon: "walk-outline", label: "El sospechoso huyó", gifPath: null },
-  { icon: "checkmark-circle-outline", label: "Estoy bien", gifPath: null },
+  { icon: "medical-outline", label: "Necesito Ambulancia" },
+  { icon: "shield-outline", label: "Robo en progreso" },
+  { icon: "hand-left-outline", label: "Necesito intérprete" },
+  { icon: "car-outline", label: "Accidente de tránsito" },
+  { icon: "walk-outline", label: "El sospechoso huyó" },
+  { icon: "checkmark-circle-outline", label: "Estoy bien" },
 ];
 
 export default function VideoCallScreen({ route, navigation }) {
@@ -46,61 +45,137 @@ export default function VideoCallScreen({ route, navigation }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [showChatModal, setShowChatModal] = useState(autoOpenChat || false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [camFlipped, setCamFlipped] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeReason, setCloseReason] = useState("");
   const [incident, setIncident] = useState(null);
+  const [permsOk, setPermsOk] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+  const [videoError, setVideoError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [webviewKey, setWebviewKey] = useState(0);
+  const [callActive, setCallActive] = useState(false);
   const flatListRef = useRef(null);
+  const webrtcRef = useRef(null);
   const insets = useSafeAreaInsets();
+  const uid = auth.currentUser?.uid;
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
   useEffect(() => {
+    (async () => {
+      try {
+        if (Platform.OS === "android") {
+          const g = await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.CAMERA,
+            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          ]);
+          const ok =
+            g[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED &&
+            g[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED;
+          if (!ok) return setPermsOk(false);
+        }
+        setPermsOk(true);
+      } catch {}
+    })();
+  }, []);
+
+  useEffect(() => {
     const unsubMsg = listenMessages(incidentId, setMessages);
     const unsubInc = listenIncidentById(incidentId, setIncident);
-    return () => {
-      unsubMsg();
-      unsubInc();
-    };
+    return () => { unsubMsg(); unsubInc(); };
   }, [incidentId]);
 
   useEffect(() => {
-    if (showChatModal) {
-      enterChat(incidentId);
-    } else {
-      leaveChat();
-    }
-    return () => {
-      if (showChatModal) {
-        leaveChat();
-      }
-    };
+    if (showChatModal) enterChat(incidentId);
+    else leaveChat();
+    return () => { if (showChatModal) leaveChat(); };
   }, [showChatModal, incidentId]);
 
   useEffect(() => {
-    if (route.params?.autoOpenChat) {
-      setShowChatModal(true);
-    }
+    if (route.params?.autoOpenChat) setShowChatModal(true);
   }, [route.params]);
 
   useEffect(() => {
-    if (incident?.status === "CERRADO") {
-      Alert.alert("Incidente Cerrado", "El carabinero ha cerrado este incidente. Serás redirigido al inicio.", [
-        { text: "OK", onPress: () => navigation.reset({ index: 0, routes: [{ name: "Home" }] }) },
-      ]);
-    }
-    if (incident?.status === "ANULADO") {
-      Alert.alert("Incidente Anulado", "Has cancelado este incidente. Serás redirigido al inicio.", [
+    if (incident?.status === "CERRADO" || incident?.status === "ANULADO") {
+      const msg = incident.status === "CERRADO"
+        ? "El carabinero ha cerrado este incidente."
+        : "Has cancelado este incidente.";
+      Alert.alert("Incidente " + (incident.status === "CERRADO" ? "Cerrado" : "Anulado"), msg, [
         { text: "OK", onPress: () => navigation.reset({ index: 0, routes: [{ name: "Home" }] }) },
       ]);
     }
   }, [incident?.status]);
 
+  const remoteUidRef = useRef(null);
+
+  const handleWebRTCMessage = useCallback((type, data) => {
+    switch (type) {
+      case "ready":
+        setVideoReady(true);
+        webrtcRef.current?.forwardSignaling("makeOffer", null);
+        break;
+      case "offer":
+        sendOffer(incidentId, uid, data).catch(() => {});
+        break;
+      case "answer":
+        sendAnswer(incidentId, uid, data).catch(() => {});
+        break;
+      case "ice":
+        sendIceCandidate(incidentId, uid, data).catch(() => {});
+        break;
+      case "remote_on":
+        setCallActive(true);
+        break;
+      case "disconnected":
+        setCallActive(false);
+        break;
+      case "log":
+        console.log("[WebRTC]", data);
+        break;
+      case "debug":
+        console.log("[WebRTC Debug]", data);
+        break;
+      case "error":
+        setVideoError(true);
+        setErrorMsg(data || "");
+        break;
+      case "hangup":
+        setCallActive(false);
+        break;
+      default:
+        console.log("[WebRTC unknown msg]", type, data);
+        break;
+    }
+  }, [incidentId, uid]);
+
+  const handleRetry = useCallback(() => {
+    setVideoError(false);
+    setVideoReady(false);
+    setWebviewKey((k) => k + 1);
+  }, []);
+
+  useEffect(() => {
+    return () => { clearSignaling(incidentId, uid); };
+  }, [incidentId, uid]);
+
+  useEffect(() => {
+    if (!videoReady || !remoteUidRef.current) return;
+    const unsub = listenSignaling(incidentId, remoteUidRef.current, {
+      onAnswer(sdp) { webrtcRef.current?.forwardSignaling("answer", sdp); },
+      onIce(candidate) { webrtcRef.current?.forwardSignaling("ice", candidate); },
+    });
+    return () => unsub;
+  }, [videoReady, incidentId]);
+
+  useEffect(() => {
+    if (!incident?.officerId) return;
+    remoteUidRef.current = incident.officerId;
+  }, [incident?.officerId]);
+
   const handleQuickRequest = async (request) => {
     try {
       await addQuickRequest(incidentId, request);
-      await sendMessage(incidentId, `[ALERTA RÁPIDA] ${request}`, auth.currentUser.uid, "CITIZEN");
+      await sendMessage(incidentId, `[ALERTA RÁPIDA] ${request}`, uid, "CITIZEN");
     } catch {}
   };
 
@@ -109,18 +184,8 @@ export default function VideoCallScreen({ route, navigation }) {
     const text = input.trim();
     setInput("");
     try {
-      await sendMessage(incidentId, text, auth.currentUser.uid, "CITIZEN");
+      await sendMessage(incidentId, text, uid, "CITIZEN");
     } catch {}
-  };
-
-  const handleHangup = () => {
-    Alert.alert("Finalizar llamada", "¿Estás seguro de que deseas colgar?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Colgar", style: "destructive",
-        onPress: () => navigation.reset({ index: 0, routes: [{ name: "Home" }] }),
-      },
-    ]);
   };
 
   const handleCloseWithReason = async () => {
@@ -130,7 +195,9 @@ export default function VideoCallScreen({ route, navigation }) {
     }
     try {
       await cancelIncident(incidentId, closeReason.trim());
-      await sendMessage(incidentId, `[CERRADO] Incidente cerrado: ${closeReason.trim()}`, auth.currentUser.uid, "CITIZEN");
+      await sendMessage(incidentId, `[CERRADO] Incidente cerrado: ${closeReason.trim()}`, uid, "CITIZEN");
+      webrtcRef.current?.hangUp();
+      await clearSignaling(incidentId, uid);
       setShowCloseModal(false);
       Alert.alert("Cerrado", "Serás redirigido al inicio.", [
         { text: "OK", onPress: () => navigation.reset({ index: 0, routes: [{ name: "Home" }] }) },
@@ -140,107 +207,101 @@ export default function VideoCallScreen({ route, navigation }) {
     }
   };
 
-  const isMine = (msg) => msg.senderId === auth.currentUser?.uid;
+  const handleHangup = () => {
+    Alert.alert("Finalizar llamada", "¿Estás seguro de que deseas colgar?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Colgar", style: "destructive",
+        onPress: () => {
+          webrtcRef.current?.hangUp();
+          clearSignaling(incidentId, uid);
+          navigation.reset({ index: 0, routes: [{ name: "Home" }] });
+        },
+      },
+    ]);
+  };
+
+  const isMine = (msg) => msg.senderId === uid;
 
   return (
-    <KeyboardAvoidingView style={[s.container, { backgroundColor: colors.videoBg }]} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.videoBg} />
+    <KeyboardAvoidingView style={[s.container, { backgroundColor: "#000" }]} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
 
-      <View style={[s.videoContainer, { backgroundColor: colors.videoBg }]}>
-        <View style={[s.floatingHeader, { top: 12 + insets.top }]}>
-          <View style={[s.liveBadge, { backgroundColor: colors.badgeRed }]}>
-            <View style={s.liveDot} />
-            <Text style={s.liveText}>EN VIVO</Text>
+      <View style={{ flex: 1, position: "relative" }}>
+        {!permsOk ? (
+          <View style={s.center}>
+            <Ionicons name="camera-outline" size={64} color="#666" />
+            <Text style={s.centerText}>Permisos de cámara denegados</Text>
           </View>
-          <Text style={s.headerTitle}>S.O.S. CARABINEROS</Text>
-          <TouchableOpacity style={[s.senaBtn, { backgroundColor: colors.quickReplyBg }]} onPress={() => Alert.alert("LENSE", "Traductor en progreso")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="hand-right" size={20} color={colors.white} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={s.mainVideo}>
-          <Ionicons name={camFlipped ? "camera-reverse-outline" : "camera-outline"} size={64} color={colors.whiteTranslucent} />
-          <Text style={s.cameraLabel}>{camFlipped ? "CÁMARA TRASERA" : "CÁMARA FRONTAL"}</Text>
-        </View>
-
-        <View style={[s.pipContainer, { top: 60 + insets.top }]}>
-          <View style={[s.pipVideo, { backgroundColor: colors.videoBg, borderColor: colors.primary }]}>
-            <MaterialCommunityIcons name="police-badge-outline" size={32} color={colors.white} style={{opacity: 0.5}} />
-            <View style={s.pipBadge}>
-              <View style={s.pipBadgeDot} />
-              <Text style={s.pipBadgeText}>OFICIAL</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      <View style={[s.quickSection, { backgroundColor: colors.videoBg }]}>
-        <FlatList
-          data={QUICK_OPTIONS}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.quickList}
-          keyExtractor={(item) => item.label}
-          initialNumToRender={6}
-          maxToRenderPerBatch={6}
-          windowSize={3}
-          removeClippedSubviews={Platform.OS === "android"}
-          renderItem={({ item }) => (
-            <TouchableOpacity style={[s.quickPill, { backgroundColor: colors.quickReplyBg, borderColor: colors.whiteTranslucent }]} onPress={() => handleQuickRequest(item.label)} activeOpacity={0.7}>
-              {item.gifPath ? (
-                <Image source={item.gifPath} style={s.pillGif} resizeMode="contain" />
-              ) : (
-                <Ionicons name={item.icon} size={16} color={colors.white} style={{ marginRight: 6 }} />
-              )}
-              <Text style={s.pillLabel}>{item.label}</Text>
+        ) : videoError ? (
+          <View style={s.center}>
+            <Ionicons name="alert-circle-outline" size={64} color="#FB923C" />
+            <Text style={s.centerText}>Error de cámara</Text>
+            {errorMsg ? <Text style={s.errorSubText}>{errorMsg}</Text> : null}
+            <TouchableOpacity style={[s.retryBtn, { backgroundColor: "#4ADE80" }]} onPress={handleRetry}>
+              <Text style={{ color: "#000", fontWeight: "bold" }}>Reintentar</Text>
             </TouchableOpacity>
-          )}
-        />
-      </View>
+          </View>
+        ) : (
+          <WebRTCView key={webviewKey} ref={webrtcRef} style={{ flex: 1 }} onWebRTCMessage={handleWebRTCMessage} />
+        )}
 
-      <View style={[s.controlDock, { backgroundColor: colors.videoBg, borderTopColor: colors.border, paddingBottom: 12 + insets.bottom }]}>
-        <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: colors.quickReplyBg }, camFlipped && { backgroundColor: colors.white }]} onPress={() => setCamFlipped(!camFlipped)}>
-          <Ionicons name="camera-reverse" size={24} color={camFlipped ? colors.textPrimary : colors.white} />
-        </TouchableOpacity>
+        <View style={[s.topBar, { top: insets.top }]}>
+          <View style={s.liveBadge}>
+            <View style={s.liveDot} />
+            <Text style={s.liveText}>LLAMADA</Text>
+          </View>
+          {callActive && <View style={[s.liveBadge, { backgroundColor: "#16A34A" }]}><Text style={s.liveText}>CONECTADO</Text></View>}
+        </View>
 
-        <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: colors.quickReplyBg }, isMuted && { backgroundColor: colors.white }]} onPress={() => setIsMuted(!isMuted)}>
-          <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color={isMuted ? colors.textPrimary : colors.white} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[s.hangupBtn, { backgroundColor: colors.badgeRed }]} onPress={handleHangup}>
-          <MaterialCommunityIcons name="phone-hangup" size={32} color={colors.white} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: colors.quickReplyBg }, showChatModal && { backgroundColor: colors.white }]} onPress={() => setShowChatModal(!showChatModal)}>
-          <Ionicons name="chatbubble-ellipses" size={24} color={showChatModal ? colors.textPrimary : colors.white} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[s.ctrlBtnDanger, { backgroundColor: colors.badgeRed }]} onPress={() => setShowCloseModal(true)}>
-          <Ionicons name="close" size={24} color={colors.white} />
-        </TouchableOpacity>
+        <View style={[s.bottomArea, { paddingBottom: insets.bottom + 8 }]}>
+          <FlatList
+            data={QUICK_OPTIONS}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.quickList}
+            keyExtractor={(item) => item.label}
+            initialNumToRender={6}
+            maxToRenderPerBatch={6}
+            windowSize={3}
+            removeClippedSubviews={Platform.OS === "android"}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={s.quickPill} onPress={() => handleQuickRequest(item.label)} activeOpacity={0.7}>
+                <Ionicons name={item.icon} size={14} color="#fff" style={{ marginRight: 5 }} />
+                <Text style={s.pillLabel}>{item.label}</Text>
+              </TouchableOpacity>
+            )}
+          />
+          <View style={s.actionsRow}>
+            <TouchableOpacity style={[s.actionBtn, { backgroundColor: "rgba(255,255,255,0.2)" }]} onPress={() => setShowChatModal(true)}>
+              <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
+              <Text style={s.actionLabel}>Chat</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.hangupBtn]} onPress={handleHangup}>
+              <Ionicons name="call" size={24} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.actionBtn, { backgroundColor: "#DC2626" }]} onPress={() => setShowCloseModal(true)}>
+              <Ionicons name="close" size={20} color="#fff" />
+              <Text style={s.actionLabel}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       <Modal visible={showChatModal} transparent animationType="slide">
-        <KeyboardAvoidingView style={[s.modalOverlay, { backgroundColor: colors.overlay }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView style={[s.modalOverlay, { backgroundColor: "rgba(0,0,0,0.7)" }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <View style={[s.chatSheet, { backgroundColor: colors.surface, paddingBottom: 20 + insets.bottom }]}>
             <View style={s.chatSheetHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} style={{ marginRight: 8 }} />
-                <Text style={[s.chatSheetTitle, { color: colors.textPrimary }]}>Chat de Emergencia</Text>
-              </View>
+              <Text style={[s.chatSheetTitle, { color: colors.textPrimary }]}>Chat de Emergencia</Text>
               <TouchableOpacity onPress={() => setShowChatModal(false)}><Ionicons name="close" size={24} color={colors.textSecondary} /></TouchableOpacity>
             </View>
-            <Text style={[s.chatSheetSub, { color: colors.textSecondary }]}>Canal de respaldo — texto alternativo a LENSE</Text>
-
             <FlatList
               ref={flatListRef}
               data={messages}
               keyExtractor={(item) => item.id}
               style={s.chatList}
               onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-              windowSize={5}
-              maxToRenderPerBatch={10}
-              ListEmptyComponent={<Text style={[s.emptyChat, { color: colors.textSecondary }]}>Sin mensajes.</Text>}
+              ListEmptyComponent={<Text style={{ textAlign: "center", marginTop: 20, color: colors.textSecondary }}>Sin mensajes.</Text>}
               renderItem={({ item }) => (
                 <View style={[s.chatBubble, isMine(item) ? [s.chatBubbleMine, { backgroundColor: colors.primary }] : [s.chatBubbleOther, { backgroundColor: colors.border }]]}>
                   <Text style={[s.chatMeta, isMine(item) ? { color: colors.whiteTranslucent, textAlign: "right" } : { color: colors.textSecondary }]}>
@@ -260,7 +321,7 @@ export default function VideoCallScreen({ route, navigation }) {
                 onSubmitEditing={handleSend}
               />
               <TouchableOpacity style={[s.sendBtn, { backgroundColor: colors.primary }]} onPress={handleSend}>
-                <Ionicons name="send" size={18} color={colors.white} />
+                <Ionicons name="send" size={18} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>
@@ -268,15 +329,14 @@ export default function VideoCallScreen({ route, navigation }) {
       </Modal>
 
       <Modal visible={showCloseModal} transparent animationType="fade">
-        <View style={[s.modalOverlay, { backgroundColor: colors.overlay }]}>
+        <View style={[s.modalOverlay, { backgroundColor: "rgba(0,0,0,0.7)" }]}>
           <View style={[s.modalContent, { backgroundColor: colors.surface }]}>
             <Text style={[s.modalTitle, { color: colors.textPrimary }]}>Finalizar Incidente</Text>
-            <Text style={[s.modalSub, { color: colors.textSecondary }]}>Por favor, indica el motivo del cierre de esta alerta:</Text>
             <TextInput
               style={[s.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.textPrimary }]}
               value={closeReason}
               onChangeText={setCloseReason}
-              placeholder="Ej: Falsa alarma, ya estoy seguro..."
+              placeholder="Motivo del cierre..."
               placeholderTextColor={colors.textSecondary}
               multiline
               textAlignVertical="top"
@@ -285,8 +345,8 @@ export default function VideoCallScreen({ route, navigation }) {
               <TouchableOpacity style={[s.modalCancelBtn, { borderColor: colors.border }]} onPress={() => { setShowCloseModal(false); setCloseReason(""); }}>
                 <Text style={[s.modalCancelText, { color: colors.textSecondary }]}>Volver</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[s.modalConfirmBtn, { backgroundColor: colors.badgeRed }]} onPress={handleCloseWithReason}>
-                <Text style={[s.modalConfirmText, { color: colors.white }]}>Confirmar Cierre</Text>
+              <TouchableOpacity style={[s.modalConfirmBtn, { backgroundColor: "#DC2626" }]} onPress={handleCloseWithReason}>
+                <Text style={[s.modalConfirmText, { color: "#fff" }]}>Confirmar Cierre</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -299,60 +359,51 @@ export default function VideoCallScreen({ route, navigation }) {
 const makeStyles = (colors) =>
   StyleSheet.create({
     container: { flex: 1 },
+    center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" },
+    centerText: { color: "#999", marginTop: 16, fontSize: 14, fontWeight: "600" },
+    errorSubText: { color: "#666", marginTop: 8, fontSize: 12, textAlign: "center", paddingHorizontal: 24 },
+    retryBtn: { marginTop: 24, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
 
-    videoContainer: { flex: 1, position: "relative" },
-    floatingHeader: {
-      position: "absolute", left: 0, right: 0,
-      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-      paddingHorizontal: 20, zIndex: 10,
+    topBar: {
+      position: "absolute", left: 0, right: 0, zIndex: 10,
+      flexDirection: "row", justifyContent: "space-between",
+      paddingHorizontal: 16, paddingVertical: 8,
     },
-    liveBadge: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4, gap: 6 },
-    liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.white },
-    liveText: { color: colors.white, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
-    headerTitle: { fontSize: 14, fontWeight: "bold", color: colors.white, letterSpacing: 1, textShadowColor: colors.blackTranslucent, textShadowOffset: {width: -1, height: 1}, textShadowRadius: 10 },
-    senaBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
+    liveBadge: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4, gap: 5, backgroundColor: "#DC2626" },
+    liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff" },
+    liveText: { color: "#fff", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
 
-    mainVideo: { flex: 1, justifyContent: "center", alignItems: "center" },
-    cameraLabel: { color: colors.whiteTranslucent, fontSize: 14, marginTop: 12, fontWeight: "bold", letterSpacing: 2 },
-
-    pipContainer: { position: "absolute", right: 20, zIndex: 10 },
-    pipVideo: {
-      width: 100, height: 140, borderRadius: 12, borderWidth: 2,
-      justifyContent: "center", alignItems: "center", overflow: "hidden",
+    bottomArea: {
+      position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 10,
+      paddingTop: 8, gap: 8,
     },
-    pipBadge: {
-      position: "absolute", bottom: 6, left: 6, flexDirection: "row", alignItems: "center",
-      backgroundColor: colors.blackTranslucent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, gap: 4,
-    },
-    pipBadgeDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.success },
-    pipBadgeText: { color: colors.white, fontSize: 8, fontWeight: "bold" },
-
-    quickSection: { paddingVertical: 12 },
-    quickList: { paddingHorizontal: 16, gap: 10 },
+    quickList: { paddingHorizontal: 12, gap: 8 },
     quickPill: {
       flexDirection: "row", alignItems: "center",
-      paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1,
+      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
     },
-    pillGif: {
-      width: 20, height: 20, marginRight: 6,
+    pillLabel: { color: "#fff", fontSize: 12, fontWeight: "600" },
+    actionsRow: {
+      flexDirection: "row", justifyContent: "center", gap: 16,
+      paddingHorizontal: 16,
     },
-    pillLabel: { color: colors.white, fontSize: 13, fontWeight: "600" },
-
-    controlDock: {
-      flexDirection: "row", justifyContent: "space-evenly", alignItems: "center",
-      paddingTop: 20, paddingHorizontal: 10, borderTopWidth: 1,
+    actionBtn: {
+      flexDirection: "row", alignItems: "center", gap: 6,
+      paddingHorizontal: 20, paddingVertical: 10, borderRadius: 24,
     },
-    ctrlBtn: { width: 50, height: 50, borderRadius: 25, justifyContent: "center", alignItems: "center" },
-    ctrlBtnDanger: { width: 50, height: 50, borderRadius: 25, justifyContent: "center", alignItems: "center" },
-    hangupBtn: { width: 64, height: 64, borderRadius: 32, justifyContent: "center", alignItems: "center" },
+    actionLabel: { color: "#fff", fontSize: 13, fontWeight: "bold" },
+    hangupBtn: {
+      width: 56, height: 56, borderRadius: 28, backgroundColor: "#DC2626",
+      justifyContent: "center", alignItems: "center",
+    },
 
     modalOverlay: { flex: 1, justifyContent: "flex-end" },
     chatSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, height: "60%" },
-    chatSheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+    chatSheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
     chatSheetTitle: { fontSize: 18, fontWeight: "bold" },
-    chatSheetSub: { fontSize: 12, marginBottom: 16 },
     chatList: { flex: 1 },
-    emptyChat: { textAlign: "center", marginTop: 20 },
     chatBubble: { maxWidth: "85%", padding: 12, borderRadius: 12, marginBottom: 12 },
     chatBubbleMine: { alignSelf: "flex-end", borderBottomRightRadius: 4 },
     chatBubbleOther: { alignSelf: "flex-start", borderBottomLeftRadius: 4 },
@@ -363,9 +414,8 @@ const makeStyles = (colors) =>
     sendBtn: { width: 48, height: 48, borderRadius: 8, justifyContent: "center", alignItems: "center" },
 
     modalContent: { borderRadius: 16, padding: 24, width: "100%" },
-    modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 8 },
-    modalSub: { fontSize: 14, marginBottom: 20 },
-    modalInput: { borderRadius: 8, padding: 16, fontSize: 14, borderWidth: 1, minHeight: 120 },
+    modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 16 },
+    modalInput: { borderRadius: 8, padding: 16, fontSize: 14, borderWidth: 1, minHeight: 100 },
     modalButtons: { flexDirection: "row", gap: 12, marginTop: 24 },
     modalCancelBtn: { flex: 1, height: 48, borderRadius: 8, justifyContent: "center", alignItems: "center", borderWidth: 1 },
     modalCancelText: { fontWeight: "bold" },
