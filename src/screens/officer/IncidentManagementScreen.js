@@ -12,8 +12,9 @@ import {
   Platform,
   Modal,
   Linking,
-  PermissionsAndroid,
   ActivityIndicator,
+  Animated,
+  Easing,
 } from "react-native";
 import { auth } from "../../firebase/firebaseConfig";
 import {
@@ -23,15 +24,10 @@ import {
   addQuickRequest,
   assignOfficer,
   sendSystemMessage,
+  markMessageAsRead,
 } from "../../services/incidentService";
 import { getCurrentAlias } from "../../services/userStore";
-import {
-  sendAnswer,
-  sendIceCandidate,
-  listenSignaling,
-  clearSignaling,
-} from "../../services/signalingService";
-import WebRTCView from "../../components/WebRTCView";
+import MessageBubble from "../../components/MessageBubble";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -54,42 +50,41 @@ export default function IncidentManagementScreen({ route, navigation }) {
   const [elapsed, setElapsed] = useState("00:00");
   const [showChatModal, setShowChatModal] = useState(autoOpenChat || false);
   const [showDispatchModal, setShowDispatchModal] = useState(false);
-  const [permsGranted, setPermsGranted] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
-  const [videoError, setVideoError] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [loadingPerms, setLoadingPerms] = useState(true);
-  const [webviewKey, setWebviewKey] = useState(0);
+  const [callActive, setCallActive] = useState(false);
+  const [connecting, setConnecting] = useState(true);
   const flatListRef = useRef(null);
   const intervalRef = useRef(null);
-  const webrtcRef = useRef(null);
-  const remoteUidRef = useRef(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        if (Platform.OS === "android") {
-          const grants = await PermissionsAndroid.requestMultiple([
-            PermissionsAndroid.PERMISSIONS.CAMERA,
-            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-          ]);
-          const ok =
-            grants[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED &&
-            grants[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED;
-          if (!ok) {
-            Alert.alert("Permiso denegado", "Cámara y micrófono son necesarios para la videollamada.");
-          }
-        }
-        setPermsGranted(true);
-      } catch {}
-      setLoadingPerms(false);
-    })();
-  }, []);
+  const markedRef = useRef(new Set());
+  const pulseAnim = useRef(new Animated.Value(0)).current;
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
+  // Simulated connecting sequence
   useEffect(() => {
-    enterChat(incidentId);
+    console.log("[IncidentMgmt] Mounted, incident:", incidentId, "autoOpenChat:", autoOpenChat);
+    const timer = setTimeout(() => {
+      setConnecting(false);
+      setCallActive(true);
+      console.log("[IncidentMgmt] Connection established");
+    }, 3000);
+    return () => {
+      clearTimeout(timer);
+      console.log("[IncidentMgmt] Unmounted");
+    };
+  }, []);
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, []);
+
+  useEffect(() => {
     const unsubIncident = listenIncidentById(incidentId, (data) => {
       setIncident(data);
       if (data.officerId && data.officerId !== auth.currentUser.uid) {
@@ -97,14 +92,31 @@ export default function IncidentManagementScreen({ route, navigation }) {
         navigation.goBack();
         return;
       }
-      if (data.userId) remoteUidRef.current = data.userId;
+      if (data.citizenId) {
+        // Keep track of citizen ID for message marking
+      }
       if (!data.officerId) {
         const officerAlias = getCurrentAlias();
         assignOfficer(incidentId, auth.currentUser.uid, officerAlias);
         sendSystemMessage(incidentId, `${officerAlias || "Un oficial"} ha tomado tu caso.`);
       }
     });
-    const unsubMessages = listenMessages(incidentId, setMessages);
+    const unsubMessages = listenMessages(incidentId, (data) => {
+      setMessages(data);
+      if (showChatModal) {
+        const uid = auth.currentUser?.uid;
+        const citizenId = data.find(m => m.senderRole === "CITIZEN")?.senderId;
+        if (citizenId) {
+          const unread = data.filter(
+            (m) => m.senderRole === "CITIZEN" && !m.readBy?.includes(uid) && !markedRef.current.has(m.id)
+          );
+          unread.forEach((m) => {
+            markedRef.current.add(m.id);
+            markMessageAsRead(incidentId, m.id, uid);
+          });
+        }
+      }
+    });
 
     const startTime = Date.now();
     intervalRef.current = setInterval(() => {
@@ -121,56 +133,17 @@ export default function IncidentManagementScreen({ route, navigation }) {
     }
   }, [route.params]);
 
-  const handleWebRTCMessage = useCallback((type, data) => {
-    switch (type) {
-      case "ready":
-        setVideoReady(true);
-        break;
-      case "answer":
-        sendAnswer(incidentId, auth.currentUser.uid, data).catch(() => {});
-        break;
-      case "ice":
-        sendIceCandidate(incidentId, auth.currentUser.uid, data).catch(() => {});
-        break;
-      case "remote_on":
-        setElapsed("00:00");
-        break;
-      case "disconnected":
-        break;
-      case "log":
-        console.log("[WebRTC]", data);
-        break;
-      case "debug":
-        console.log("[WebRTC Debug]", data);
-        break;
-      case "error":
-        setVideoError(true);
-        setErrorMsg(data || "");
-        break;
-      default:
-        console.log("[WebRTC unknown msg]", type, data);
-        break;
-    }
-    }, [incidentId]);
-
   useEffect(() => {
-    return () => { clearSignaling(incidentId, auth.currentUser?.uid); };
-  }, [incidentId]);
-
-  useEffect(() => {
-    if (!videoReady || !remoteUidRef.current) return;
-    const unsub = listenSignaling(incidentId, remoteUidRef.current, {
-      onOffer(sdp) { webrtcRef.current?.forwardSignaling("offer", sdp); },
-      onIce(candidate) { webrtcRef.current?.forwardSignaling("ice", candidate); },
+    if (!showChatModal || !incident?.citizenId) return;
+    const uid = auth.currentUser?.uid;
+    const unreadMsgs = messages.filter(
+      (m) => m.senderRole === "CITIZEN" && !m.readBy?.includes(uid) && !markedRef.current.has(m.id)
+    );
+    unreadMsgs.forEach((m) => {
+      markedRef.current.add(m.id);
+      markMessageAsRead(incidentId, m.id, uid);
     });
-    return () => unsub;
-  }, [videoReady, incidentId]);
-
-  const handleRetry = useCallback(() => {
-    setVideoError(false);
-    setVideoReady(false);
-    setWebviewKey((k) => k + 1);
-  }, []);
+  }, [showChatModal, incident?.citizenId]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -178,7 +151,8 @@ export default function IncidentManagementScreen({ route, navigation }) {
     setInput("");
     try {
       await sendMessage(incidentId, text, auth.currentUser.uid, "OFFICER");
-    } catch {}
+      console.log("[IncidentMgmt] Message sent (OFFICER):", text.slice(0, 40));
+    } catch (e) { console.warn("[IncidentMgmt] Send error:", e); }
   };
 
   const handleDispatchAction = (label) => {
@@ -193,18 +167,31 @@ export default function IncidentManagementScreen({ route, navigation }) {
         try {
           await addQuickRequest(incidentId, label);
           await sendMessage(incidentId, `[SISTEMA] Central ha despachado: ${label}`, auth.currentUser.uid, "OFFICER");
+          console.log("[IncidentMgmt] Dispatched:", label);
           Alert.alert("Despachado", "La unidad ha sido notificada.");
-        } catch {}
+        } catch (e) { console.warn("[IncidentMgmt] Dispatch error:", e); }
       }},
     ]);
   };
 
   const handleFinalize = () => {
-    navigation.replace("CloseIncident", { incidentId });
+    Alert.alert("Finalizar procedimiento", "¿Estás seguro de que deseas cerrar este caso?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Continuar", onPress: () => {
+        console.log("[IncidentMgmt] Navigating to CloseIncident");
+        navigation.replace("CloseIncident", { incidentId });
+      }},
+    ]);
   };
 
   const handleBack = () => {
-    navigation.goBack();
+    Alert.alert("Salir", "¿Estás seguro de salir de este procedimiento?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Salir", style: "destructive", onPress: () => {
+        console.log("[IncidentMgmt] Officer exited");
+        navigation.goBack();
+      }},
+    ]);
   };
 
   const isMine = (msg) => msg.senderId === auth.currentUser?.uid;
@@ -214,45 +201,45 @@ export default function IncidentManagementScreen({ route, navigation }) {
       Alert.alert("Ubicación no disponible", "No se ha registrado la ubicación del ciudadano.");
       return;
     }
-    const url = Platform.OS === "ios"
-      ? `maps://app?daddr=${incident.latitude},${incident.longitude}`
-      : `geo:${incident.latitude},${incident.longitude}?q=${incident.latitude},${incident.longitude}`;
-    Linking.openURL(url).catch(() => {
-      Linking.openURL(`https://maps.google.com/maps?daddr=${incident.latitude},${incident.longitude}`);
-    });
+    Alert.alert("Abrir mapa", "¿Deseas abrir la ubicación en tu aplicación de mapas?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Abrir", onPress: () => {
+        const url = Platform.OS === "ios"
+          ? `maps://app?daddr=${incident.latitude},${incident.longitude}`
+          : `geo:${incident.latitude},${incident.longitude}?q=${incident.latitude},${incident.longitude}`;
+        Linking.openURL(url).catch(() => {
+          Linking.openURL(`https://maps.google.com/maps?daddr=${incident.latitude},${incident.longitude}`);
+        });
+      }},
+    ]);
   };
 
+  const pulseOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 1],
+  });
+
   return (
-    <KeyboardAvoidingView style={[s.container, { backgroundColor: colors.videoCallBg }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.videoCallBg} />
+    <KeyboardAvoidingView style={[s.container, { backgroundColor: "#000" }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       <View style={{ flex: 1, position: "relative" }}>
-        {loadingPerms ? (
-          <View style={s.permLoading}>
-            <ActivityIndicator size="large" color={colors.white} />
-            <Text style={{ color: colors.whiteTranslucent, marginTop: 16 }}>Iniciando videollamada...</Text>
-          </View>
-        ) : !permsGranted ? (
-          <View style={s.permLoading}>
-            <Ionicons name="camera-outline" size={64} color={colors.whiteTranslucent} />
-            <Text style={{ color: colors.white, marginTop: 16, fontWeight: "bold", textAlign: "center", paddingHorizontal: 40 }}>
-              Permisos de cámara y micrófono denegados
-            </Text>
-          </View>
-        ) : videoError ? (
-          <View style={s.permLoading}>
-            <Ionicons name="alert-circle-outline" size={64} color={colors.warning} />
-            <Text style={{ color: colors.white, marginTop: 16, fontWeight: "bold", textAlign: "center", paddingHorizontal: 40 }}>
-              Error de cámara
-            </Text>
-            {errorMsg ? <Text style={{ color: colors.whiteTranslucent, marginTop: 8, fontSize: 12, textAlign: "center", paddingHorizontal: 24 }}>{errorMsg}</Text> : null}
-
-            <TouchableOpacity style={[s.retryBtn, { backgroundColor: colors.primary }]} onPress={handleRetry}>
-              <Text style={{ color: colors.white, fontWeight: "bold" }}>Reintentar</Text>
-            </TouchableOpacity>
+        {/* Connecting overlay */}
+        {connecting ? (
+          <View style={s.connectingContainer}>
+            <Animated.View style={[s.pulseCircle, { opacity: pulseOpacity }]}>
+              <MaterialCommunityIcons name="cellphone-link" size={64} color="#4ADE80" />
+            </Animated.View>
+            <Text style={s.connectingText}>Conectando...</Text>
+            <Text style={s.connectingSub}>Estableciendo enlace con ciudadano</Text>
+            <ActivityIndicator size="small" color="#4ADE80" style={{ marginTop: 20 }} />
           </View>
         ) : (
-          <WebRTCView key={webviewKey} ref={webrtcRef} style={{ flex: 1 }} onWebRTCMessage={handleWebRTCMessage} />
+          <View style={s.connectingContainer}>
+            <MaterialCommunityIcons name="video" size={80} color="#4ADE80" />
+            <Text style={s.connectedText}>VIDEOLLAMADA ACTIVA</Text>
+            <Text style={s.connectedSub}>Conexión establecida con el ciudadano</Text>
+          </View>
         )}
 
         <View style={[s.header, { top: insets.top }]}>
@@ -271,19 +258,25 @@ export default function IncidentManagementScreen({ route, navigation }) {
           </View>
         </View>
 
-        <View style={[s.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
-          <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: colors.blueDispatch }]} onPress={() => setShowDispatchModal(true)}>
-            <MaterialCommunityIcons name="radio-handheld" size={22} color={colors.white} />
-            <Text style={s.ctrlLabel}>Despacho</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[s.ctrlBtnLarge, { backgroundColor: colors.badgeRed }]} onPress={handleFinalize}>
-            <Text style={s.finalizeLabel}>Finalizar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: "rgba(255,255,255,0.2)" }]} onPress={() => setShowChatModal(true)}>
-            <Ionicons name="chatbubble-ellipses" size={22} color={colors.white} />
-            <Text style={s.ctrlLabel}>Chat</Text>
-          </TouchableOpacity>
-        </View>
+        {callActive && (
+          <View style={[s.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
+            <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: colors.blueDispatch }]} onPress={() => setShowDispatchModal(true)}>
+              <MaterialCommunityIcons name="radio-handheld" size={22} color={colors.white} />
+              <Text style={s.ctrlLabel}>Despacho</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: "#16A34A" }]} onPress={openMaps}>
+              <Ionicons name="location-outline" size={22} color={colors.white} />
+              <Text style={s.ctrlLabel}>Ubicación</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.ctrlBtnLarge, { backgroundColor: colors.badgeRed }]} onPress={handleFinalize}>
+              <Text style={s.finalizeLabel}>Finalizar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: "rgba(255,255,255,0.2)" }]} onPress={() => setShowChatModal(true)}>
+              <Ionicons name="chatbubble-ellipses" size={22} color={colors.white} />
+              <Text style={s.ctrlLabel}>Chat</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       <Modal visible={showDispatchModal} transparent animationType="slide">
@@ -324,17 +317,22 @@ export default function IncidentManagementScreen({ route, navigation }) {
               data={messages}
               keyExtractor={(item) => item.id}
               style={s.chatList}
-              onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-              windowSize={5}
+              initialNumToRender={15}
               maxToRenderPerBatch={10}
+              windowSize={5}
+              removeClippedSubviews={Platform.OS === "android"}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
               ListEmptyComponent={<Text style={[s.emptyChat, { color: colors.textSecondary }]}>Sin mensajes.</Text>}
               renderItem={({ item }) => (
-                <View style={[s.chatBubble, isMine(item) ? [s.chatBubbleMine, { backgroundColor: colors.primary }] : [s.chatBubbleOther, { backgroundColor: colors.border }]]}>
-                  <Text style={[s.chatMeta, isMine(item) ? { color: colors.whiteTranslucent, textAlign: "right" } : { color: colors.textSecondary }]}>
-                    {isMine(item) ? "Tú" : (incident?.citizenAlias || "Ciudadano")}
-                  </Text>
-                  <Text style={[s.chatText, isMine(item) ? { color: colors.white } : { color: colors.textPrimary }]}>{item.text}</Text>
-                </View>
+                <MessageBubble
+                  message={item}
+                  isMine={isMine(item)}
+                  otherRole="CITIZEN"
+                  otherUserId={incident?.citizenId}
+                  currentUserId={auth.currentUser?.uid}
+                  citizenAlias={incident?.citizenAlias}
+                  officerAlias={incident?.officerAlias}
+                />
               )}
             />
             <View style={s.inputRow}>
@@ -361,14 +359,19 @@ const makeStyles = (colors) =>
   StyleSheet.create({
     container: { flex: 1 },
 
+    connectingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" },
+    pulseCircle: { width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(74,222,128,0.1)", justifyContent: "center", alignItems: "center" },
+    connectingText: { color: "#4ADE80", marginTop: 24, fontSize: 22, fontWeight: "900", letterSpacing: 1 },
+    connectingSub: { color: "rgba(255,255,255,0.5)", marginTop: 8, fontSize: 13 },
+    connectedText: { color: "#4ADE80", marginTop: 24, fontSize: 22, fontWeight: "900", letterSpacing: 1 },
+    connectedSub: { color: "rgba(255,255,255,0.5)", marginTop: 8, fontSize: 13 },
+
     header: {
       position: "absolute", left: 0, right: 0, zIndex: 10,
       flexDirection: "row", alignItems: "center", justifyContent: "space-between",
       paddingHorizontal: 12, paddingVertical: 8,
     },
     backBtn: { width: 40, height: 40, borderRadius: 8, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(255,255,255,0.15)" },
-    permLoading: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.videoCallBg },
-    retryBtn: { marginTop: 24, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
     headerCenter: { alignItems: "center" },
     headerSub: { fontSize: 11, fontWeight: "bold" },
     headerTitle: { fontSize: 15, fontWeight: "900", letterSpacing: 1 },
@@ -408,11 +411,6 @@ const makeStyles = (colors) =>
     chatSheetSub: { fontSize: 12, marginBottom: 16 },
     chatList: { flex: 1 },
     emptyChat: { textAlign: "center", marginTop: 20 },
-    chatBubble: { maxWidth: "85%", padding: 12, borderRadius: 12, marginBottom: 12 },
-    chatBubbleMine: { alignSelf: "flex-end", borderBottomRightRadius: 4 },
-    chatBubbleOther: { alignSelf: "flex-start", borderBottomLeftRadius: 4 },
-    chatMeta: { fontSize: 10, marginBottom: 4, fontWeight: "bold" },
-    chatText: { fontSize: 14, lineHeight: 20 },
     inputRow: { flexDirection: "row", gap: 12, marginTop: 16 },
     chatInput: { flex: 1, borderRadius: 8, paddingHorizontal: 16, height: 48, borderWidth: 1, textAlignVertical: "center" },
     sendBtn: { width: 48, height: 48, borderRadius: 8, justifyContent: "center", alignItems: "center" },

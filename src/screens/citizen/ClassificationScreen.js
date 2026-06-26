@@ -40,6 +40,7 @@ export default function ClassificationScreen({ route, navigation }) {
   const classifyAndNavigate = async (id) => {
     setSelected(id);
     setSubmitting(true);
+    console.log("[Classification] Selected type:", id, "incident:", incidentId);
 
     try {
       await updateDoc(doc(db, "incidents", incidentId), {
@@ -50,7 +51,7 @@ export default function ClassificationScreen({ route, navigation }) {
 
       setTimeout(() => {
         navigation.replace("VideoCall", { incidentId });
-      }, 1000);
+      }, 1200);
     } catch {
       setSubmitting(false);
       Alert.alert("Error", "No se pudo actualizar el tipo de emergencia.");
@@ -105,13 +106,6 @@ export default function ClassificationScreen({ route, navigation }) {
       </View>
 
       <View style={s.content}>
-        {/* LENSE Video Mini */}
-        <TouchableOpacity style={[s.lenseMini, { backgroundColor: colors.lenseCard }]} activeOpacity={0.9}>
-          <View style={[s.playMini, { backgroundColor: colors.whiteTranslucent, borderColor: colors.whiteTranslucent }]}>
-            <Ionicons name="play" size={20} color={colors.white} style={{ marginLeft: 3 }} />
-          </View>
-        </TouchableOpacity>
-
         <Text style={[s.questionTitle, { color: colors.textPrimary }]}>¿Qué pasó?</Text>
         <Text style={[s.questionSub, { color: colors.textSecondary }]}>
           Seleccione la categoría de su emergencia
@@ -171,17 +165,22 @@ export default function ClassificationScreen({ route, navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Bottom Fixed Area */}
-      <View style={[s.bottomArea, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: 20 + insets.bottom }]}>
-        {submitting && (
-          <View style={[s.confirmButton, { backgroundColor: colors.primary }]}>
-            <Text style={s.confirmButtonText}>Actualizando...</Text>
+      {/* Loading overlay */}
+      {submitting && (
+        <View style={[s.loadingOverlay, { backgroundColor: colors.overlay }]}>
+          <View style={[s.loadingBox, { backgroundColor: colors.surface }]}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[s.loadingText, { color: colors.textPrimary }]}>
+              Conectando con CENCO...
+            </Text>
           </View>
-        )}
-      </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const makeStyles = (colors) =>
   StyleSheet.create({
@@ -195,14 +194,6 @@ const makeStyles = (colors) =>
     sosLabel: { fontSize: 16, fontWeight: "900", letterSpacing: 1 },
     
     content: { flex: 1, paddingHorizontal: 24, paddingTop: 24 },
-    lenseMini: {
-      width: "100%", height: 120, borderRadius: 12,
-      justifyContent: "center", alignItems: "center", marginBottom: 24,
-    },
-    playMini: {
-      width: 48, height: 48, borderRadius: 24,
-      justifyContent: "center", alignItems: "center", borderWidth: 1,
-    },
     
     questionTitle: { fontSize: 26, fontWeight: "bold", marginBottom: 4 },
     questionSub: { fontSize: 14, marginBottom: 24 },
@@ -230,7 +221,14 @@ const makeStyles = (colors) =>
     otherLink: { alignItems: "center", marginTop: 32 },
     otherLinkText: { fontSize: 14, fontWeight: "bold", textDecorationLine: "underline" },
     
-    bottomArea: { paddingHorizontal: 24, paddingVertical: 20, borderTopWidth: 1 },
-    confirmButton: { borderRadius: 12, height: 54, justifyContent: "center", alignItems: "center" },
-    confirmButtonText: { color: colors.white, fontSize: 16, fontWeight: "bold" },
+    loadingOverlay: {
+      position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+      justifyContent: "center", alignItems: "center", zIndex: 200,
+    },
+    loadingBox: {
+      borderRadius: 20, padding: 36, alignItems: "center",
+      width: SCREEN_WIDTH * 0.75,
+      shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 8,
+    },
+    loadingText: { fontSize: 16, fontWeight: "600", marginTop: 20, textAlign: "center" },
   });

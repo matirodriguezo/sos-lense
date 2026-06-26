@@ -122,9 +122,9 @@ export default function DispatchPanelScreen({ navigation }) {
 
   const handleLogout = () => {
     setMenuVisible(false);
-    Alert.alert("Finalizar Turno", "¿Deseas cerrar tu sesión actual?", [
+    Alert.alert("Finalizar Turno", "¿Estás seguro de finalizar tu turno? Los casos no cerrados se perderán.", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Cerrar Sesión", style: "destructive", onPress: () => signOut(auth) },
+      { text: "Finalizar Turno", style: "destructive", onPress: () => signOut(auth) },
     ]);
   };
 
@@ -218,7 +218,12 @@ export default function DispatchPanelScreen({ navigation }) {
           </TouchableOpacity>
         )}
         {!isFinal && isAssignedToMe && (
-          <TouchableOpacity style={[s.enterBtn, { backgroundColor: colors.officerBg, borderTopColor: colors.border }]} onPress={() => navigation.navigate("IncidentManagement", { incidentId: item.id })}>
+          <TouchableOpacity style={[s.enterBtn, { backgroundColor: colors.officerBg, borderTopColor: colors.border }]} onPress={() => {
+            Alert.alert("Gestionar incidente", "¿Confirmas que deseas gestionar este caso?", [
+              { text: "Cancelar", style: "cancel" },
+              { text: "Gestionar", onPress: () => navigation.navigate("IncidentManagement", { incidentId: item.id }) },
+            ]);
+          }}>
             <Text style={[s.enterBtnText, { color: colors.primary }]}>Gestionar Incidente →</Text>
           </TouchableOpacity>
         )}
@@ -276,7 +281,10 @@ export default function DispatchPanelScreen({ navigation }) {
 
             <View style={s.drawerBody}>
               <Text style={[s.drawerNavTitle, { color: colors.emptyText }]}>NAVEGACIÓN</Text>
-              <TouchableOpacity style={s.drawerItem} onPress={() => { setMenuVisible(false); navigation.navigate("Perfil"); }}>
+              <TouchableOpacity style={s.drawerItem} onPress={() => { setMenuVisible(false); Alert.alert("Mi Perfil", "¿Deseas ver tu perfil?", [
+                { text: "Cancelar", style: "cancel" },
+                { text: "Ver Perfil", onPress: () => navigation.navigate("Perfil") },
+              ]); }}>
                 <Ionicons name="person-outline" size={24} color={colors.primary} />
                 <View style={s.drawerItemTexts}>
                   <Text style={[s.drawerItemTitle, { color: colors.textPrimary }]}>Mi Perfil</Text>
@@ -284,7 +292,10 @@ export default function DispatchPanelScreen({ navigation }) {
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={colors.emptyText} />
               </TouchableOpacity>
-              <TouchableOpacity style={s.drawerItem} onPress={() => { setMenuVisible(false); navigation.navigate("Mapa"); }}>
+              <TouchableOpacity style={s.drawerItem} onPress={() => { setMenuVisible(false); Alert.alert("Mapa Global", "¿Deseas abrir el mapa de unidades?", [
+                { text: "Cancelar", style: "cancel" },
+                { text: "Abrir Mapa", onPress: () => navigation.navigate("Mapa") },
+              ]); }}>
                 <Ionicons name="map-outline" size={24} color={colors.primary} />
                 <View style={s.drawerItemTexts}>
                   <Text style={[s.drawerItemTitle, { color: colors.textPrimary }]}>Mapa Global</Text>
@@ -336,13 +347,22 @@ export default function DispatchPanelScreen({ navigation }) {
       <Text style={[s.feedSub, { color: colors.textSecondary }]}>Actualización en tiempo real</Text>
 
       <View style={[s.tabRow, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-        <TouchableOpacity style={[s.tab, activeTab === "activos" && { borderBottomColor: colors.primary }]} onPress={() => setActiveTab("activos")}>
+        <TouchableOpacity style={[s.tab, activeTab === "activos" && { borderBottomColor: colors.primary }]} onPress={() => { if (activeTab !== "activos") Alert.alert("Cambiar vista", "¿Ver todos los incidentes activos?", [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Ver", onPress: () => setActiveTab("activos") },
+        ]); }}>
           <Text style={[s.tabText, { color: colors.textSecondary }, activeTab === "activos" && { color: colors.primary, fontWeight: "bold" }]}>Activos ({activos.length})</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[s.tab, activeTab === "mycases" && { borderBottomColor: colors.primary }]} onPress={() => setActiveTab("mycases")}>
+        <TouchableOpacity style={[s.tab, activeTab === "mycases" && { borderBottomColor: colors.primary }]} onPress={() => { if (activeTab !== "mycases") Alert.alert("Cambiar vista", "¿Ver tus casos asignados?", [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Ver", onPress: () => setActiveTab("mycases") },
+        ]); }}>
           <Text style={[s.tabText, { color: colors.textSecondary }, activeTab === "mycases" && { color: colors.primary, fontWeight: "bold" }]}>Mis Casos ({misCasosActivos.length})</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[s.tab, activeTab === "cancelados" && { borderBottomColor: colors.primary }]} onPress={() => setActiveTab("cancelados")}>
+        <TouchableOpacity style={[s.tab, activeTab === "cancelados" && { borderBottomColor: colors.primary }]} onPress={() => { if (activeTab !== "cancelados") Alert.alert("Cambiar vista", "¿Ver incidentes cancelados?", [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Ver", onPress: () => setActiveTab("cancelados") },
+        ]); }}>
           <Text style={[s.tabText, { color: colors.textSecondary }, activeTab === "cancelados" && { color: colors.primary, fontWeight: "bold" }]}>Cancelados ({cancelados.length})</Text>
         </TouchableOpacity>
       </View>

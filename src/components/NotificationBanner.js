@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { View, Text, TouchableOpacity, Animated, StyleSheet, Platform } from "react-native";
-import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { navigationRef } from "../navigation/navigationRef";
 import { useNotifications } from "../context/NotificationContext";
 import { useTheme } from "../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,7 +9,6 @@ import { Ionicons } from "@expo/vector-icons";
 export default function NotificationBanner() {
   const { banner } = useNotifications();
   const { colors } = useTheme();
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(-120)).current;
 
@@ -33,8 +32,10 @@ export default function NotificationBanner() {
 
   const handlePress = useCallback(() => {
     if (!banner?.route) return;
-    navigation.navigate(banner.route, banner.params);
-  }, [banner, navigation]);
+    if (navigationRef.isReady()) {
+      navigationRef.navigate(banner.route, banner.params);
+    }
+  }, [banner]);
 
   if (!banner) return null;
 

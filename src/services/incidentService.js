@@ -11,10 +11,14 @@ import {
   orderBy,
   arrayUnion,
   getDoc,
+  getDocs,
 } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
 
+const LOG = "[IncidentSvc]";
+
 export async function triggerSOS(citizenId, { latitude, longitude, address, citizenAlias }) {
+  console.log(`${LOG} triggerSOS: citizen=${citizenId.slice(0, 6)}..., lat=${latitude.toFixed(4)}, lng=${longitude.toFixed(4)}`);
   const docRef = await addDoc(collection(db, "incidents"), {
     citizenId,
     citizenAlias: citizenAlias || "",
@@ -33,6 +37,7 @@ export async function triggerSOS(citizenId, { latitude, longitude, address, citi
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+  console.log(`${LOG} Incident created: ${docRef.id}`);
   return docRef.id;
 }
 
@@ -101,12 +106,14 @@ export function listenMessages(incidentId, callback) {
 }
 
 export async function assignOfficer(incidentId, officerId, officerAlias = "") {
+  console.log(`${LOG} assignOfficer: incident=${incidentId}, officer=${officerId.slice(0, 6)}..., alias=${officerAlias}`);
   await updateDoc(doc(db, "incidents", incidentId), {
     officerId,
     officerAlias,
     status: "ACTIVO",
     updatedAt: serverTimestamp(),
   });
+  console.log(`${LOG} Incident ${incidentId} assigned to ${officerAlias}`);
 }
 
 export async function startManaging(incidentId) {
@@ -124,6 +131,7 @@ export async function addQuickRequest(incidentId, request) {
 }
 
 export async function closeIncident(incidentId, observations, reason) {
+  console.log(`${LOG} closeIncident: ${incidentId}, reason=${reason}`);
   await updateDoc(doc(db, "incidents", incidentId), {
     status: "CERRADO",
     observations,
@@ -134,6 +142,7 @@ export async function closeIncident(incidentId, observations, reason) {
 }
 
 export async function cancelIncident(incidentId, reason) {
+  console.log(`${LOG} cancelIncident: ${incidentId}, reason=${reason}`);
   await updateDoc(doc(db, "incidents", incidentId), {
     status: "ANULADO",
     observations: reason || "Cancelado por el ciudadano",
@@ -159,6 +168,28 @@ export async function sendMessage(incidentId, text, senderId, senderRole) {
     senderId,
     senderRole,
     createdAt: serverTimestamp(),
+    readBy: [],
+    status: "sent",
+  });
+}
+
+export async function markMessageAsRead(incidentId, messageId, userId) {
+  try {
+    const msgRef = doc(db, "incidents", incidentId, "messages", messageId);
+    await updateDoc(msgRef, {
+      readBy: arrayUnion(userId),
+      status: "read",
+    });
+  } catch {}
+}
+
+export function listenMessagesWithStatus(incidentId, callback) {
+  const q = query(
+    collection(db, "incidents", incidentId, "messages"),
+    orderBy("createdAt", "asc")
+  );
+  return onSnapshot(q, (snapshot) => {
+    callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
   });
 }
 

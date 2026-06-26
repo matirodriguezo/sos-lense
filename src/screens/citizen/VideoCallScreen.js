@@ -11,8 +11,9 @@ import {
   Alert,
   Modal,
   StatusBar,
-  PermissionsAndroid,
   ActivityIndicator,
+  Animated,
+  Easing,
 } from "react-native";
 import { auth } from "../../firebase/firebaseConfig";
 import {
@@ -21,13 +22,13 @@ import {
   listenMessages,
   listenIncidentById,
   cancelIncident,
+  markMessageAsRead,
 } from "../../services/incidentService";
-import { sendOffer, sendAnswer, sendIceCandidate, listenSignaling, clearSignaling } from "../../services/signalingService";
-import WebRTCView from "../../components/WebRTCView";
+import MessageBubble from "../../components/MessageBubble";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 const QUICK_OPTIONS = [
   { icon: "medical-outline", label: "Necesito Ambulancia" },
@@ -48,35 +49,40 @@ export default function VideoCallScreen({ route, navigation }) {
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeReason, setCloseReason] = useState("");
   const [incident, setIncident] = useState(null);
-  const [permsOk, setPermsOk] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
-  const [videoError, setVideoError] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [webviewKey, setWebviewKey] = useState(0);
   const [callActive, setCallActive] = useState(false);
+  const [connecting, setConnecting] = useState(true);
   const flatListRef = useRef(null);
-  const webrtcRef = useRef(null);
   const insets = useSafeAreaInsets();
   const uid = auth.currentUser?.uid;
+  const markedRef = useRef(new Set());
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+  const chatListRef = useRef(null);
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
+  // Simulated connecting sequence
   useEffect(() => {
-    (async () => {
-      try {
-        if (Platform.OS === "android") {
-          const g = await PermissionsAndroid.requestMultiple([
-            PermissionsAndroid.PERMISSIONS.CAMERA,
-            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-          ]);
-          const ok =
-            g[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED &&
-            g[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED;
-          if (!ok) return setPermsOk(false);
-        }
-        setPermsOk(true);
-      } catch {}
-    })();
+    console.log("[VideoCall] Mounted, incident:", incidentId, "autoOpenChat:", autoOpenChat);
+    const timer = setTimeout(() => {
+      setConnecting(false);
+      setCallActive(true);
+      console.log("[VideoCall] Connection established");
+    }, 3000);
+    return () => {
+      clearTimeout(timer);
+      console.log("[VideoCall] Unmounted");
+    };
+  }, []);
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
   }, []);
 
   useEffect(() => {
@@ -106,77 +112,27 @@ export default function VideoCallScreen({ route, navigation }) {
     }
   }, [incident?.status]);
 
-  const remoteUidRef = useRef(null);
-
-  const handleWebRTCMessage = useCallback((type, data) => {
-    switch (type) {
-      case "ready":
-        setVideoReady(true);
-        webrtcRef.current?.forwardSignaling("makeOffer", null);
-        break;
-      case "offer":
-        sendOffer(incidentId, uid, data).catch(() => {});
-        break;
-      case "answer":
-        sendAnswer(incidentId, uid, data).catch(() => {});
-        break;
-      case "ice":
-        sendIceCandidate(incidentId, uid, data).catch(() => {});
-        break;
-      case "remote_on":
-        setCallActive(true);
-        break;
-      case "disconnected":
-        setCallActive(false);
-        break;
-      case "log":
-        console.log("[WebRTC]", data);
-        break;
-      case "debug":
-        console.log("[WebRTC Debug]", data);
-        break;
-      case "error":
-        setVideoError(true);
-        setErrorMsg(data || "");
-        break;
-      case "hangup":
-        setCallActive(false);
-        break;
-      default:
-        console.log("[WebRTC unknown msg]", type, data);
-        break;
-    }
-  }, [incidentId, uid]);
-
-  const handleRetry = useCallback(() => {
-    setVideoError(false);
-    setVideoReady(false);
-    setWebviewKey((k) => k + 1);
-  }, []);
-
   useEffect(() => {
-    return () => { clearSignaling(incidentId, uid); };
-  }, [incidentId, uid]);
-
-  useEffect(() => {
-    if (!videoReady || !remoteUidRef.current) return;
-    const unsub = listenSignaling(incidentId, remoteUidRef.current, {
-      onAnswer(sdp) { webrtcRef.current?.forwardSignaling("answer", sdp); },
-      onIce(candidate) { webrtcRef.current?.forwardSignaling("ice", candidate); },
+    if (!showChatModal || !incident?.officerId) return;
+    const unreadMsgs = messages.filter(
+      (m) => m.senderRole === "OFFICER" && !m.readBy?.includes(uid) && !markedRef.current.has(m.id)
+    );
+    unreadMsgs.forEach((m) => {
+      markedRef.current.add(m.id);
+      markMessageAsRead(incidentId, m.id, uid);
     });
-    return () => unsub;
-  }, [videoReady, incidentId]);
-
-  useEffect(() => {
-    if (!incident?.officerId) return;
-    remoteUidRef.current = incident.officerId;
-  }, [incident?.officerId]);
+  }, [messages, showChatModal, incident?.officerId]);
 
   const handleQuickRequest = async (request) => {
-    try {
-      await addQuickRequest(incidentId, request);
-      await sendMessage(incidentId, `[ALERTA RÁPIDA] ${request}`, uid, "CITIZEN");
-    } catch {}
+    Alert.alert("Enviar alerta rápida", `¿Confirmas el envío de: "${request}"?`, [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Enviar", onPress: async () => {
+        try {
+          await addQuickRequest(incidentId, request);
+          await sendMessage(incidentId, `[ALERTA RÁPIDA] ${request}`, uid, "CITIZEN");
+        } catch {}
+      }},
+    ]);
   };
 
   const handleSend = async () => {
@@ -185,7 +141,8 @@ export default function VideoCallScreen({ route, navigation }) {
     setInput("");
     try {
       await sendMessage(incidentId, text, uid, "CITIZEN");
-    } catch {}
+      console.log("[VideoCall] Message sent (CITIZEN):", text.slice(0, 40));
+    } catch (e) { console.warn("[VideoCall] Send error:", e); }
   };
 
   const handleCloseWithReason = async () => {
@@ -193,18 +150,21 @@ export default function VideoCallScreen({ route, navigation }) {
       Alert.alert("Motivo requerido", "Por favor indica el motivo del cierre.");
       return;
     }
-    try {
-      await cancelIncident(incidentId, closeReason.trim());
-      await sendMessage(incidentId, `[CERRADO] Incidente cerrado: ${closeReason.trim()}`, uid, "CITIZEN");
-      webrtcRef.current?.hangUp();
-      await clearSignaling(incidentId, uid);
-      setShowCloseModal(false);
-      Alert.alert("Cerrado", "Serás redirigido al inicio.", [
-        { text: "OK", onPress: () => navigation.reset({ index: 0, routes: [{ name: "Home" }] }) },
-      ]);
-    } catch {
-      Alert.alert("Error", "No se pudo cerrar el incidente.");
-    }
+    Alert.alert("Confirmar cierre", `¿Estás seguro de cerrar el incidente?\n\nMotivo: ${closeReason.trim()}`, [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Sí, cerrar", style: "destructive", onPress: async () => {
+        try {
+          await cancelIncident(incidentId, closeReason.trim());
+          await sendMessage(incidentId, `[CERRADO] Incidente cerrado: ${closeReason.trim()}`, uid, "CITIZEN");
+          setShowCloseModal(false);
+          console.log("[VideoCall] Incident closed by citizen");
+          navigation.reset({ index: 0, routes: [{ name: "Home" }] });
+        } catch (e) {
+          console.warn("[VideoCall] Close error:", e);
+          Alert.alert("Error", "No se pudo cerrar el incidente.");
+        }
+      }},
+    ]);
   };
 
   const handleHangup = () => {
@@ -213,8 +173,7 @@ export default function VideoCallScreen({ route, navigation }) {
       {
         text: "Colgar", style: "destructive",
         onPress: () => {
-          webrtcRef.current?.hangUp();
-          clearSignaling(incidentId, uid);
+          console.log("[VideoCall] Citizen hung up");
           navigation.reset({ index: 0, routes: [{ name: "Home" }] });
         },
       },
@@ -223,27 +182,32 @@ export default function VideoCallScreen({ route, navigation }) {
 
   const isMine = (msg) => msg.senderId === uid;
 
+  const pulseOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 1],
+  });
+
   return (
     <KeyboardAvoidingView style={[s.container, { backgroundColor: "#000" }]} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       <View style={{ flex: 1, position: "relative" }}>
-        {!permsOk ? (
+        {/* Connecting overlay */}
+        {connecting ? (
           <View style={s.center}>
-            <Ionicons name="camera-outline" size={64} color="#666" />
-            <Text style={s.centerText}>Permisos de cámara denegados</Text>
-          </View>
-        ) : videoError ? (
-          <View style={s.center}>
-            <Ionicons name="alert-circle-outline" size={64} color="#FB923C" />
-            <Text style={s.centerText}>Error de cámara</Text>
-            {errorMsg ? <Text style={s.errorSubText}>{errorMsg}</Text> : null}
-            <TouchableOpacity style={[s.retryBtn, { backgroundColor: "#4ADE80" }]} onPress={handleRetry}>
-              <Text style={{ color: "#000", fontWeight: "bold" }}>Reintentar</Text>
-            </TouchableOpacity>
+            <Animated.View style={[s.pulseCircle, { opacity: pulseOpacity }]}>
+              <MaterialCommunityIcons name="cellphone-link" size={64} color="#4ADE80" />
+            </Animated.View>
+            <Text style={s.connectingText}>Conectando...</Text>
+            <Text style={s.connectingSub}>Estableciendo enlace con CENCO</Text>
+            <ActivityIndicator size="small" color="#4ADE80" style={{ marginTop: 20 }} />
           </View>
         ) : (
-          <WebRTCView key={webviewKey} ref={webrtcRef} style={{ flex: 1 }} onWebRTCMessage={handleWebRTCMessage} />
+          <View style={s.center}>
+            <MaterialCommunityIcons name="video" size={80} color="#4ADE80" />
+            <Text style={s.connectedText}>LLAMADA ACTIVA</Text>
+            <Text style={s.connectedSub}>Conexión establecida con CENCO</Text>
+          </View>
         )}
 
         <View style={[s.topBar, { top: insets.top }]}>
@@ -254,38 +218,40 @@ export default function VideoCallScreen({ route, navigation }) {
           {callActive && <View style={[s.liveBadge, { backgroundColor: "#16A34A" }]}><Text style={s.liveText}>CONECTADO</Text></View>}
         </View>
 
-        <View style={[s.bottomArea, { paddingBottom: insets.bottom + 8 }]}>
-          <FlatList
-            data={QUICK_OPTIONS}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.quickList}
-            keyExtractor={(item) => item.label}
-            initialNumToRender={6}
-            maxToRenderPerBatch={6}
-            windowSize={3}
-            removeClippedSubviews={Platform.OS === "android"}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={s.quickPill} onPress={() => handleQuickRequest(item.label)} activeOpacity={0.7}>
-                <Ionicons name={item.icon} size={14} color="#fff" style={{ marginRight: 5 }} />
-                <Text style={s.pillLabel}>{item.label}</Text>
+        {callActive && (
+          <View style={[s.bottomArea, { paddingBottom: insets.bottom + 8 }]}>
+            <FlatList
+              data={QUICK_OPTIONS}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.quickList}
+              keyExtractor={(item) => item.label}
+              initialNumToRender={6}
+              maxToRenderPerBatch={6}
+              windowSize={3}
+              removeClippedSubviews={Platform.OS === "android"}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={s.quickPill} onPress={() => handleQuickRequest(item.label)} activeOpacity={0.7}>
+                  <Ionicons name={item.icon} size={14} color="#fff" style={{ marginRight: 5 }} />
+                  <Text style={s.pillLabel}>{item.label}</Text>
+                </TouchableOpacity>
+              )}
+            />
+            <View style={s.actionsRow}>
+              <TouchableOpacity style={[s.actionBtn, { backgroundColor: "rgba(255,255,255,0.2)" }]} onPress={() => setShowChatModal(true)}>
+                <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
+                <Text style={s.actionLabel}>Chat</Text>
               </TouchableOpacity>
-            )}
-          />
-          <View style={s.actionsRow}>
-            <TouchableOpacity style={[s.actionBtn, { backgroundColor: "rgba(255,255,255,0.2)" }]} onPress={() => setShowChatModal(true)}>
-              <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
-              <Text style={s.actionLabel}>Chat</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[s.hangupBtn]} onPress={handleHangup}>
-              <Ionicons name="call" size={24} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={[s.actionBtn, { backgroundColor: "#DC2626" }]} onPress={() => setShowCloseModal(true)}>
-              <Ionicons name="close" size={20} color="#fff" />
-              <Text style={s.actionLabel}>Cerrar</Text>
-            </TouchableOpacity>
+              <TouchableOpacity style={[s.hangupBtn]} onPress={handleHangup}>
+                <Ionicons name="call" size={24} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.actionBtn, { backgroundColor: "#DC2626" }]} onPress={() => setShowCloseModal(true)}>
+                <Ionicons name="close" size={20} color="#fff" />
+                <Text style={s.actionLabel}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        )}
       </View>
 
       <Modal visible={showChatModal} transparent animationType="slide">
@@ -300,15 +266,22 @@ export default function VideoCallScreen({ route, navigation }) {
               data={messages}
               keyExtractor={(item) => item.id}
               style={s.chatList}
+              initialNumToRender={15}
+              maxToRenderPerBatch={10}
+              windowSize={5}
+              removeClippedSubviews={Platform.OS === "android"}
               onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
               ListEmptyComponent={<Text style={{ textAlign: "center", marginTop: 20, color: colors.textSecondary }}>Sin mensajes.</Text>}
               renderItem={({ item }) => (
-                <View style={[s.chatBubble, isMine(item) ? [s.chatBubbleMine, { backgroundColor: colors.primary }] : [s.chatBubbleOther, { backgroundColor: colors.border }]]}>
-                  <Text style={[s.chatMeta, isMine(item) ? { color: colors.whiteTranslucent, textAlign: "right" } : { color: colors.textSecondary }]}>
-                    {isMine(item) ? "Tú" : (incident?.officerAlias || "Oficial")}
-                  </Text>
-                  <Text style={[s.chatText, isMine(item) ? { color: colors.white } : { color: colors.textPrimary }]}>{item.text}</Text>
-                </View>
+                <MessageBubble
+                  message={item}
+                  isMine={isMine(item)}
+                  otherRole="OFFICER"
+                  otherUserId={incident?.officerId}
+                  currentUserId={uid}
+                  citizenAlias={incident?.citizenAlias}
+                  officerAlias={incident?.officerAlias}
+                />
               )}
             />
             <View style={s.inputRow}>
@@ -361,8 +334,11 @@ const makeStyles = (colors) =>
     container: { flex: 1 },
     center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" },
     centerText: { color: "#999", marginTop: 16, fontSize: 14, fontWeight: "600" },
-    errorSubText: { color: "#666", marginTop: 8, fontSize: 12, textAlign: "center", paddingHorizontal: 24 },
-    retryBtn: { marginTop: 24, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
+    pulseCircle: { width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(74,222,128,0.1)", justifyContent: "center", alignItems: "center" },
+    connectingText: { color: "#4ADE80", marginTop: 24, fontSize: 22, fontWeight: "900", letterSpacing: 1 },
+    connectingSub: { color: "rgba(255,255,255,0.5)", marginTop: 8, fontSize: 13 },
+    connectedText: { color: "#4ADE80", marginTop: 24, fontSize: 22, fontWeight: "900", letterSpacing: 1 },
+    connectedSub: { color: "rgba(255,255,255,0.5)", marginTop: 8, fontSize: 13 },
 
     topBar: {
       position: "absolute", left: 0, right: 0, zIndex: 10,
@@ -404,11 +380,6 @@ const makeStyles = (colors) =>
     chatSheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
     chatSheetTitle: { fontSize: 18, fontWeight: "bold" },
     chatList: { flex: 1 },
-    chatBubble: { maxWidth: "85%", padding: 12, borderRadius: 12, marginBottom: 12 },
-    chatBubbleMine: { alignSelf: "flex-end", borderBottomRightRadius: 4 },
-    chatBubbleOther: { alignSelf: "flex-start", borderBottomLeftRadius: 4 },
-    chatMeta: { fontSize: 10, marginBottom: 4, fontWeight: "bold" },
-    chatText: { fontSize: 14, lineHeight: 20 },
     inputRow: { flexDirection: "row", gap: 12, marginTop: 16 },
     chatInput: { flex: 1, borderRadius: 8, paddingHorizontal: 16, height: 48, borderWidth: 1, textAlignVertical: "center" },
     sendBtn: { width: 48, height: 48, borderRadius: 8, justifyContent: "center", alignItems: "center" },

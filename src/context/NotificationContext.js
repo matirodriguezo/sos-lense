@@ -3,18 +3,23 @@ import { auth, db } from "../firebase/firebaseConfig";
 import { collection, query, where, onSnapshot, orderBy, doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
+const LOG_TAG = "[NotificationCtx]";
+
 export const NotificationContext = createContext();
 
 export function NotificationProvider({ children }) {
   const [banner, setBanner] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const activeChatIdRef = useRef(null);
+  const inChatListRef = useRef(false);
   const seenMessages = useRef(new Set());
   const initializedAt = useRef(Date.now());
   const bannerTimer = useRef(null);
   const msgUnsubs = useRef([]);
   const incidentUnsub = useRef(null);
   const authUnsub = useRef(null);
+  const isVisibleRef = useRef(true);
+  const prevCountRef = useRef(0);
 
   const showBanner = useCallback((senderName, text, incidentId, role) => {
     if (bannerTimer.current) clearTimeout(bannerTimer.current);
@@ -27,16 +32,34 @@ export function NotificationProvider({ children }) {
 
   const enterChat = useCallback((incidentId) => {
     activeChatIdRef.current = incidentId;
+    if (prevCountRef.current !== 0) {
+      console.log(`${LOG_TAG} Entering chat ${incidentId}, clearing unread count`);
+    }
     setUnreadCount(0);
+    prevCountRef.current = 0;
   }, []);
 
   const leaveChat = useCallback(() => {
     activeChatIdRef.current = null;
   }, []);
 
+  const enterChatList = useCallback(() => {
+    inChatListRef.current = true;
+    if (prevCountRef.current !== 0) {
+      console.log(`${LOG_TAG} Entering chat list, cleared ${prevCountRef.current} unreads`);
+    }
+    setUnreadCount(0);
+    prevCountRef.current = 0;
+  }, []);
+
+  const leaveChatList = useCallback(() => {
+    inChatListRef.current = false;
+  }, []);
+
   useEffect(() => {
     authUnsub.current = onAuthStateChanged(auth, (user) => {
-      // Cleanup previous listeners
+      console.log(`${LOG_TAG} Auth state changed:`, user?.uid ? `user ${user.uid.slice(0, 6)}...` : "null");
+
       if (incidentUnsub.current) {
         incidentUnsub.current();
         incidentUnsub.current = null;
@@ -46,6 +69,7 @@ export function NotificationProvider({ children }) {
 
       if (!user) {
         setUnreadCount(0);
+        prevCountRef.current = 0;
         return;
       }
 
@@ -60,6 +84,7 @@ export function NotificationProvider({ children }) {
         const role = snap.data().role;
         const isOfficer = role === "OFFICER";
         const userIdField = isOfficer ? "officerId" : "citizenId";
+        console.log(`${LOG_TAG} Setting up listeners for ${isOfficer ? "officer" : "citizen"} (${uid.slice(0, 6)}...)`);
 
         incidentUnsub.current = onSnapshot(
           query(
@@ -70,6 +95,13 @@ export function NotificationProvider({ children }) {
           (snapshot) => {
             msgUnsubs.current.forEach((u) => u());
             msgUnsubs.current = [];
+
+            if (snapshot.empty) {
+              console.log(`${LOG_TAG} No active incidents found`);
+              return;
+            }
+
+            console.log(`${LOG_TAG} Found ${snapshot.docs.length} active incident(s)`);
 
             snapshot.docs.forEach((d) => {
               const incident = { id: d.id, ...d.data() };
@@ -93,8 +125,14 @@ export function NotificationProvider({ children }) {
                     ? (incident.citizenAlias || "Ciudadano")
                     : (incident.officerAlias || "Oficial");
 
-                  if (activeChatIdRef.current !== incident.id) {
-                    setUnreadCount((prev) => prev + 1);
+                  if (inChatListRef.current) {
+                    showBanner(senderName, msg.text, incident.id, role);
+                  } else if (activeChatIdRef.current !== incident.id) {
+                    setUnreadCount((prev) => {
+                      const next = prev + 1;
+                      prevCountRef.current = next;
+                      return next;
+                    });
                     showBanner(senderName, msg.text, incident.id, role);
                   }
                 });
@@ -114,7 +152,7 @@ export function NotificationProvider({ children }) {
     };
   }, [showBanner]);
 
-  const value = { banner, unreadCount, enterChat, leaveChat };
+  const value = { banner, unreadCount, enterChat, leaveChat, enterChatList, leaveChatList };
 
   return (
     <NotificationContext.Provider value={value}>
@@ -125,6 +163,6 @@ export function NotificationProvider({ children }) {
 
 export function useNotifications() {
   const ctx = useContext(NotificationContext);
-  if (!ctx) return { banner: null, unreadCount: 0, enterChat: () => {}, leaveChat: () => {} };
+  if (!ctx) return { banner: null, unreadCount: 0, enterChat: () => {}, leaveChat: () => {}, enterChatList: () => {}, leaveChatList: () => {} };
   return ctx;
 }

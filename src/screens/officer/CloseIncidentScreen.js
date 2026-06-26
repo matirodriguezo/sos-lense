@@ -40,21 +40,34 @@ export default function CloseIncidentScreen({ route, navigation }) {
       return;
     }
 
-    setLoading(true);
-    try {
-      await closeIncident(incidentId, observations.trim(), reason.trim());
-      await sendMessage(
-        incidentId,
-        `[CERRADO] INCIDENTE CERRADO. Resolución: ${reason.trim()}`,
-        auth.currentUser.uid,
-        "OFFICER"
-      );
-      
-      navigation.reset({ index: 0, routes: [{ name: "DispatchPanel" }] });
-    } catch {
-      Alert.alert("Error", "No se pudo archivar el caso.");
-      setLoading(false);
-    }
+    Alert.alert(
+      "Confirmar cierre",
+      "¿Estás seguro de cerrar este caso? Esta acción es irreversible.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Sí, cerrar caso",
+          style: "destructive",
+          onPress: async () => {
+            setLoading(true);
+            try {
+              await closeIncident(incidentId, observations.trim(), reason.trim());
+              await sendMessage(
+                incidentId,
+                `[CERRADO] INCIDENTE CERRADO. Resolución: ${reason.trim()}`,
+                auth.currentUser.uid,
+                "OFFICER"
+              );
+              
+              navigation.reset({ index: 0, routes: [{ name: "DispatchPanel" }] });
+            } catch {
+              Alert.alert("Error", "No se pudo archivar el caso.");
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (!incident) return null;
@@ -81,7 +94,7 @@ export default function CloseIncidentScreen({ route, navigation }) {
           <View style={s.grid}>
             <View style={s.gridItem}>
                 <Text style={[s.gridLabel, { color: colors.textSecondary }]}>Tipo</Text>
-                <View style={s.row}><View style={[s.dot, { backgroundColor: colors.danger }]}/> <Text style={[s.gridValue, { color: colors.textPrimary }]}>{incident.type}</Text></View>
+                <View style={s.row}><View style={[s.dot, { backgroundColor: colors.danger }]}/><Text style={[s.gridValue, { color: colors.textPrimary }]}>{incident.type}</Text></View>
             </View>
             <View style={s.gridItem}>
                 <Text style={[s.gridLabel, { color: colors.textSecondary }]}>Ciudadano</Text>

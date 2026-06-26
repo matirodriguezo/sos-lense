@@ -3,11 +3,14 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "./src/context/ThemeContext";
 import { NotificationProvider } from "./src/context/NotificationContext";
 import NotificationBanner from "./src/components/NotificationBanner";
-import { Component, createRef } from "react";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { Component } from "react";
 import { View, Text, ScrollView } from "react-native";
 import AppNavigator from "./src/navigation/AppNavigator";
+import FakeAppScreen from "./src/screens/FakeAppScreen";
+import { navigationRef } from "./src/navigation/navigationRef";
 
-export const navigationRef = createRef();
+const RootStack = createNativeStackNavigator();
 
 class ErrorBoundary extends Component {
   state = { hasError: false, error: null, stack: "" };
@@ -62,7 +65,14 @@ export default function App() {
         <ThemeProvider>
           <NotificationProvider>
             <NavigationContainer ref={navigationRef}>
-              <AppInner />
+              <RootStack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_bottom" }}>
+                <RootStack.Screen name="Main" component={AppInner} />
+                <RootStack.Screen
+                  name="FakeApp"
+                  component={FakeAppScreen}
+                  options={{ animation: "fade", presentation: "fullScreenModal" }}
+                />
+              </RootStack.Navigator>
             </NavigationContainer>
           </NotificationProvider>
         </ThemeProvider>

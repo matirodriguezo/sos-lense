@@ -144,7 +144,10 @@ export default function LoginScreen({ navigation }) {
                 />
                 {!isRegistering && (
                   <TouchableOpacity
-                    onPress={() => Alert.alert("Biometría", "Autenticación biométrica no disponible aún.")}
+                    onPress={() => Alert.alert("Huella Digital", "¿Deseas usar tu huella digital para acceder?\n\n", [
+                      { text: "Cancelar", style: "cancel" },
+                      { text: "Usar huella", onPress: () => Alert.alert("Próximamente", "La autenticación biométrica estará disponible en una próxima actualización.") },
+                    ])}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                     accessibilityLabel="Autenticación biométrica"
                   >
@@ -182,7 +185,9 @@ export default function LoginScreen({ navigation }) {
             {!isRegistering && (
               <TouchableOpacity
                 style={s.forgotLink}
-                onPress={() => Alert.alert("Restablecer", "Contacta a tu unidad.")}
+                onPress={() => Alert.alert("Restablecer contraseña", "¿Necesitas ayuda con tu contraseña?\n\nContacta a Carabineros de Chile para restablecer tu acceso.", [
+                  { text: "Entendido" },
+                ])}
                 hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
               >
                 <Text style={[s.forgotText, { color: colors.primary }]}>¿Olvidé mi contraseña?</Text>
@@ -204,7 +209,19 @@ export default function LoginScreen({ navigation }) {
 
             <TouchableOpacity
               style={s.switchLink}
-              onPress={() => setIsRegistering(!isRegistering)}
+              onPress={() => {
+                if (isRegistering) {
+                  Alert.alert("Iniciar sesión", "¿Ya tienes una cuenta?", [
+                    { text: "Seguir registrando", style: "cancel" },
+                    { text: "Iniciar sesión", onPress: () => setIsRegistering(false) },
+                  ]);
+                } else {
+                  Alert.alert("Registrarse", "¿No tienes cuenta? Vamos a crear una.", [
+                    { text: "Cancelar", style: "cancel" },
+                    { text: "Registrarme", onPress: () => setIsRegistering(true) },
+                  ]);
+                }
+              }}
               hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
             >
               <Text style={[s.switchLinkText, { color: colors.primary }]}>
@@ -220,7 +237,10 @@ export default function LoginScreen({ navigation }) {
 
             <TouchableOpacity
               style={s.officerLink}
-              onPress={() => navigation.navigate("OfficerLogin")}
+              onPress={() => Alert.alert("Acceso restringido", "¿Eres personal autorizado de Carabineros de Chile?", [
+                { text: "Cancelar", style: "cancel" },
+                { text: "Sí, continuar", onPress: () => navigation.navigate("OfficerLogin") },
+              ])}
               hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
             >
               <Text style={[s.officerLinkText, { color: colors.primary }]}>Acceso Personal Carabineros</Text>

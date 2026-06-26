@@ -18,6 +18,7 @@ export default function AppNavigator() {
   const retryCount = useRef(0);
 
   useEffect(() => {
+    console.log("[AppNavigator] Initializing...");
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setUser(firebaseUser);
@@ -38,9 +39,11 @@ export default function AppNavigator() {
           setRole(data.role);
           setCurrentAlias(data.alias || "");
           if (data.role === ROLES.OFFICER) setShiftStart(Date.now());
+          console.log("[AppNavigator] User ready:", data.role, data.alias || "no alias");
         }
         setLoading(false);
       } else {
+        console.log("[AppNavigator] No user found");
         setUser(null);
         setRole(null);
         setLoading(false);
@@ -58,7 +61,8 @@ export default function AppNavigator() {
     );
   }
 
-  if (!user) return <AuthStack />;
-  if (role === ROLES.OFFICER) return <OfficerTabs />;
+  if (!user) { console.log("[AppNavigator] No user → AuthStack"); return <AuthStack />; }
+  if (role === ROLES.OFFICER) { console.log("[AppNavigator] Role OFFICER → OfficerTabs"); return <OfficerTabs />; }
+  console.log("[AppNavigator] Role CITIZEN → CitizenStack");
   return <CitizenStack />;
 }

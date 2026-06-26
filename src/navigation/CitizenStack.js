@@ -1,12 +1,25 @@
 import { useMemo } from "react";
+import { View } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useTheme } from "../context/ThemeContext";
 import CitizenTabs from "./CitizenTabs";
 import ClassificationScreen from "../screens/citizen/ClassificationScreen";
 import VideoCallScreen from "../screens/citizen/VideoCallScreen";
+import DetailPromptScreen from "../screens/citizen/DetailPromptScreen";
+import CitizenProfileScreen from "../screens/citizen/ProfileScreen";
+import CamouflageButton from "../components/CamouflageButton";
 import { FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
 
 const Stack = createNativeStackNavigator();
+
+function CitizenLayout() {
+  return (
+    <View style={{ flex: 1 }}>
+      <CitizenTabs />
+      <CamouflageButton />
+    </View>
+  );
+}
 
 export default function CitizenStack() {
   const { colors } = useTheme();
@@ -26,8 +39,13 @@ export default function CitizenStack() {
     <Stack.Navigator screenOptions={screenOptions}>
       <Stack.Screen
         name="Home"
-        component={CitizenTabs}
+        component={CitizenLayout}
         options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="DetailPrompt"
+        component={DetailPromptScreen}
+        options={{ headerShown: false, animation: "slide_from_bottom" }}
       />
       <Stack.Screen
         name="Classification"
@@ -38,6 +56,11 @@ export default function CitizenStack() {
         name="VideoCall"
         component={VideoCallScreen}
         options={{ headerShown: false, animation: "fade" }}
+      />
+      <Stack.Screen
+        name="CitizenProfile"
+        component={CitizenProfileScreen}
+        options={{ headerShown: false, animation: "slide_from_right" }}
       />
     </Stack.Navigator>
   );

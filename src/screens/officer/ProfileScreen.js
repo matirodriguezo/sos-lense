@@ -36,7 +36,11 @@ export default function ProfileScreen({ navigation }) {
   return (
     <SafeAreaView style={[s.safeArea, { backgroundColor: colors.background }]}>
       <View style={[s.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity onPress={() => Alert.alert("Menú", "¿Qué deseas hacer?", [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Ir al Panel", onPress: () => navigation.navigate("Emergencia") },
+          { text: "Cerrar sesión", style: "destructive", onPress: handleLogout },
+        ])} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="menu" size={28} color={colors.primary} />
         </TouchableOpacity>
         <Text style={[s.headerTitle, { color: colors.primary }]}>S.O.S. CARABINEROS</Text>
@@ -87,7 +91,12 @@ export default function ProfileScreen({ navigation }) {
           <Text style={[s.dataSub, { color: colors.textSecondary }]}>Sector Sur, Región Metropolitana</Text>
         </View>
 
-        <TouchableOpacity style={[s.logoutBtn, { backgroundColor: colors.surface, borderColor: colors.badgeRed }]} onPress={handleLogout}>
+        <TouchableOpacity style={[s.logoutBtn, { backgroundColor: colors.surface, borderColor: colors.badgeRed }]} onPress={() => {
+          Alert.alert("Finalizar Turno", "¿Estás seguro de finalizar tu turno actual?", [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Finalizar Turno", style: "destructive", onPress: handleLogout },
+          ]);
+        }}>
           <Ionicons name="log-out-outline" size={20} color={colors.danger} />
           <Text style={[s.logoutText, { color: colors.danger }]}>Finalizar Turno</Text>
         </TouchableOpacity>

@@ -106,7 +106,10 @@ export default function HistoryScreen({ navigation }) {
   };
 
   const handleRejoin = (incident) => {
-    navigation.navigate("VideoCall", { incidentId: incident.id });
+    Alert.alert("Reingresar", "¿Deseas reingresar a este incidente activo?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Reingresar", onPress: () => navigation.navigate("VideoCall", { incidentId: incident.id }) },
+    ]);
   };
 
   const renderItem = ({ item }) => {
@@ -204,7 +207,10 @@ export default function HistoryScreen({ navigation }) {
       <View style={[s.tabRow, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
         <TouchableOpacity
           style={[s.tab, activeTab === "activas" && { borderBottomColor: colors.primary }]}
-          onPress={() => setActiveTab("activas")}
+          onPress={() => { if (activeTab !== "activas") Alert.alert("Cambiar vista", "¿Ver incidentes activos?", [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Ver", onPress: () => setActiveTab("activas") },
+          ]); }}
         >
           <Text style={[s.tabText, { color: colors.textSecondary }, activeTab === "activas" && { color: colors.primary, fontWeight: "bold" }]}>
             Activas ({activeIncidents.length})
@@ -212,7 +218,10 @@ export default function HistoryScreen({ navigation }) {
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.tab, activeTab === "historial" && { borderBottomColor: colors.primary }]}
-          onPress={() => setActiveTab("historial")}
+          onPress={() => { if (activeTab !== "historial") Alert.alert("Cambiar vista", "¿Ver historial de incidentes?", [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Ver", onPress: () => setActiveTab("historial") },
+          ]); }}
         >
           <Text style={[s.tabText, { color: colors.textSecondary }, activeTab === "historial" && { color: colors.primary, fontWeight: "bold" }]}>
             Historial ({closedIncidents.length})

@@ -4,7 +4,6 @@ import { View, StyleSheet } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import HomeScreen from "../screens/citizen/HomeScreen";
 import HistoryScreen from "../screens/citizen/HistoryScreen";
-import ProfileScreen from "../screens/citizen/ProfileScreen";
 import { FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
 
 const Tab = createBottomTabNavigator();
@@ -12,7 +11,6 @@ const Tab = createBottomTabNavigator();
 const TAB_ICONS = {
   Inicio: "home-outline",
   Historial: "time-outline",
-  Perfil: "person-outline",
 };
 
 function TabIcon({ label, focused, colors }) {
@@ -59,11 +57,6 @@ export default function CitizenTabs() {
         name="Historial"
         component={HistoryScreen}
         options={{ tabBarLabel: "Historial" }}
-      />
-      <Tab.Screen
-        name="Perfil"
-        component={ProfileScreen}
-        options={{ tabBarLabel: "Perfil" }}
       />
     </Tab.Navigator>
   );

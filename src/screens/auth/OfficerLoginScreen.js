@@ -189,7 +189,19 @@ export default function OfficerLoginScreen({ navigation }) {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => setIsRegistering(!isRegistering)}
+              onPress={() => {
+                if (isRegistering) {
+                  Alert.alert("Cancelar registro", "¿Estás seguro de cancelar el registro?", [
+                    { text: "Seguir registrando", style: "cancel" },
+                    { text: "Cancelar registro", onPress: () => setIsRegistering(false) },
+                  ]);
+                } else {
+                  Alert.alert("Nuevo operador", "¿Eres personal autorizado de Carabineros para registrarte?", [
+                    { text: "Cancelar", style: "cancel" },
+                    { text: "Sí, registrarme", onPress: () => setIsRegistering(true) },
+                  ]);
+                }
+              }}
               style={s.switchLink}
               hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
             >
@@ -205,7 +217,10 @@ export default function OfficerLoginScreen({ navigation }) {
           {/* Back to Citizen Flow */}
           <TouchableOpacity
             style={s.backToCitizen}
-            onPress={() => navigation.goBack()}
+            onPress={() => Alert.alert("Volver", "¿Deseas regresar al portal ciudadano?", [
+              { text: "Cancelar", style: "cancel" },
+              { text: "Volver", onPress: () => navigation.goBack() },
+            ])}
             hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }}
           >
             <Ionicons name="arrow-back" size={18} color={colors.gold} />
