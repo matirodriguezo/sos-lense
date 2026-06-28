@@ -11,9 +11,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "../../firebase/firebaseConfig";
-import { cancelIncident } from "../../services/incidentService";
+import { cancelIncident, updateIncidentType } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -43,11 +41,7 @@ export default function ClassificationScreen({ route, navigation }) {
     console.log("[Classification] Selected type:", id, "incident:", incidentId);
 
     try {
-      await updateDoc(doc(db, "incidents", incidentId), {
-        type: id,
-        status: "ACTIVO",
-        updatedAt: new Date().toISOString(),
-      });
+      await updateIncidentType(incidentId, id);
 
       setTimeout(() => {
         navigation.replace("VideoCall", { incidentId });
@@ -134,7 +128,7 @@ export default function ClassificationScreen({ route, navigation }) {
                 )}
                 {item.gifPath ? (
                   allGifsReady ? (
-                    <Image 
+                    <Image
                       source={item.gifPath}
                       style={s.gifIcon}
                       resizeMode="contain"
@@ -145,11 +139,11 @@ export default function ClassificationScreen({ route, navigation }) {
                     </View>
                   )
                 ) : (
-                  <Ionicons 
-                    name={item.icon} 
-                    size={42} 
+                  <Ionicons
+                    name={item.icon}
+                    size={42}
                     color={isSelected ? colors.primary : colors.iconMuted}
-                    style={{ marginBottom: 12 }} 
+                    style={{ marginBottom: 12 }}
                   />
                 )}
                 <Text style={[s.cardLabel, { color: colors.textPrimary }, isSelected && { color: colors.primary }]}>
@@ -192,12 +186,12 @@ const makeStyles = (colors) =>
     closeButton: { width: 44, height: 44, justifyContent: "center", alignItems: "center" },
     stepText: { fontSize: 16, fontWeight: "bold" },
     sosLabel: { fontSize: 16, fontWeight: "900", letterSpacing: 1 },
-    
+
     content: { flex: 1, paddingHorizontal: 24, paddingTop: 24 },
-    
+
     questionTitle: { fontSize: 26, fontWeight: "bold", marginBottom: 4 },
     questionSub: { fontSize: 14, marginBottom: 24 },
-    
+
     grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 16 },
     card: {
       width: "47%", aspectRatio: 1.05,
@@ -217,10 +211,10 @@ const makeStyles = (colors) =>
       flex: 1, width: "100%", marginBottom: 8, justifyContent: "center", alignItems: "center",
     },
     cardLabel: { fontSize: 13, fontWeight: "600", textAlign: "center", paddingHorizontal: 4 },
-    
+
     otherLink: { alignItems: "center", marginTop: 32 },
     otherLinkText: { fontSize: 14, fontWeight: "bold", textDecorationLine: "underline" },
-    
+
     loadingOverlay: {
       position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
       justifyContent: "center", alignItems: "center", zIndex: 200,

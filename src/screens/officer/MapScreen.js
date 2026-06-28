@@ -1,22 +1,19 @@
 import { useState, useEffect, useMemo } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, StatusBar, Linking, Platform, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { auth } from "../../firebase/firebaseConfig";
-import { listenMyCases } from "../../services/incidentService";
+import { useFocusEffect } from "@react-navigation/native";
+import { listMyCases } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 const ACTIVE_STATUSES = ["ACTIVO", "EN_CURSO", "NO_CLASIFICADO"];
+const POLL_INTERVAL = 10000;
 
-const sortByTimeAsc = (a, b) => {
-  const tA = a.createdAt?.toMillis?.() || 0;
-  const tB = b.createdAt?.toMillis?.() || 0;
-  return tA - tB;
-};
+const sortByTimeAsc = (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
 
 const getElapsed = (createdAt) => {
   if (!createdAt) return "";
-  const created = createdAt.toMillis ? createdAt.toMillis() : createdAt;
+  const created = new Date(createdAt).getTime();
   const diffMs = Date.now() - created;
   const diffMin = Math.floor(diffMs / 60000);
   if (diffMin < 1) return "< 1 min";
@@ -42,18 +39,27 @@ export default function MapScreen({ navigation }) {
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
-  useEffect(() => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) return;
-    const unsub = listenMyCases(uid, (data) => {
+  const loadData = async () => {
+    try {
+      const data = await listMyCases();
       const active = data
         .filter((i) => ACTIVE_STATUSES.includes(i.status))
         .sort(sortByTimeAsc);
       setIncidents(active);
+    } catch (e) {
+      console.warn("[MapScreen] load error:", e.message);
+    } finally {
       setLoading(false);
-    });
-    return unsub;
-  }, []);
+    }
+  };
+
+  useFocusEffect(
+    () => {
+      loadData();
+      const interval = setInterval(loadData, POLL_INTERVAL);
+      return () => clearInterval(interval);
+    }
+  );
 
   const openMaps = (lat, lng) => {
     if (!lat || !lng) {

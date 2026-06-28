@@ -11,8 +11,8 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { auth } from "../../firebase/firebaseConfig";
-import { listenCitizenHistory, cancelIncident, sendMessage } from "../../services/incidentService";
+import { useFocusEffect } from "@react-navigation/native";
+import { listCitizenHistory, cancelIncident, sendMessage } from "../../services/incidentService";
 import { INCIDENT_STATUS } from "../../constants/roles";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
@@ -55,15 +55,22 @@ export default function HistoryScreen({ navigation }) {
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
-  useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) return;
-    const unsub = listenCitizenHistory(user.uid, (data) => {
+  const loadHistory = useCallback(async () => {
+    try {
+      const data = await listCitizenHistory();
       setIncidents(data);
+    } catch (e) {
+      console.warn("[HistoryScreen] load error:", e.message);
+    } finally {
       setLoading(false);
-    });
-    return unsub;
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadHistory();
+    }, [loadHistory])
+  );
 
   const activeIncidents = incidents.filter(
     (i) =>
@@ -91,11 +98,10 @@ export default function HistoryScreen({ navigation }) {
               await cancelIncident(incident.id, "Anulado por el ciudadano desde historial");
               await sendMessage(
                 incident.id,
-                "[ANULADO] Incidente anulado por el ciudadano.",
-                auth.currentUser.uid,
-                "CITIZEN"
+                "[ANULADO] Incidente anulado por el ciudadano."
               );
               Alert.alert("Anulado", "El incidente ha sido cancelado.");
+              loadHistory();
             } catch {
               Alert.alert("Error", "No se pudo anular el incidente.");
             }

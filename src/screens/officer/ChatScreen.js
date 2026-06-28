@@ -11,10 +11,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import { auth } from "../../firebase/firebaseConfig";
-import { db } from "../../firebase/firebaseConfig";
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
-import { listenMyCases } from "../../services/incidentService";
+import { getUser } from "../../services/authService";
+import { listMyCases, listMessages } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
@@ -22,6 +20,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 const ACTIVE_STATUSES = ["ACTIVO", "EN_CURSO", "NO_CLASIFICADO"];
 const FINALIZED_STATUSES = ["CERRADO", "ANULADO"];
+const POLL_INTERVAL = 8000;
 
 const TYPE_CONFIG = {
   ACCIDENTE: { icon: "car", label: "Accidente Tránsito", color: "#F59E0B" },
@@ -41,7 +40,7 @@ const STATUS_CONFIG = {
 
 const getElapsed = (createdAt) => {
   if (!createdAt) return "";
-  const created = createdAt.toMillis ? createdAt.toMillis() : createdAt;
+  const created = new Date(createdAt).getTime();
   const diffMs = Date.now() - created;
   const diffMin = Math.floor(diffMs / 60000);
   if (diffMin < 1) return "< 1 min";
@@ -52,12 +51,7 @@ const getElapsed = (createdAt) => {
   return `${Math.floor(diffHr / 24)}d ${diffHr % 24}h`;
 };
 
-const getTime = (createdAt) => {
-  if (!createdAt) return 0;
-  return createdAt.toMillis ? createdAt.toMillis() : createdAt;
-};
-
-const sortByRecent = (a, b) => getTime(b.createdAt) - getTime(a.createdAt);
+const sortByRecent = (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
 
 export default function ChatScreen({ navigation }) {
   const { colors } = useTheme();
@@ -66,91 +60,68 @@ export default function ChatScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [unreadMap, setUnreadMap] = useState({});
   const msgUnsubs = useRef({});
-  const uid = auth.currentUser?.uid;
+  const [userId, setUserId] = useState(null);
+  const pollRef = useRef(null);
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
-  // Subscribe to message changes per incident to track unread counts
-  const subscribeMessages = (incidentId) => {
-    if (msgUnsubs.current[incidentId]) return;
-    const q = query(
-      collection(db, "incidents", incidentId, "messages"),
-      orderBy("createdAt", "asc")
+  const loadUnreadCounts = useCallback(async (caseList) => {
+    if (!userId) return;
+    const active = caseList.filter((i) => ACTIVE_STATUSES.includes(i.status));
+    const map = {};
+    await Promise.all(
+      active.map(async (inc) => {
+        try {
+          const msgs = await listMessages(inc.id);
+          const count = msgs.reduce((acc, msg) => {
+            if (msg.senderId === userId) return acc;
+            if (!msg.readBy?.includes(userId)) return acc + 1;
+            return acc;
+          }, 0);
+          map[inc.id] = count;
+        } catch {
+          map[inc.id] = 0;
+        }
+      })
     );
-    const unsub = onSnapshot(q, (snapshot) => {
-      const uidLocal = auth.currentUser?.uid;
-      if (!uidLocal) return;
-      let count = 0;
-      snapshot.docs.forEach((d) => {
-        const msg = d.data();
-        if (msg.senderId === uidLocal) return;
-        if (msg.senderRole === "SYSTEM") return;
-        const readBy = msg.readBy || [];
-        if (!readBy.includes(uidLocal)) count++;
-      });
-      setUnreadMap((prev) => {
-        if (prev[incidentId] === count) return prev;
-        return { ...prev, [incidentId]: count };
-      });
-    });
-    msgUnsubs.current[incidentId] = unsub;
-  };
+    setUnreadMap(map);
+  }, [userId]);
 
-  const unsubscribeAllMessages = () => {
-    Object.values(msgUnsubs.current).forEach((u) => u());
-    msgUnsubs.current = {};
-  };
-
-  // Reset unread count when tab is focused, resume counting when blurred
-  useFocusEffect(
-    useCallback(() => {
-      console.log("[ChatScreen] Tab focused");
-      enterChatList();
-      return () => {
-        console.log("[ChatScreen] Tab blurred");
-        leaveChatList();
-      };
-    }, [])
-  );
-
-  useEffect(() => {
-    console.log("[ChatScreen] Mounted");
-    const user = auth.currentUser;
-    if (!user) return;
-    const unsub = listenMyCases(user.uid, (data) => {
+  const loadCases = useCallback(async () => {
+    try {
+      const user = await getUser();
+      if (user?.userId) setUserId(user.userId);
+      const data = await listMyCases();
       const active = data
         .filter((i) => ACTIVE_STATUSES.includes(i.status))
         .sort(sortByRecent);
       const finalized = data
         .filter((i) => FINALIZED_STATUSES.includes(i.status))
         .sort(sortByRecent);
-      setIncidents([...active, ...finalized]);
+      const sorted = [...active, ...finalized];
+      setIncidents(sorted);
       setLoading(false);
-      console.log(`[ChatScreen] Loaded ${active.length} active, ${finalized.length} finalized`);
-    });
-    return () => {
-      console.log("[ChatScreen] Unmounted");
-      unsub();
-      unsubscribeAllMessages();
-    };
-  }, []);
+      await loadUnreadCounts(sorted);
+    } catch (e) {
+      console.warn("[ChatScreen] load error:", e.message);
+      setLoading(false);
+    }
+  }, [loadUnreadCounts]);
 
-  // When incidents change, subscribe to messages for active ones
-  useEffect(() => {
-    const activeIds = incidents
-      .filter((i) => ACTIVE_STATUSES.includes(i.status))
-      .map((i) => i.id);
-    const currentIds = Object.keys(msgUnsubs.current);
-    // Unsubscribe removed incidents
-    currentIds.forEach((id) => {
-      if (!activeIds.includes(id)) {
-        msgUnsubs.current[id]();
-        delete msgUnsubs.current[id];
-      }
-    });
-    // Subscribe to new active incidents
-    activeIds.forEach((id) => subscribeMessages(id));
-  }, [incidents]);
+  // Reset unread count when tab is focused, resume counting when blurred
+  useFocusEffect(
+    useCallback(() => {
+      console.log("[ChatScreen] Tab focused");
+      enterChatList();
+      loadCases();
+      pollRef.current = setInterval(loadCases, POLL_INTERVAL);
+      return () => {
+        console.log("[ChatScreen] Tab blurred");
+        leaveChatList();
+        if (pollRef.current) clearInterval(pollRef.current);
+      };
+    }, [enterChatList, leaveChatList, loadCases])
+  );
 
   const sectionCounts = useMemo(() => {
     const active = incidents.filter((i) => ACTIVE_STATUSES.includes(i.status)).length;

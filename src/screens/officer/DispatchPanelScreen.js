@@ -13,10 +13,13 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { signOut } from "firebase/auth";
-import { auth, db } from "../../firebase/firebaseConfig";
-import { doc, getDoc } from "firebase/firestore";
-import { listenAllActiveIncidents, listenAllCancelled, listenMyCases } from "../../services/incidentService";
+import { useFocusEffect } from "@react-navigation/native";
+import { logout, getUser } from "../../services/authService";
+import {
+  listActiveIncidents,
+  listAllCancelled,
+  listMyCases,
+} from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
 import { getShiftStart } from "../../services/userStore";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -37,29 +40,30 @@ const TYPE_CONFIG = {
   OTRO: { icon: "alert-circle-outline", label: "Otro Incidente", gifPath: null },
 };
 
-const sortByTime = (a, b) => {
-  const tA = a.createdAt?.toMillis?.() || 0;
-  const tB = b.createdAt?.toMillis?.() || 0;
-  return tB - tA;
+const DEFAULT_LAT = -33.4489;
+const DEFAULT_LNG = -70.6693;
+const DEFAULT_RADIUS = 100000;
+const POLL_INTERVAL = 8000;
+
+const sortByTime = (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+
+const formatElapsed = (ms) => {
+  const totalSec = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
 };
 
-  const formatElapsed = (ms) => {
-    const totalSec = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSec / 3600);
-    const minutes = Math.floor((totalSec % 3600) / 60);
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
-  };
+const getShiftTime = () => {
+  const start = getShiftStart();
+  if (!start) return "—";
+  return formatElapsed(Date.now() - start);
+};
 
-  const getShiftTime = () => {
-    const start = getShiftStart();
-    if (!start) return "—";
-    return formatElapsed(Date.now() - start);
-  };
-
-  const getElapsedTime = (createdAt) => {
+const getElapsedTime = (createdAt) => {
   if (!createdAt) return "";
-  const created = createdAt.toMillis ? createdAt.toMillis() : createdAt;
+  const created = new Date(createdAt).getTime();
   const diffMs = Date.now() - created;
   const diffMin = Math.floor(diffMs / 60000);
   if (diffMin < 1) return "< 1 min";
@@ -82,33 +86,47 @@ export default function DispatchPanelScreen({ navigation }) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [userData, setUserData] = useState(null);
+  const pollRef = useRef(null);
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
-  useEffect(() => {
-    getDoc(doc(db, "users", auth.currentUser?.uid)).then((snap) => {
-      if (snap.exists()) setUserData(snap.data());
-    });
-    const unsubActive = listenAllActiveIncidents((data) => {
-      setActivos(data.sort(sortByTime));
+  const loadData = useCallback(async () => {
+    try {
+      const [active, mine, cancelled] = await Promise.all([
+        listActiveIncidents(DEFAULT_LAT, DEFAULT_LNG, DEFAULT_RADIUS),
+        listMyCases(),
+        listAllCancelled(),
+      ]);
+      setActivos((active || []).sort(sortByTime));
+      setMyCases((mine || []).sort(sortByTime));
+      setCancelados((cancelled || []).sort(sortByTime));
+    } catch (e) {
+      console.warn("[DispatchPanel] load error:", e.message);
+    } finally {
       setLoading(false);
-    });
-    const unsubMyCases = listenMyCases(auth.currentUser.uid, (data) => {
-      setMyCases(data.sort(sortByTime));
-      setLoading(false);
-    });
-    const unsubCancelled = listenAllCancelled((data) => {
-      setCancelados(data.sort(sortByTime));
-      setLoading(false);
-    });
-    const interval = setInterval(() => setNow(Date.now()), 30000);
-    return () => {
-      unsubActive();
-      unsubMyCases();
-      unsubCancelled();
-      clearInterval(interval);
-    };
+    }
   }, []);
+
+  useEffect(() => {
+    async function bootstrap() {
+      const user = await getUser();
+      setUserData(user);
+      await loadData();
+      pollRef.current = setInterval(loadData, POLL_INTERVAL);
+      const interval = setInterval(() => setNow(Date.now()), 30000);
+      return () => {
+        clearInterval(interval);
+        if (pollRef.current) clearInterval(pollRef.current);
+      };
+    }
+    bootstrap();
+  }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const handleTakeProcedure = (incidentId) => {
     Alert.alert("Tomar Procedimiento", "¿Confirmas asignación de este caso?", [
@@ -124,13 +142,13 @@ export default function DispatchPanelScreen({ navigation }) {
     setMenuVisible(false);
     Alert.alert("Finalizar Turno", "¿Estás seguro de finalizar tu turno? Los casos no cerrados se perderán.", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Finalizar Turno", style: "destructive", onPress: () => signOut(auth) },
+      { text: "Finalizar Turno", style: "destructive", onPress: () => logout() },
     ]);
   };
 
   const renderCard = ({ item }) => {
     const config = TYPE_CONFIG[item.type] || { icon: "alert-circle-outline", label: item.type || "Sin clasificar" };
-    const isAssignedToMe = item.officerId === auth.currentUser?.uid;
+    const isAssignedToMe = item.officerId === userData?.userId;
     const isTakenByOther = !!item.officerId && !isAssignedToMe;
     const isActive = item.status === "ACTIVO" || item.status === "NO_CLASIFICADO";
     const isEnCurso = item.status === "EN_CURSO";
@@ -264,7 +282,7 @@ export default function DispatchPanelScreen({ navigation }) {
                   <Text style={s.drawerRole}>OPERADOR ACTIVO</Text>
                   <Text style={s.drawerName}>{userData?.alias || "Oficial"}</Text>
                   {userData?.rut && <Text style={s.drawerUnit}>Placa: {userData.rut}</Text>}
-                  <Text style={[s.drawerEmail, { color: colors.emptyText }]}>{auth.currentUser?.email}</Text>
+                  <Text style={[s.drawerEmail, { color: colors.emptyText }]}>{userData?.email}</Text>
                 </View>
               </View>
               <View style={s.statusPillsRow}>
@@ -396,7 +414,7 @@ const makeStyles = (colors) =>
   StyleSheet.create({
     safeArea: { flex: 1 },
     loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-    
+
     overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 100, justifyContent: "flex-start" },
     drawerContainer: { width: "80%", height: "100%" },
     drawerHeader: { padding: 24, paddingTop: 50 },

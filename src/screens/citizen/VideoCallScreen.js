@@ -15,15 +15,15 @@ import {
   Animated,
   Easing,
 } from "react-native";
-import { auth } from "../../firebase/firebaseConfig";
 import {
   addQuickRequest,
   sendMessage,
-  listenMessages,
-  listenIncidentById,
+  listMessages,
+  getIncident,
   cancelIncident,
   markMessageAsRead,
 } from "../../services/incidentService";
+import { getUser } from "../../services/authService";
 import MessageBubble from "../../components/MessageBubble";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
@@ -39,6 +39,8 @@ const QUICK_OPTIONS = [
   { icon: "checkmark-circle-outline", label: "Estoy bien" },
 ];
 
+const POLL_INTERVAL = 5000;
+
 export default function VideoCallScreen({ route, navigation }) {
   const { colors } = useTheme();
   const { incidentId, autoOpenChat } = route.params;
@@ -51,12 +53,12 @@ export default function VideoCallScreen({ route, navigation }) {
   const [incident, setIncident] = useState(null);
   const [callActive, setCallActive] = useState(false);
   const [connecting, setConnecting] = useState(true);
+  const [userId, setUserId] = useState(null);
   const flatListRef = useRef(null);
   const insets = useSafeAreaInsets();
-  const uid = auth.currentUser?.uid;
   const markedRef = useRef(new Set());
   const pulseAnim = useRef(new Animated.Value(0)).current;
-  const chatListRef = useRef(null);
+  const pollRef = useRef(null);
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
@@ -85,11 +87,28 @@ export default function VideoCallScreen({ route, navigation }) {
     return () => pulse.stop();
   }, []);
 
-  useEffect(() => {
-    const unsubMsg = listenMessages(incidentId, setMessages);
-    const unsubInc = listenIncidentById(incidentId, setIncident);
-    return () => { unsubMsg(); unsubInc(); };
+  const loadData = useCallback(async () => {
+    try {
+      const [inc, msgs, user] = await Promise.all([
+        getIncident(incidentId),
+        listMessages(incidentId),
+        getUser(),
+      ]);
+      setIncident(inc);
+      setMessages(msgs);
+      if (user?.userId) setUserId(user.userId);
+    } catch (e) {
+      console.warn("[VideoCall] load error:", e.message);
+    }
   }, [incidentId]);
+
+  useEffect(() => {
+    loadData();
+    pollRef.current = setInterval(loadData, POLL_INTERVAL);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [loadData]);
 
   useEffect(() => {
     if (showChatModal) enterChat(incidentId);
@@ -113,15 +132,15 @@ export default function VideoCallScreen({ route, navigation }) {
   }, [incident?.status]);
 
   useEffect(() => {
-    if (!showChatModal || !incident?.officerId) return;
+    if (!showChatModal || !incident?.officerId || !userId) return;
     const unreadMsgs = messages.filter(
-      (m) => m.senderRole === "OFFICER" && !m.readBy?.includes(uid) && !markedRef.current.has(m.id)
+      (m) => m.senderRole === "OFFICER" && !m.readBy?.includes(userId) && !markedRef.current.has(m.id)
     );
     unreadMsgs.forEach((m) => {
       markedRef.current.add(m.id);
-      markMessageAsRead(incidentId, m.id, uid);
+      markMessageAsRead(incidentId, m.id);
     });
-  }, [messages, showChatModal, incident?.officerId]);
+  }, [messages, showChatModal, incident?.officerId, userId]);
 
   const handleQuickRequest = async (request) => {
     Alert.alert("Enviar alerta rápida", `¿Confirmas el envío de: "${request}"?`, [
@@ -129,7 +148,7 @@ export default function VideoCallScreen({ route, navigation }) {
       { text: "Enviar", onPress: async () => {
         try {
           await addQuickRequest(incidentId, request);
-          await sendMessage(incidentId, `[ALERTA RÁPIDA] ${request}`, uid, "CITIZEN");
+          await sendMessage(incidentId, `[ALERTA RÁPIDA] ${request}`);
         } catch {}
       }},
     ]);
@@ -140,8 +159,9 @@ export default function VideoCallScreen({ route, navigation }) {
     const text = input.trim();
     setInput("");
     try {
-      await sendMessage(incidentId, text, uid, "CITIZEN");
+      await sendMessage(incidentId, text);
       console.log("[VideoCall] Message sent (CITIZEN):", text.slice(0, 40));
+      loadData();
     } catch (e) { console.warn("[VideoCall] Send error:", e); }
   };
 
@@ -155,7 +175,7 @@ export default function VideoCallScreen({ route, navigation }) {
       { text: "Sí, cerrar", style: "destructive", onPress: async () => {
         try {
           await cancelIncident(incidentId, closeReason.trim());
-          await sendMessage(incidentId, `[CERRADO] Incidente cerrado: ${closeReason.trim()}`, uid, "CITIZEN");
+          await sendMessage(incidentId, `[CERRADO] Incidente cerrado: ${closeReason.trim()}`);
           setShowCloseModal(false);
           console.log("[VideoCall] Incident closed by citizen");
           navigation.reset({ index: 0, routes: [{ name: "Home" }] });
@@ -180,7 +200,7 @@ export default function VideoCallScreen({ route, navigation }) {
     ]);
   };
 
-  const isMine = (msg) => msg.senderId === uid;
+  const isMine = (msg) => msg.senderId === userId;
 
   const pulseOpacity = pulseAnim.interpolate({
     inputRange: [0, 1],
@@ -278,7 +298,7 @@ export default function VideoCallScreen({ route, navigation }) {
                   isMine={isMine(item)}
                   otherRole="OFFICER"
                   otherUserId={incident?.officerId}
-                  currentUserId={uid}
+                  currentUserId={userId}
                   citizenAlias={incident?.citizenAlias}
                   officerAlias={incident?.officerAlias}
                 />

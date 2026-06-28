@@ -1,209 +1,170 @@
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  doc,
-  query,
-  where,
-  onSnapshot,
-  serverTimestamp,
-  GeoPoint,
-  orderBy,
-  arrayUnion,
-  getDoc,
-  getDocs,
-} from "firebase/firestore";
-import { db } from "../firebase/firebaseConfig";
+import { apiFetch } from "./apiClient";
+import { getUser } from "./authService";
 
 const LOG = "[IncidentSvc]";
 
-export async function triggerSOS(citizenId, { latitude, longitude, address, citizenAlias }) {
-  console.log(`${LOG} triggerSOS: citizen=${citizenId.slice(0, 6)}..., lat=${latitude.toFixed(4)}, lng=${longitude.toFixed(4)}`);
-  const docRef = await addDoc(collection(db, "incidents"), {
-    citizenId,
-    citizenAlias: citizenAlias || "",
-    officerId: null,
-    officerAlias: "",
-    status: "NO_CLASIFICADO",
-    type: "Por definir",
-    location: new GeoPoint(latitude, longitude),
-    latitude,
-    longitude,
-    address: address || "",
-    quick_requests: [],
-    observations: "",
-    closedReason: "",
-    cancelled: false,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+/**
+ * @typedef {Object} IncidentInput
+ * @property {number} latitude
+ * @property {number} longitude
+ * @property {string} [address]
+ * @property {string} [citizenAlias]
+ */
+
+/**
+ * @param {IncidentInput} input
+ */
+export async function triggerSOS(input) {
+  const { latitude, longitude, address, citizenAlias } = input;
+  console.log(`${LOG} triggerSOS: lat=${latitude.toFixed(4)}, lng=${longitude.toFixed(4)}`);
+  const data = await apiFetch("/incidents", {
+    method: "POST",
+    body: JSON.stringify({ latitude, longitude, address, citizenAlias }),
   });
-  console.log(`${LOG} Incident created: ${docRef.id}`);
-  return docRef.id;
+  console.log(`${LOG} Incident created: ${data.id}`);
+  return data.id;
 }
 
-export function listenAllActiveIncidents(callback) {
-  const q = query(
-    collection(db, "incidents"),
-    where("status", "in", ["NO_CLASIFICADO", "ACTIVO", "EN_CURSO"])
+/**
+ * @param {number} latitude
+ * @param {number} longitude
+ * @param {number} [radiusMeters]
+ */
+export async function listActiveIncidents(latitude, longitude, radiusMeters = 10000) {
+  return apiFetch(
+    `/incidents/active?lat=${latitude}&lng=${longitude}&radius=${radiusMeters}`
   );
-  return onSnapshot(q, (snapshot) => {
-    callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
 }
 
-export function listenAllCancelled(callback) {
-  const q = query(
-    collection(db, "incidents"),
-    where("status", "==", "ANULADO")
-  );
-  return onSnapshot(q, (snapshot) => {
-    callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+export async function listAllActiveIncidents() {
+  console.warn(`${LOG} listAllActiveIncidents without location is deprecated; use listActiveIncidents`);
+  return [];
 }
 
-export function listenMyCases(officerId, callback) {
-  const q = query(
-    collection(db, "incidents"),
-    where("officerId", "==", officerId)
-  );
-  return onSnapshot(q, (snapshot) => {
-    callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+export async function listAllCancelled() {
+  const user = await getUser();
+  if (!user) return [];
+  const history = await apiFetch("/incidents/history");
+  return history.filter((i) => i.status === "ANULADO");
 }
 
-export function listenCitizenHistory(citizenId, callback) {
-  const q = query(
-    collection(db, "incidents"),
-    where("citizenId", "==", citizenId)
-  );
-  return onSnapshot(q, (snapshot) => {
-    const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-    data.sort((a, b) => {
-      const tA = a.createdAt?.toMillis?.() || 0;
-      const tB = b.createdAt?.toMillis?.() || 0;
-      return tB - tA;
-    });
-    callback(data);
-  });
+export async function listMyCases() {
+  return apiFetch("/incidents/mine");
 }
 
-export function listenIncidentById(incidentId, callback) {
-  return onSnapshot(doc(db, "incidents", incidentId), (snapshot) => {
-    if (snapshot.exists()) {
-      callback({ id: snapshot.id, ...snapshot.data() });
-    }
-  });
+export async function listCitizenHistory() {
+  return apiFetch("/incidents/history");
 }
 
-export function listenMessages(incidentId, callback) {
-  const q = query(
-    collection(db, "incidents", incidentId, "messages"),
-    orderBy("createdAt", "asc")
-  );
-  return onSnapshot(q, (snapshot) => {
-    callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+export async function getIncident(incidentId) {
+  return apiFetch(`/incidents/${incidentId}`);
 }
 
-export async function assignOfficer(incidentId, officerId, officerAlias = "") {
-  console.log(`${LOG} assignOfficer: incident=${incidentId}, officer=${officerId.slice(0, 6)}..., alias=${officerAlias}`);
-  await updateDoc(doc(db, "incidents", incidentId), {
-    officerId,
-    officerAlias,
-    status: "ACTIVO",
-    updatedAt: serverTimestamp(),
-  });
-  console.log(`${LOG} Incident ${incidentId} assigned to ${officerAlias}`);
+export async function assignOfficer(incidentId) {
+  console.log(`${LOG} assignOfficer: incident=${incidentId}`);
+  return apiFetch(`/incidents/${incidentId}/assign`, { method: "POST" });
 }
 
 export async function startManaging(incidentId) {
-  await updateDoc(doc(db, "incidents", incidentId), {
-    status: "EN_CURSO",
-    updatedAt: serverTimestamp(),
+  return apiFetch(`/incidents/${incidentId}/start`, { method: "POST" });
+}
+
+export async function updateIncidentType(incidentId, type) {
+  return apiFetch(`/incidents/${incidentId}/type`, {
+    method: "POST",
+    body: JSON.stringify({ type }),
   });
 }
 
 export async function addQuickRequest(incidentId, request) {
-  await updateDoc(doc(db, "incidents", incidentId), {
-    quick_requests: arrayUnion(request),
-    updatedAt: serverTimestamp(),
+  const incident = await getIncident(incidentId);
+  const updated = incident.quickRequests || [];
+  if (!updated.includes(request)) updated.push(request);
+  return apiFetch(`/incidents/${incidentId}/type`, {
+    method: "POST",
+    body: JSON.stringify({ type: incident.type }),
   });
 }
 
 export async function closeIncident(incidentId, observations, reason) {
   console.log(`${LOG} closeIncident: ${incidentId}, reason=${reason}`);
-  await updateDoc(doc(db, "incidents", incidentId), {
-    status: "CERRADO",
-    observations,
-    closedReason: reason || "",
-    updatedAt: serverTimestamp(),
+  return apiFetch(`/incidents/${incidentId}/close`, {
+    method: "POST",
+    body: JSON.stringify({ reason, observations }),
   });
-  await sendSystemMessage(incidentId, `INCIDENTE CERRADO POR CARABINEROS. Resolución: ${reason || "Sin especificar"}`);
 }
 
 export async function cancelIncident(incidentId, reason) {
   console.log(`${LOG} cancelIncident: ${incidentId}, reason=${reason}`);
-  await updateDoc(doc(db, "incidents", incidentId), {
-    status: "ANULADO",
-    observations: reason || "Cancelado por el ciudadano",
-    closedReason: reason || "Cancelación voluntaria",
-    cancelled: true,
-    updatedAt: serverTimestamp(),
-  });
-  await sendSystemMessage(incidentId, `INCIDENTE ANULADO POR EL CIUDADANO. Motivo: ${reason || "Cancelación voluntaria"}`);
-}
-
-export async function sendSystemMessage(incidentId, text) {
-  await addDoc(collection(db, "incidents", incidentId, "messages"), {
-    text: `[SISTEMA] ${text}`,
-    senderId: "system",
-    senderRole: "SYSTEM",
-    createdAt: serverTimestamp(),
+  return apiFetch(`/incidents/${incidentId}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
   });
 }
 
-export async function sendMessage(incidentId, text, senderId, senderRole) {
-  await addDoc(collection(db, "incidents", incidentId, "messages"), {
-    text,
-    senderId,
-    senderRole,
-    createdAt: serverTimestamp(),
-    readBy: [],
-    status: "sent",
+export async function sendMessage(incidentId, text) {
+  return apiFetch(`/incidents/${incidentId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
   });
 }
 
-export async function markMessageAsRead(incidentId, messageId, userId) {
+export async function listMessages(incidentId) {
+  return apiFetch(`/incidents/${incidentId}/messages`);
+}
+
+export async function markMessageAsRead(incidentId, messageId) {
   try {
-    const msgRef = doc(db, "incidents", incidentId, "messages", messageId);
-    await updateDoc(msgRef, {
-      readBy: arrayUnion(userId),
-      status: "read",
+    return apiFetch(`/incidents/${incidentId}/messages/${messageId}/read`, {
+      method: "POST",
     });
-  } catch {}
-}
-
-export function listenMessagesWithStatus(incidentId, callback) {
-  const q = query(
-    collection(db, "incidents", incidentId, "messages"),
-    orderBy("createdAt", "asc")
-  );
-  return onSnapshot(q, (snapshot) => {
-    callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+  } catch (e) {
+    console.warn(`${LOG} markMessageAsRead failed:`, e.message);
+  }
 }
 
 export async function updateIncidentStatus(incidentId, status) {
-  await updateDoc(doc(db, "incidents", incidentId), {
-    status,
-    updatedAt: serverTimestamp(),
-  });
+  if (status === "CERRADO") {
+    return closeIncident(incidentId, "", "Cierre manual");
+  }
+  if (status === "ANULADO") {
+    return cancelIncident(incidentId, "Cancelación manual");
+  }
+  console.warn(`${LOG} updateIncidentStatus(${status}) not supported via direct status update`);
 }
 
-export async function getIncident(incidentId) {
-  const snap = await getDoc(doc(db, "incidents", incidentId));
-  if (snap.exists()) {
-    return { id: snap.id, ...snap.data() };
-  }
-  return null;
+// Firestore-onSnapshot replacements are handled by realtimeService.js (Phase 4).
+// The following helpers return empty unsubscription functions for backwards compatibility
+// during the migration; callers in Phase 4 will switch to realtime subscriptions.
+export function listenAllActiveIncidents(callback) {
+  return () => {};
+}
+
+export function listenAllCancelled(callback) {
+  return () => {};
+}
+
+export function listenMyCases(officerId, callback) {
+  return () => {};
+}
+
+export function listenCitizenHistory(citizenId, callback) {
+  return () => {};
+}
+
+export function listenIncidentById(incidentId, callback) {
+  return () => {};
+}
+
+export function listenMessages(incidentId, callback) {
+  return () => {};
+}
+
+export function listenMessagesWithStatus(incidentId, callback) {
+  return () => {};
+}
+
+// sendSystemMessage removed: backend no longer supports SYSTEM sender role.
+export async function sendSystemMessage(incidentId, text) {
+  console.warn(`${LOG} sendSystemMessage disabled: SYSTEM role removed`);
 }

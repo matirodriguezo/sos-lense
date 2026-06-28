@@ -16,17 +16,16 @@ import {
   Animated,
   Easing,
 } from "react-native";
-import { auth } from "../../firebase/firebaseConfig";
 import {
-  listenIncidentById,
-  listenMessages,
+  getIncident,
+  listMessages,
   sendMessage,
   addQuickRequest,
   assignOfficer,
-  sendSystemMessage,
+  startManaging,
   markMessageAsRead,
 } from "../../services/incidentService";
-import { getCurrentAlias } from "../../services/userStore";
+import { getUser } from "../../services/authService";
 import MessageBubble from "../../components/MessageBubble";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
@@ -38,6 +37,8 @@ const DISPATCH_OPTIONS = [
   { id: 2, icon: "ambulance", label: "Solicitar SAMU", color: "#D32F2F" },
   { id: 3, icon: "chat-processing", label: "Chat de Texto", color: "#424242" },
 ];
+
+const POLL_INTERVAL = 5000;
 
 export default function IncidentManagementScreen({ route, navigation }) {
   const { colors } = useTheme();
@@ -52,10 +53,12 @@ export default function IncidentManagementScreen({ route, navigation }) {
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [callActive, setCallActive] = useState(false);
   const [connecting, setConnecting] = useState(true);
+  const [userId, setUserId] = useState(null);
   const flatListRef = useRef(null);
   const intervalRef = useRef(null);
   const markedRef = useRef(new Set());
   const pulseAnim = useRef(new Animated.Value(0)).current;
+  const pollRef = useRef(null);
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
@@ -84,39 +87,34 @@ export default function IncidentManagementScreen({ route, navigation }) {
     return () => pulse.stop();
   }, []);
 
-  useEffect(() => {
-    const unsubIncident = listenIncidentById(incidentId, (data) => {
-      setIncident(data);
-      if (data.officerId && data.officerId !== auth.currentUser.uid) {
-        Alert.alert("Caso ya asignado", `Este caso ya fue tomado por ${data.officerAlias || "otro oficial"}.`);
+  const loadData = useCallback(async () => {
+    try {
+      const [inc, msgs, user] = await Promise.all([
+        getIncident(incidentId),
+        listMessages(incidentId),
+        getUser(),
+      ]);
+      setIncident(inc);
+      setMessages(msgs);
+      if (user?.userId) setUserId(user.userId);
+
+      if (inc?.officerId && inc.officerId !== user?.userId) {
+        Alert.alert("Caso ya asignado", `Este caso ya fue tomado por ${inc.officerAlias || "otro oficial"}.`);
         navigation.goBack();
         return;
       }
-      if (data.citizenId) {
-        // Keep track of citizen ID for message marking
+
+      if (inc && !inc.officerId) {
+        await assignOfficer(incidentId);
       }
-      if (!data.officerId) {
-        const officerAlias = getCurrentAlias();
-        assignOfficer(incidentId, auth.currentUser.uid, officerAlias);
-        sendSystemMessage(incidentId, `${officerAlias || "Un oficial"} ha tomado tu caso.`);
-      }
-    });
-    const unsubMessages = listenMessages(incidentId, (data) => {
-      setMessages(data);
-      if (showChatModal) {
-        const uid = auth.currentUser?.uid;
-        const citizenId = data.find(m => m.senderRole === "CITIZEN")?.senderId;
-        if (citizenId) {
-          const unread = data.filter(
-            (m) => m.senderRole === "CITIZEN" && !m.readBy?.includes(uid) && !markedRef.current.has(m.id)
-          );
-          unread.forEach((m) => {
-            markedRef.current.add(m.id);
-            markMessageAsRead(incidentId, m.id, uid);
-          });
-        }
-      }
-    });
+    } catch (e) {
+      console.warn("[IncidentMgmt] load error:", e.message);
+    }
+  }, [incidentId, navigation]);
+
+  useEffect(() => {
+    loadData();
+    pollRef.current = setInterval(loadData, POLL_INTERVAL);
 
     const startTime = Date.now();
     intervalRef.current = setInterval(() => {
@@ -124,8 +122,12 @@ export default function IncidentManagementScreen({ route, navigation }) {
       setElapsed(`${String(Math.floor(diff / 60)).padStart(2, "0")}:${String(diff % 60).padStart(2, "0")}`);
     }, 1000);
 
-    return () => { leaveChat(); unsubIncident(); unsubMessages(); if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [incidentId]);
+    return () => {
+      leaveChat();
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [loadData]);
 
   useEffect(() => {
     if (route.params?.autoOpenChat) {
@@ -134,24 +136,24 @@ export default function IncidentManagementScreen({ route, navigation }) {
   }, [route.params]);
 
   useEffect(() => {
-    if (!showChatModal || !incident?.citizenId) return;
-    const uid = auth.currentUser?.uid;
+    if (!showChatModal || !incident?.citizenId || !userId) return;
     const unreadMsgs = messages.filter(
-      (m) => m.senderRole === "CITIZEN" && !m.readBy?.includes(uid) && !markedRef.current.has(m.id)
+      (m) => m.senderRole === "CITIZEN" && !m.readBy?.includes(userId) && !markedRef.current.has(m.id)
     );
     unreadMsgs.forEach((m) => {
       markedRef.current.add(m.id);
-      markMessageAsRead(incidentId, m.id, uid);
+      markMessageAsRead(incidentId, m.id);
     });
-  }, [showChatModal, incident?.citizenId]);
+  }, [showChatModal, messages, incident?.citizenId, userId]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
     const text = input.trim();
     setInput("");
     try {
-      await sendMessage(incidentId, text, auth.currentUser.uid, "OFFICER");
+      await sendMessage(incidentId, text);
       console.log("[IncidentMgmt] Message sent (OFFICER):", text.slice(0, 40));
+      loadData();
     } catch (e) { console.warn("[IncidentMgmt] Send error:", e); }
   };
 
@@ -166,9 +168,10 @@ export default function IncidentManagementScreen({ route, navigation }) {
       { text: "Confirmar", onPress: async () => {
         try {
           await addQuickRequest(incidentId, label);
-          await sendMessage(incidentId, `[SISTEMA] Central ha despachado: ${label}`, auth.currentUser.uid, "OFFICER");
+          await sendMessage(incidentId, `[SISTEMA] Central ha despachado: ${label}`);
           console.log("[IncidentMgmt] Dispatched:", label);
           Alert.alert("Despachado", "La unidad ha sido notificada.");
+          loadData();
         } catch (e) { console.warn("[IncidentMgmt] Dispatch error:", e); }
       }},
     ]);
@@ -194,7 +197,16 @@ export default function IncidentManagementScreen({ route, navigation }) {
     ]);
   };
 
-  const isMine = (msg) => msg.senderId === auth.currentUser?.uid;
+  const handleStart = async () => {
+    try {
+      await startManaging(incidentId);
+      loadData();
+    } catch (e) {
+      Alert.alert("Error", e.message);
+    }
+  };
+
+  const isMine = (msg) => msg.senderId === userId;
 
   const openMaps = () => {
     if (!incident?.latitude || !incident?.longitude) {
@@ -268,6 +280,12 @@ export default function IncidentManagementScreen({ route, navigation }) {
               <Ionicons name="location-outline" size={22} color={colors.white} />
               <Text style={s.ctrlLabel}>Ubicación</Text>
             </TouchableOpacity>
+            {incident?.status === "ACTIVO" && (
+              <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: "#2563EB" }]} onPress={handleStart}>
+                <Ionicons name="play" size={22} color={colors.white} />
+                <Text style={s.ctrlLabel}>Iniciar</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={[s.ctrlBtnLarge, { backgroundColor: colors.badgeRed }]} onPress={handleFinalize}>
               <Text style={s.finalizeLabel}>Finalizar</Text>
             </TouchableOpacity>
@@ -329,7 +347,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
                   isMine={isMine(item)}
                   otherRole="CITIZEN"
                   otherUserId={incident?.citizenId}
-                  currentUserId={auth.currentUser?.uid}
+                  currentUserId={userId}
                   citizenAlias={incident?.citizenAlias}
                   officerAlias={incident?.officerAlias}
                 />

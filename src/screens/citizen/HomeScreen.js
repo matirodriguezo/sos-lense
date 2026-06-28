@@ -16,12 +16,9 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import { signOut } from "firebase/auth";
 import * as Location from "expo-location";
-import { auth } from "../../firebase/firebaseConfig";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../../firebase/firebaseConfig";
-import { triggerSOS, listenCitizenHistory } from "../../services/incidentService";
+import { logout, getUser } from "../../services/authService";
+import { triggerSOS, listCitizenHistory } from "../../services/incidentService";
 import { getCurrentAlias } from "../../services/userStore";
 import { INCIDENT_STATUS } from "../../constants/roles";
 import { useTheme } from "../../context/ThemeContext";
@@ -35,6 +32,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BTN_SIZE = Math.min(SCREEN_WIDTH * 0.5, 220);
 const HISTORY_PREVIEW_COUNT = 3;
 const SOS_HOLD_DURATION = 1500;
+const POLL_INTERVAL = 10000;
 
 export default function HomeScreen({ navigation }) {
   const { colors, isDark } = useTheme();
@@ -55,31 +53,44 @@ export default function HomeScreen({ navigation }) {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const pressTimer = useRef(null);
   const insets = useSafeAreaInsets();
+  const pollRef = useRef(null);
 
   const s = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
-  useEffect(() => {
-    console.log(`${LOG} Mounted`);
-    const user = auth.currentUser;
-    if (user) {
-      InteractionManager.runAfterInteractions(() => {
-        getDoc(doc(db, "users", user.uid)).then((snap) => {
-          if (snap.exists()) { setUserData(snap.data()); console.log(`${LOG} User data loaded`); }
-        });
-      });
-      const unsub = listenCitizenHistory(user.uid, (data) => {
-        setLastIncidents(data.slice(0, HISTORY_PREVIEW_COUNT));
-        const active = data.find(
+  const loadUserAndHistory = useCallback(async () => {
+    try {
+      const user = await getUser();
+      if (user) {
+        setUserData(user);
+        const history = await listCitizenHistory();
+        setLastIncidents(history.slice(0, HISTORY_PREVIEW_COUNT));
+        const active = history.find(
           (inc) =>
             inc.status === INCIDENT_STATUS.NO_CLASIFICADO ||
             inc.status === INCIDENT_STATUS.ACTIVO ||
             inc.status === INCIDENT_STATUS.EN_CURSO
         );
         setActiveIncident(active || null);
-      });
-      return () => { console.log(`${LOG} Unmounted`); unsub(); };
+      }
+    } catch (e) {
+      console.warn(`${LOG} load error:`, e.message);
     }
   }, []);
+
+  useEffect(() => {
+    console.log(`${LOG} Mounted`);
+    let mounted = true;
+    InteractionManager.runAfterInteractions(async () => {
+      if (!mounted) return;
+      await loadUserAndHistory();
+      pollRef.current = setInterval(loadUserAndHistory, POLL_INTERVAL);
+    });
+    return () => {
+      mounted = false;
+      if (pollRef.current) clearInterval(pollRef.current);
+      console.log(`${LOG} Unmounted`);
+    };
+  }, [loadUserAndHistory]);
 
   const animRefs = useRef([]);
 
@@ -213,12 +224,11 @@ export default function HomeScreen({ navigation }) {
       }
       const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = location.coords;
-      const user = auth.currentUser;
       const citizenAlias = getCurrentAlias();
 
       setLoadingMessage("Enviando ubicación a CENCO...");
       const address = await getAddress(latitude, longitude);
-      const incidentId = await triggerSOS(user.uid, { latitude, longitude, address, citizenAlias });
+      const incidentId = await triggerSOS({ latitude, longitude, address, citizenAlias });
 
       console.log(`${LOG} Incident created: ${incidentId}`);
       setLoadingMessage("Ubicación enviada ✓");
@@ -238,7 +248,7 @@ export default function HomeScreen({ navigation }) {
     setMenuVisible(false);
     Alert.alert("Cerrar sesión", "¿Estás seguro de que deseas salir?", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Salir", style: "destructive", onPress: () => signOut(auth) },
+      { text: "Salir", style: "destructive", onPress: () => logout() },
     ]);
   };
 
@@ -290,7 +300,7 @@ export default function HomeScreen({ navigation }) {
               </View>
               <Text style={s.drawerName}>{userData?.alias || "Ciudadano"}</Text>
               {userData?.rut && <Text style={s.drawerRut}>RUT: {userData.rut}</Text>}
-              <Text style={[s.drawerEmail, { color: colors.textSecondary }]}>{auth.currentUser?.email}</Text>
+              <Text style={[s.drawerEmail, { color: colors.textSecondary }]}>{userData?.email}</Text>
             </View>
 
             <View style={s.drawerBody}>
