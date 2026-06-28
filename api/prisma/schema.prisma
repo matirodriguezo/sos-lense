@@ -12,6 +12,14 @@ enum Role {
   OFFICER
 }
 
+enum IncidentStatus {
+  NO_CLASIFICADO
+  ACTIVO
+  EN_CURSO
+  CERRADO
+  ANULADO
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -39,4 +47,48 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model Incident {
+  id            String         @id @default(uuid())
+  citizenId     String         @map("citizen_id")
+  citizenAlias  String         @default("") @map("citizen_alias")
+  officerId     String?        @map("officer_id")
+  officerAlias  String         @default("") @map("officer_alias")
+  status        IncidentStatus @default(NO_CLASIFICADO)
+  type          String         @default("Por definir")
+  latitude      Float
+  longitude     Float
+  address       String         @default("")
+  quickRequests String[]       @default([]) @map("quick_requests")
+  observations  String         @default("")
+  closedReason  String         @default("") @map("closed_reason")
+  cancelled     Boolean        @default(false)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  citizen  User      @relation("CitizenIncidents", fields: [citizenId], references: [id], onDelete: Cascade)
+  officer  User?     @relation("OfficerIncidents", fields: [officerId], references: [id], onDelete: SetNull)
+  messages Message[]
+
+  @@index([status])
+  @@index([citizenId])
+  @@index([officerId])
+  @@map("incidents")
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  incidentId String   @map("incident_id")
+  text       String
+  senderId   String   @map("sender_id")
+  senderRole Role     @map("sender_role")
+  readBy     String[] @default([]) @map("read_by")
+  status     String   @default("sent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+  @@map("messages")
 }
