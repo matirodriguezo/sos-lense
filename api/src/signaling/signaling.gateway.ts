@@ -9,7 +9,7 @@ import {
 import { UseGuards } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { OnEvent } from '@nestjs/event-emitter';
-import { Role } from '@prisma/client';
+import { IncidentStatus, Role } from '@prisma/client';
 import { WsJwtGuard, WsUser } from '../auth/ws-jwt.guard';
 import { PrismaService } from '../prisma.service';
 
@@ -130,13 +130,22 @@ export class SignalingGateway
   }
 
   @OnEvent('incident.status-changed')
-  handleIncidentClosed(payload: { incidentId: string; status: string }) {
-    if (payload.status !== 'CERRADO' && payload.status !== 'ANULADO') {
+  handleIncidentClosed(payload: {
+    incident: { id: string; status: IncidentStatus };
+  }) {
+    const { incident } = payload;
+    if (
+      incident.status !== IncidentStatus.CERRADO &&
+      incident.status !== IncidentStatus.ANULADO
+    ) {
       return;
     }
-    const roomName = this.roomName(payload.incidentId);
+
+    const incidentId = incident.id;
+    const roomName = this.roomName(incidentId);
     this.server.to(roomName).emit('signal:bye', {});
-    const peers = this.rooms.get(payload.incidentId);
+
+    const peers = this.rooms.get(incidentId);
     if (peers) {
       peers.forEach((socketId) => {
         const socket = this.server.sockets.sockets.get(socketId);
@@ -145,7 +154,7 @@ export class SignalingGateway
           this.socketRoom.delete(socketId);
         }
       });
-      this.rooms.delete(payload.incidentId);
+      this.rooms.delete(incidentId);
     }
   }
 
