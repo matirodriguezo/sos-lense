@@ -1,10 +1,13 @@
 import { io } from "socket.io-client";
 import { API_URL } from "./apiClient";
+import { refresh as refreshAuth, logout as logoutAuth } from "./authService";
 
 const LOG = "[RealtimeSvc]";
 
 let socket = null;
 let currentToken = null;
+let isReconnecting = false;
+let listenersAttached = false;
 
 const listeners = {
   "incident:created": [],
@@ -14,14 +17,50 @@ const listeners = {
   "message:read": [],
 };
 
+const activeSubscriptions = new Set();
+
+function dispatch(event, data) {
+  if (!listeners[event]) return;
+  listeners[event].forEach((cb) => {
+    try {
+      cb(data);
+    } catch (e) {
+      console.warn(`${LOG} listener error for ${event}:`, e.message);
+    }
+  });
+}
+
+function isAuthError(err) {
+  const msg = (err?.message || "").toLowerCase();
+  return (
+    msg.includes("token") ||
+    msg.includes("unauthorized") ||
+    err?.status === 401 ||
+    err?.data?.status === 401
+  );
+}
+
+function rejoinRooms() {
+  if (!socket?.connected) return;
+  activeSubscriptions.forEach((incidentId) => {
+    socket.emit("subscribe:incident", { incidentId });
+    console.log(`${LOG} re-subscribe incident:${incidentId}`);
+  });
+}
+
 /**
  * Connect to the /realtime namespace.
  * @param {string} token JWT access token
  */
 export function connectRealtime(token) {
-  if (socket?.connected) {
+  if (socket?.connected && token === currentToken) {
     console.log(`${LOG} already connected`);
     return socket;
+  }
+
+  if (socket) {
+    socket.disconnect();
+    socket = null;
   }
 
   currentToken = token;
@@ -35,42 +74,74 @@ export function connectRealtime(token) {
 
   socket.on("connect", () => {
     console.log(`${LOG} connected ${socket.id}`);
+    isReconnecting = false;
+    rejoinRooms();
   });
 
   socket.on("connect_error", async (err) => {
     console.warn(`${LOG} connect_error`, err.message);
+
+    if (!isAuthError(err)) {
+      // Let socket.io's built-in reconnection handle transient errors.
+      return;
+    }
+
+    if (isReconnecting) {
+      // Already attempted one refresh cycle; session is dead.
+      await logoutAuth();
+      disconnect();
+      return;
+    }
+
+    isReconnecting = true;
+    socket.disconnect();
+    socket = null;
+    currentToken = null;
+
+    try {
+      const data = await refreshAuth();
+      if (!data?.accessToken) {
+        throw new Error("refresh returned no access token");
+      }
+      connectRealtime(data.accessToken);
+    } catch (e) {
+      console.warn(`${LOG} token refresh failed, logging out:`, e.message);
+      await logoutAuth();
+      disconnect();
+    }
   });
 
   socket.on("disconnect", (reason) => {
     console.log(`${LOG} disconnected`, reason);
   });
 
-  Object.keys(listeners).forEach((event) => {
-    socket.on(event, (data) => {
-      console.log(`${LOG} << ${event}`);
-      listeners[event].forEach((cb) => {
-        try {
-          cb(data);
-        } catch (e) {
-          console.warn(`${LOG} listener error for ${event}:`, e.message);
-        }
+  if (!listenersAttached) {
+    Object.keys(listeners).forEach((event) => {
+      socket.on(event, (data) => {
+        console.log(`${LOG} << ${event}`);
+        dispatch(event, data);
       });
     });
-  });
+    listenersAttached = true;
+  }
 
   return socket;
 }
 
 export function subscribeIncident(incidentId) {
-  if (!socket?.connected) return;
-  socket.emit("subscribe:incident", { incidentId });
-  console.log(`${LOG} subscribe incident:${incidentId}`);
+  activeSubscriptions.add(incidentId);
+  if (socket?.connected) {
+    socket.emit("subscribe:incident", { incidentId });
+    console.log(`${LOG} subscribe incident:${incidentId}`);
+  }
 }
 
 export function unsubscribeIncident(incidentId) {
-  if (!socket?.connected) return;
-  socket.emit("unsubscribe:incident", { incidentId });
-  console.log(`${LOG} unsubscribe incident:${incidentId}`);
+  activeSubscriptions.delete(incidentId);
+  if (socket?.connected) {
+    socket.emit("unsubscribe:incident", { incidentId });
+    console.log(`${LOG} unsubscribe incident:${incidentId}`);
+  }
 }
 
 /**
@@ -94,9 +165,12 @@ export function disconnect() {
     socket = null;
   }
   currentToken = null;
+  isReconnecting = false;
+  activeSubscriptions.clear();
   Object.keys(listeners).forEach((key) => {
     listeners[key] = [];
   });
+  listenersAttached = false;
 }
 
 export function isConnected() {
