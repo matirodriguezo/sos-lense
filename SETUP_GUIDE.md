@@ -8,14 +8,15 @@ Guía paso a paso para preparar el entorno de desarrollo desde cero en VS Code.
 
 | Herramienta | Versión Mínima | Verificación |
 |---|---|---|
-| Node.js | 18 LTS o superior | `node -v` |
-| npm | 9+ | `npm -v` |
+| Node.js | 20 LTS o superior | `node -v` |
+| npm | 10+ | `npm -v` |
+| Docker / Docker Compose | Última estable | `docker compose version` |
 | Expo CLI | 54.x | `npx expo --version` |
 | Expo Go app | Última de Play/App Store | Instalada en tu celular |
 
 ### Instalación rápida
 
-**Node.js:** https://nodejs.org (versión LTS 18.x o 20.x) — marcar "Add to PATH".
+**Node.js:** https://nodejs.org (versión LTS 20.x) — marcar "Add to PATH".
 
 **Expo Go:** Google Play o App Store en tu celular físico.
 
@@ -43,12 +44,17 @@ Si pide permiso para sobrescribir archivos existentes, responde que **no** y usa
 
 ## 4. Instalar Dependencias
 
+### Frontend
+
 ```bash
 # Navegación
 npx expo install @react-navigation/native @react-navigation/native-stack @react-navigation/bottom-tabs react-native-screens react-native-safe-area-context
 
-# Firebase (Auth + Firestore)
-npx expo install firebase
+# Seguridad y estado local
+npx expo install expo-secure-store @react-native-async-storage/async-storage
+
+# Socket.IO (tiempo real + señalización WebRTC)
+npm install socket.io-client
 
 # Ubicación GPS
 npx expo install expo-location
@@ -59,32 +65,57 @@ npx expo install @zegocloud/zego-uikit-prebuilt-call-rn @zegocloud/zego-uikit-rn
 npx expo install react-native-agora
 ```
 
+### Backend
+
+```bash
+cd api
+npm install
+```
+
 ---
 
-## 5. Configurar Firebase
+## 5. Configurar Backend
 
-### 5.1 Crear proyecto en Firebase Console
+### 5.1 Variables de entorno
 
-1. Ve a https://console.firebase.google.com → **Crear proyecto**.
-2. Nombre: `sos-carabineros` → Desactivar Analytics → **Crear**.
+Copia el archivo de ejemplo y edita los valores:
 
-### 5.2 Obtener credenciales Web
+```bash
+cd api
+cp .env.example .env
+```
 
-1. En la vista general del proyecto, haz clic en el ícono **Web** (`</>`).
-2. Sobrenombre: `sos-carabineros-web` → **Registrar app**.
-3. **Copia el objeto `firebaseConfig`** que aparece en pantalla.
+```bash
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/soslense?schema=public"
+JWT_SECRET="cambia_esto_por_un_secreto_largo_y_aleatorio"
+JWT_REFRESH_SECRET="otro_secreto_largo_y_aleatorio"
+PORT=3000
+```
 
-### 5.3 Pegar credenciales en el proyecto
+### 5.2 Levantar PostgreSQL + PostGIS
 
-Abre `src/firebase/firebaseConfig.js` y reemplaza todo el objeto `firebaseConfig` con el que copiaste.
+```bash
+docker compose up -d db
+```
 
-### 5.4 Activar Authentication
+### 5.3 Aplicar migraciones y sembrar admin
 
-Firebase Console → **Authentication** → **Sign-in method** → Habilitar **Correo electrónico/contraseña** → Guardar.
+```bash
+npm run db:migrate
+npm run db:seed
+```
 
-### 5.5 Crear Firestore
+El seed crea un usuario administrador:
+- Email: `admin@sos-lense.local`
+- Contraseña: `Admin1234!`
 
-Firebase Console → **Firestore Database** → **Crear base de datos** → **Modo de prueba** → Elegir ubicación `southamerica-east1` (o `us-central1`) → **Activar**.
+### 5.4 Iniciar API
+
+```bash
+npm run start:dev
+```
+
+La API quedará disponible en `http://localhost:3000`.
 
 ---
 
@@ -100,11 +131,18 @@ Proyecto_Carabineros/
 │   ├── icon.png
 │   ├── splash-icon.png
 │   └── adaptive-icon.png
+├── api/                            # Backend NestJS + PostgreSQL + PostGIS
+│   ├── src/
+│   │   ├── auth/
+│   │   ├── incidents/
+│   │   ├── messages/
+│   │   ├── realtime/
+│   │   ├── signaling/
+│   │   └── prisma/
+│   └── prisma/migrations/
 └── src/
     ├── constants/
     │   └── roles.js                # Enumeraciones (ROLES, STATUS, TYPES)
-    ├── firebase/
-    │   └── firebaseConfig.js       # Inicialización Firebase Auth + Firestore
     ├── navigation/
     │   ├── AppNavigator.js         # Ruteo condicional por rol
     │   ├── AuthStack.js            # Stack de Login
@@ -118,16 +156,22 @@ Proyecto_Carabineros/
     │   │   ├── ClassificationScreen.js  # Grilla de tipos
     │   │   └── VideoCallScreen.js  # Videollamada + chat + respuestas rápidas
     │   └── officer/
-    │       ├── DispatchPanelScreen.js      # onSnapshot incidentes activos
+    │       ├── DispatchPanelScreen.js      # Panel de incidentes activos
     │       ├── IncidentManagementScreen.js # Gestión + videollamada
     │       └── CloseIncidentScreen.js      # Cierre con observaciones
     └── services/
-        └── incidentService.js      # triggerSOS, listenActiveIncidents, etc.
+        ├── apiClient.js            # Axios + refresco automático de token
+        ├── authService.js          # Login, registro, tokens
+        ├── incidentService.js      # REST para incidentes/mensajes
+        ├── signalingService.js     # Socket.IO /signaling
+        └── realtimeService.js      # Socket.IO /realtime
 ```
 
 ---
 
 ## 7. Ejecutar la App
+
+Asegúrate de que el backend esté corriendo (`npm run start:dev` en `api/`) y ejecuta:
 
 ```bash
 npx expo start
@@ -136,49 +180,59 @@ npx expo start
 1. Escanea el código QR con **Expo Go** en tu celular.
 2. La app carga automáticamente.
 3. **Regístrate** con un correo cualquiera → rol ciudadano por defecto.
-4. Para probar rol oficial, ve a Firebase → Firestore → colección `users` → crea documento con el UID del usuario y campo `role: "OFFICER"`.
+4. Para probar rol oficial, inicia sesión como administrador en la API y crea un usuario con rol `OFFICER`, o usa el endpoint de registro con un rol forzado desde el panel de administración.
 
 ### Solución de problemas
 
 | Problema | Solución |
 |---|---|
 | "Project is incompatible with this version of Expo Go" | El proyecto usa SDK 56+. Recrea con SDK 54. |
-| Error de conexión Firebase | Verifica credenciales en `firebaseConfig.js` |
+| Error de conexión al backend | Verifica que `API_URL` en `src/services/apiClient.js` apunte al host correcto y que el backend esté corriendo. |
 | GPS no funciona | Acepta permisos de ubicación en el celular |
+| Error `Connection refused` al backend en Android | Usa la IP local de tu máquina en lugar de `localhost` en `API_URL`. |
 
 ---
 
-## 8. Estructura de Datos en Firestore
+## 8. Estructura de Datos en PostgreSQL
 
-### Colección `users`
+### Tabla `User`
 ```
-uid (String, Auth ID)
-├── email: "user@mail.com"
-├── role: "CITIZEN" | "OFFICER"
-└── rut: "12.345.678-9" (opcional)
-```
-
-### Colección `incidents`
-```
-id (auto-generado)
-├── citizenId: "uid_del_ciudadano"
-├── officerId: "uid_del_operador" | null
-├── status: "NO_CLASIFICADO" | "ACTIVO" | "EN_CURSO" | "CERRADO"
-├── type: "Por definir" | "ROBO" | "VIOLENCIA" | "ACCIDENTE" | "OTRO"
-├── location: GeoPoint(lat, lng)
-├── latitude: number
-├── longitude: number
-├── quick_requests: string
-├── observations: string
-├── createdAt: Timestamp
-└── updatedAt: Timestamp
+id (UUID, PK)
+├── email: string (unique)
+├── passwordHash: string
+├── role: "CITIZEN" | "OFFICER" | "ADMIN"
+├── alias: string
+├── rut: string (nullable)
+├── createdAt: timestamp
+└── updatedAt: timestamp
 ```
 
-### Subcolección `incidents/{id}/messages`
+### Tabla `Incident`
 ```
-id (auto-generado)
-├── text: string
-├── senderId: string
+id (UUID, PK)
+├── citizenId -> User.id
+├── officerId -> User.id (nullable)
+├── status: "NO_CLASIFICADO" | "ACTIVO" | "EN_CURSO" | "CERRADO" | "ANULADO"
+├── type: string
+├── latitude: decimal
+├── longitude: decimal
+├── location: geography(Point) (PostGIS)
+├── address: string (nullable)
+├── quickRequests: text[]
+├── observations: text
+├── closedReason: string (nullable)
+├── createdAt: timestamp
+└── updatedAt: timestamp
+```
+
+### Tabla `Message`
+```
+id (UUID, PK)
+├── incidentId -> Incident.id
+├── senderId -> User.id
 ├── senderRole: "CITIZEN" | "OFFICER"
-└── createdAt: Timestamp
+├── text: string
+├── readBy: text[]
+├── createdAt: timestamp
+└── updatedAt: timestamp
 ```

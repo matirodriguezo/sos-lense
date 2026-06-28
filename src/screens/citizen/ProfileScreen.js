@@ -1,10 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../../firebase/firebaseConfig";
-import { listenCitizenHistory } from "../../services/incidentService";
+import { logout, getUser } from "../../services/authService";
+import { listCitizenHistory } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -14,21 +12,28 @@ export default function CitizenProfileScreen({ navigation }) {
   const [caseCount, setCaseCount] = useState(0);
 
   useEffect(() => {
-    loadUserData();
-    const unsub = listenCitizenHistory(auth.currentUser?.uid, (data) => setCaseCount(data.length));
-    return unsub;
+    let mounted = true;
+    async function load() {
+      const user = await getUser();
+      if (!mounted) return;
+      setUserData(user);
+      try {
+        const cases = await listCitizenHistory();
+        setCaseCount(cases.length);
+      } catch (e) {
+        console.warn("[CitizenProfile] cases load failed:", e.message);
+      }
+    }
+    load();
+    return () => { mounted = false; };
   }, []);
 
-  const loadUserData = async () => {
-    const snap = await getDoc(doc(db, "users", auth.currentUser?.uid));
-    if (snap.exists()) setUserData(snap.data());
-  };
-
-  const handleLogout = () => {
-    Alert.alert("Cerrar Sesión", "¿Deseas salir del sistema?", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Salir", style: "destructive", onPress: () => signOut(auth) },
-    ]);
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (e) {
+      console.warn("[CitizenProfile] logout error:", e.message);
+    }
   };
 
   const s = useMemo(() => makeStyles(colors), [colors]);
@@ -83,7 +88,7 @@ export default function CitizenProfileScreen({ navigation }) {
             <Ionicons name="mail-outline" size={20} color={colors.textSecondary} />
             <Text style={[s.dataTitle, { color: colors.textSecondary }]}>CORREO ELECTRÓNICO</Text>
           </View>
-          <Text style={[s.dataValue, { color: colors.textPrimary }]}>{auth.currentUser?.email || "—"}</Text>
+          <Text style={[s.dataValue, { color: colors.textPrimary }]}>{userData?.email || "—"}</Text>
         </View>
 
         <View style={[s.dataCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -93,6 +98,14 @@ export default function CitizenProfileScreen({ navigation }) {
           </View>
           <Text style={[s.dataValue, { color: colors.textPrimary }]}>Comunidad Sorda (CENCO)</Text>
           <Text style={[s.dataSub, { color: colors.textSecondary }]}>Región Metropolitana</Text>
+        </View>
+
+        <View style={[s.dataCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={s.dataHeader}>
+            <Ionicons name="folder-open-outline" size={20} color={colors.textSecondary} />
+            <Text style={[s.dataTitle, { color: colors.textSecondary }]}>CASOS HISTÓRICOS</Text>
+          </View>
+          <Text style={[s.dataValueBig, { color: colors.textPrimary }]}>{caseCount}</Text>
         </View>
 
         <TouchableOpacity style={[s.logoutBtn, { backgroundColor: colors.surface, borderColor: colors.badgeRed }]} onPress={() => {
