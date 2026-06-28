@@ -14,12 +14,17 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import { logout, getUser } from "../../services/authService";
+import { logout, getUser, getToken } from "../../services/authService";
 import {
   listActiveIncidents,
   listAllCancelled,
   listMyCases,
 } from "../../services/incidentService";
+import {
+  connectRealtime,
+  on as onRealtime,
+  disconnect as disconnectRealtime,
+} from "../../services/realtimeService";
 import { useTheme } from "../../context/ThemeContext";
 import { getShiftStart } from "../../services/userStore";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -111,11 +116,17 @@ export default function DispatchPanelScreen({ navigation }) {
     async function bootstrap() {
       const user = await getUser();
       setUserData(user);
+      const token = await getToken();
+      if (token) connectRealtime(token);
+      onRealtime("incident:created", loadData);
+      onRealtime("incident:updated", loadData);
+      onRealtime("incident:status-changed", loadData);
       await loadData();
       pollRef.current = setInterval(loadData, POLL_INTERVAL);
       const interval = setInterval(() => setNow(Date.now()), 30000);
       return () => {
         clearInterval(interval);
+        disconnectRealtime();
         if (pollRef.current) clearInterval(pollRef.current);
       };
     }

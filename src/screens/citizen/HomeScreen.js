@@ -17,8 +17,13 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Location from "expo-location";
-import { logout, getUser } from "../../services/authService";
+import { logout, getUser, getToken } from "../../services/authService";
 import { triggerSOS, listCitizenHistory } from "../../services/incidentService";
+import {
+  connectRealtime,
+  on as onRealtime,
+  disconnect as disconnectRealtime,
+} from "../../services/realtimeService";
 import { getCurrentAlias } from "../../services/userStore";
 import { INCIDENT_STATUS } from "../../constants/roles";
 import { useTheme } from "../../context/ThemeContext";
@@ -82,11 +87,17 @@ export default function HomeScreen({ navigation }) {
     let mounted = true;
     InteractionManager.runAfterInteractions(async () => {
       if (!mounted) return;
+      const token = await getToken();
+      if (token) connectRealtime(token);
+      onRealtime("incident:created", loadUserAndHistory);
+      onRealtime("incident:updated", loadUserAndHistory);
+      onRealtime("incident:status-changed", loadUserAndHistory);
       await loadUserAndHistory();
       pollRef.current = setInterval(loadUserAndHistory, POLL_INTERVAL);
     });
     return () => {
       mounted = false;
+      disconnectRealtime();
       if (pollRef.current) clearInterval(pollRef.current);
       console.log(`${LOG} Unmounted`);
     };

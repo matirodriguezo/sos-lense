@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
-import { auth, db } from "../firebase/firebaseConfig";
-import { collection, query, where, onSnapshot, orderBy, doc, getDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { connectRealtime, on, disconnect } from "../services/realtimeService";
+import { listMyCases, listCitizenHistory } from "../services/incidentService";
+import { getUser, getToken } from "../services/authService";
 
 const LOG_TAG = "[NotificationCtx]";
 
@@ -15,11 +15,10 @@ export function NotificationProvider({ children }) {
   const seenMessages = useRef(new Set());
   const initializedAt = useRef(Date.now());
   const bannerTimer = useRef(null);
-  const msgUnsubs = useRef([]);
-  const incidentUnsub = useRef(null);
-  const authUnsub = useRef(null);
   const isVisibleRef = useRef(true);
   const prevCountRef = useRef(0);
+  const incidentIdsRef = useRef(new Set());
+  const userRef = useRef(null);
 
   const showBanner = useCallback((senderName, text, incidentId, role) => {
     if (bannerTimer.current) clearTimeout(bannerTimer.current);
@@ -57,97 +56,65 @@ export function NotificationProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    authUnsub.current = onAuthStateChanged(auth, (user) => {
-      console.log(`${LOG_TAG} Auth state changed:`, user?.uid ? `user ${user.uid.slice(0, 6)}...` : "null");
+    let mounted = true;
 
-      if (incidentUnsub.current) {
-        incidentUnsub.current();
-        incidentUnsub.current = null;
-      }
-      msgUnsubs.current.forEach((u) => u());
-      msgUnsubs.current = [];
+    async function bootstrap() {
+      const [token, user] = await Promise.all([getToken(), getUser()]);
+      if (!mounted || !token || !user) return;
 
-      if (!user) {
-        setUnreadCount(0);
-        prevCountRef.current = 0;
-        return;
-      }
-
-      const uid = user.uid;
+      userRef.current = user;
       initializedAt.current = Date.now();
       seenMessages.current.clear();
 
-      getDoc(doc(db, "users", uid)).then((snap) => {
-        if (!snap.exists()) return;
-        if (auth.currentUser?.uid !== uid) return;
+      connectRealtime(token);
 
-        const role = snap.data().role;
-        const isOfficer = role === "OFFICER";
-        const userIdField = isOfficer ? "officerId" : "citizenId";
-        console.log(`${LOG_TAG} Setting up listeners for ${isOfficer ? "officer" : "citizen"} (${uid.slice(0, 6)}...)`);
+      // Subscribe to relevant incidents
+      try {
+        const cases =
+          user.role === "OFFICER"
+            ? await listMyCases()
+            : await listCitizenHistory();
+        cases.forEach((inc) => {
+          incidentIdsRef.current.add(inc.id);
+        });
+      } catch (e) {
+        console.warn(`${LOG_TAG} initial load failed:`, e.message);
+      }
 
-        incidentUnsub.current = onSnapshot(
-          query(
-            collection(db, "incidents"),
-            where(userIdField, "==", uid),
-            where("status", "in", ["ACTIVO", "EN_CURSO", "NO_CLASIFICADO"])
-          ),
-          (snapshot) => {
-            msgUnsubs.current.forEach((u) => u());
-            msgUnsubs.current = [];
+      const handleMessageCreated = (data) => {
+        const msg = data?.message;
+        const incident = data?.incident;
+        if (!msg) return;
+        if (msg.senderId === user.userId) return;
+        if (seenMessages.current.has(msg.id)) return;
+        if (new Date(msg.createdAt).getTime() < initializedAt.current) return;
+        seenMessages.current.add(msg.id);
 
-            if (snapshot.empty) {
-              console.log(`${LOG_TAG} No active incidents found`);
-              return;
-            }
+        const senderName =
+          user.role === "OFFICER"
+            ? (incident?.citizenAlias || "Ciudadano")
+            : (incident?.officerAlias || "Oficial");
 
-            console.log(`${LOG_TAG} Found ${snapshot.docs.length} active incident(s)`);
+        if (inChatListRef.current) {
+          showBanner(senderName, msg.text, data.incidentId, user.role);
+        } else if (activeChatIdRef.current !== data.incidentId) {
+          setUnreadCount((prev) => {
+            const next = prev + 1;
+            prevCountRef.current = next;
+            return next;
+          });
+          showBanner(senderName, msg.text, data.incidentId, user.role);
+        }
+      };
 
-            snapshot.docs.forEach((d) => {
-              const incident = { id: d.id, ...d.data() };
+      on("message:created", handleMessageCreated);
+    }
 
-              const iq = query(
-                collection(db, "incidents", incident.id, "messages"),
-                orderBy("createdAt", "asc")
-              );
-              const unsub = onSnapshot(iq, (msgSnap) => {
-                msgSnap.docChanges().forEach((change) => {
-                  if (change.type !== "added") return;
-                  const msg = { id: change.doc.id, ...change.doc.data() };
-                  if (msg.senderId === uid) return;
-                  if (msg.senderRole === "SYSTEM") return;
-                  if (seenMessages.current.has(msg.id)) return;
-                  const msgTime = msg.createdAt?.toMillis?.() || Date.now();
-                  if (msgTime < initializedAt.current) return;
-                  seenMessages.current.add(msg.id);
-
-                  const senderName = isOfficer
-                    ? (incident.citizenAlias || "Ciudadano")
-                    : (incident.officerAlias || "Oficial");
-
-                  if (inChatListRef.current) {
-                    showBanner(senderName, msg.text, incident.id, role);
-                  } else if (activeChatIdRef.current !== incident.id) {
-                    setUnreadCount((prev) => {
-                      const next = prev + 1;
-                      prevCountRef.current = next;
-                      return next;
-                    });
-                    showBanner(senderName, msg.text, incident.id, role);
-                  }
-                });
-              });
-              msgUnsubs.current.push(unsub);
-            });
-          }
-        );
-      });
-    });
+    bootstrap();
 
     return () => {
-      if (authUnsub.current) authUnsub.current();
-      if (incidentUnsub.current) incidentUnsub.current();
-      msgUnsubs.current.forEach((u) => u());
+      mounted = false;
+      disconnect();
       if (bannerTimer.current) clearTimeout(bannerTimer.current);
     };
   }, [showBanner]);

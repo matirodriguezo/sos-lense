@@ -37,6 +37,12 @@ import {
   onBye,
   disconnect as disconnectSignaling,
 } from "../../services/signalingService";
+import {
+  connectRealtime,
+  subscribeIncident,
+  on as onRealtime,
+  disconnect as disconnectRealtime,
+} from "../../services/realtimeService";
 import MessageBubble from "../../components/MessageBubble";
 import WebRTCView from "../../components/WebRTCView";
 import { useTheme } from "../../context/ThemeContext";
@@ -96,10 +102,17 @@ export default function VideoCallScreen({ route, navigation }) {
       if (token) {
         connectSignaling(token);
         joinIncident(incidentId);
+        connectRealtime(token);
+        subscribeIncident(incidentId);
       }
     }
 
     bootstrap();
+
+    onRealtime("message:created", loadData);
+    onRealtime("message:read", loadData);
+    onRealtime("incident:updated", loadData);
+    onRealtime("incident:status-changed", loadData);
 
     onOffer((sdp) => {
       console.log("[VideoCall] forwarding offer to WebRTC");
@@ -121,6 +134,7 @@ export default function VideoCallScreen({ route, navigation }) {
 
     return () => {
       disconnectSignaling();
+      disconnectRealtime();
       console.log("[VideoCall] Unmounted");
     };
   }, [incidentId, autoOpenChat, endCall]);

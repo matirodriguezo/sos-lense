@@ -58,8 +58,7 @@ export class IncidentsService {
     await this.setGeom(incident.id);
 
     this.events.emit('incident.created', {
-      incidentId: incident.id,
-      citizenId: incident.citizenId,
+      incident,
     });
 
     return incident;
@@ -162,8 +161,7 @@ export class IncidentsService {
     });
 
     this.events.emit('incident.updated', {
-      incidentId: updated.id,
-      officerId,
+      incident: updated,
     });
 
     return updated;
@@ -189,8 +187,7 @@ export class IncidentsService {
     });
 
     this.events.emit('incident.status-changed', {
-      incidentId: updated.id,
-      status: updated.status,
+      incident: updated,
     });
 
     return updated;
@@ -225,8 +222,7 @@ export class IncidentsService {
     });
 
     this.events.emit('incident.status-changed', {
-      incidentId: updated.id,
-      status: updated.status,
+      incident: updated,
     });
 
     return updated;
@@ -260,8 +256,7 @@ export class IncidentsService {
     });
 
     this.events.emit('incident.status-changed', {
-      incidentId: updated.id,
-      status: updated.status,
+      incident: updated,
     });
 
     return updated;
@@ -292,8 +287,7 @@ export class IncidentsService {
     });
 
     this.events.emit('incident.updated', {
-      incidentId: updated.id,
-      type: updated.type,
+      incident: updated,
     });
 
     return updated;
