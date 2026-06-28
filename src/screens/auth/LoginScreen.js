@@ -11,9 +11,7 @@ import {
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../../firebase/firebaseConfig";
+import { login, storeUser } from "../../services/authService";
 import { ROLES } from "../../constants/roles";
 import { useTheme } from "../../context/ThemeContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
@@ -41,7 +39,15 @@ export default function LoginScreen({ navigation }) {
     }
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, buildEmail(), password);
+      const email = buildEmail();
+      await login(email, password);
+      await storeUser({
+        email,
+        role: ROLES.CITIZEN,
+        alias: "",
+        rut,
+        userId: "",
+      });
     } catch (e) {
       Alert.alert("Error de inicio de sesión", e.message);
     } finally {
@@ -64,13 +70,14 @@ export default function LoginScreen({ navigation }) {
     }
     setLoading(true);
     try {
-      const cred = await createUserWithEmailAndPassword(auth, buildEmail(), password);
-      await setDoc(doc(db, "users", cred.user.uid), {
-        email: buildEmail(),
+      const email = buildEmail();
+      await register(email, password, rut, alias.trim());
+      await storeUser({
+        email,
         role: ROLES.CITIZEN,
-        rut: rut || "",
         alias: alias.trim(),
-        createdAt: new Date().toISOString(),
+        rut,
+        userId: "",
       });
       Alert.alert("Cuenta creada", "Bienvenido a S.O.S. Carabineros");
     } catch (e) {

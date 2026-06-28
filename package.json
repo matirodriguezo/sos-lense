@@ -17,6 +17,7 @@
     "expo": "~54.0.34",
     "expo-file-system": "~19.0.23",
     "expo-location": "~19.0.8",
+    "expo-secure-store": "~14.2.3",
     "expo-status-bar": "~3.0.9",
     "firebase": "^11.4.0",
     "react": "19.1.0",

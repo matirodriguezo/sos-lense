@@ -1,11 +1,9 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../firebase/firebaseConfig";
 import { ROLES } from "../constants/roles";
 import { useTheme } from "../context/ThemeContext";
 import { setCurrentAlias, setShiftStart } from "../services/userStore";
+import { hydrateUserFromToken, getUser, getToken } from "../services/authService";
 import AuthStack from "./AuthStack";
 import CitizenStack from "./CitizenStack";
 import OfficerTabs from "./OfficerTabs";
@@ -15,42 +13,40 @@ export default function AppNavigator() {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
-  const retryCount = useRef(0);
 
   useEffect(() => {
     console.log("[AppNavigator] Initializing...");
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        let docSnap = null;
-        retryCount.current = 0;
+    let mounted = true;
 
-        while (retryCount.current < 10) {
-          try {
-            docSnap = await getDoc(doc(db, "users", firebaseUser.uid));
-            if (docSnap.exists()) break;
-          } catch {}
-          retryCount.current++;
-          await new Promise((r) => setTimeout(r, 300));
-        }
+    async function bootstrap() {
+      try {
+        await hydrateUserFromToken();
+        const [token, stored] = await Promise.all([
+          getToken(),
+          getUser(),
+        ]);
+        if (!mounted) return;
 
-        if (docSnap?.exists()) {
-          const data = docSnap.data();
-          setRole(data.role);
-          setCurrentAlias(data.alias || "");
-          if (data.role === ROLES.OFFICER) setShiftStart(Date.now());
-          console.log("[AppNavigator] User ready:", data.role, data.alias || "no alias");
+        if (token && stored) {
+          setUser({ userId: stored.userId, email: stored.email });
+          setRole(stored.role);
+          setCurrentAlias(stored.alias || "");
+          if (stored.role === ROLES.OFFICER) setShiftStart(Date.now());
+          console.log("[AppNavigator] User ready:", stored.role, stored.alias || "no alias");
+        } else {
+          console.log("[AppNavigator] No user found");
+          setUser(null);
+          setRole(null);
         }
-        setLoading(false);
-      } else {
-        console.log("[AppNavigator] No user found");
-        setUser(null);
-        setRole(null);
-        setLoading(false);
+      } catch (e) {
+        console.warn("[AppNavigator] Bootstrap error:", e.message);
+      } finally {
+        if (mounted) setLoading(false);
       }
-    });
+    }
 
-    return unsubscribe;
+    bootstrap();
+    return () => { mounted = false; };
   }, []);
 
   if (loading) {

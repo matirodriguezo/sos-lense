@@ -11,9 +11,7 @@ import {
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../../firebase/firebaseConfig";
+import { login, storeUser } from "../../services/authService";
 import { ROLES } from "../../constants/roles";
 import { useTheme } from "../../context/ThemeContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
@@ -22,11 +20,8 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 export default function OfficerLoginScreen({ navigation }) {
   const { colors } = useTheme();
   const [rut, setRut] = useState("");
-  const [alias, setAlias] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const s = useMemo(() => makeStyles(colors), [colors]);
@@ -41,40 +36,17 @@ export default function OfficerLoginScreen({ navigation }) {
     }
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, buildEmail(), password);
+      const email = buildEmail();
+      await login(email, password);
+      await storeUser({
+        email,
+        role: ROLES.OFFICER,
+        alias: "",
+        rut,
+        userId: "",
+      });
     } catch (e) {
       Alert.alert("Error de inicio de sesión", e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRegister = async () => {
-    if (!rut || !password || !alias) {
-      Alert.alert("Error", "Completa todos los campos (placa, nombre/grado y contraseña)");
-      return;
-    }
-    if (password.length < 6) {
-      Alert.alert("Error", "La contraseña debe tener al menos 6 caracteres");
-      return;
-    }
-    if (password !== confirmPassword) {
-      Alert.alert("Error", "Las contraseñas no coinciden");
-      return;
-    }
-    setLoading(true);
-    try {
-      const cred = await createUserWithEmailAndPassword(auth, buildEmail(), password);
-      await setDoc(doc(db, "users", cred.user.uid), {
-        email: buildEmail(),
-        role: ROLES.OFFICER,
-        rut: rut || "",
-        alias: alias.trim(),
-        createdAt: new Date().toISOString(),
-      });
-      Alert.alert("Cuenta creada", "Acceso habilitado para personal autorizado");
-    } catch (e) {
-      Alert.alert("Error al registrarse", e.message);
     } finally {
       setLoading(false);
     }
@@ -87,7 +59,7 @@ export default function OfficerLoginScreen({ navigation }) {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-          
+
           {/* Header & Brand */}
           <View style={s.brandSection}>
             <View style={s.logoCircle}>
@@ -113,24 +85,8 @@ export default function OfficerLoginScreen({ navigation }) {
               />
             </View>
 
-            {isRegistering && (
-              <>
-                <Text style={[s.inputLabelInside, { color: colors.labelGray }]}>GRADO Y NOMBRE / ALIAS</Text>
-                <View style={[s.inputWrapper, { borderColor: colors.border }]}>
-                  <TextInput
-                    style={[s.inputFieldFlex, { color: colors.textPrimary }]}
-                    placeholder="Ej: Cabo 1ro José Martínez"
-                    placeholderTextColor={colors.textSecondary}
-                    value={alias}
-                    onChangeText={setAlias}
-                    autoCapitalize="words"
-                  />
-                </View>
-              </>
-            )}
-
             <Text style={[s.inputLabelInside, { color: colors.labelGray }]}>
-              {isRegistering ? "CREAR CONTRASEÑA" : "CONTRASEÑA DE SISTEMA"}
+              CONTRASEÑA DE SISTEMA
             </Text>
             <View style={[s.inputWrapper, { borderColor: colors.border }]}>
               <TextInput
@@ -154,58 +110,20 @@ export default function OfficerLoginScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            {isRegistering && (
-              <>
-                <Text style={[s.inputLabelInside, { color: colors.labelGray }]}>CONFIRMAR CONTRASEÑA</Text>
-                <View style={[s.inputWrapper, { borderColor: colors.border }]}>
-                  <TextInput
-                    style={[s.inputFieldFlex, { color: colors.textPrimary }]}
-                    placeholder="Repite la contraseña"
-                    placeholderTextColor={colors.textSecondary}
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry={!showPassword}
-                  />
-                </View>
-              </>
-            )}
-
-            {!isRegistering && (
-              <View style={s.checkboxRow}>
-                <Ionicons name="square-outline" size={20} color={colors.textSecondary} />
-                <Text style={[s.checkboxText, { color: colors.textSecondary }]}>Mantener sesión activa en turno</Text>
-              </View>
-            )}
+            <View style={s.checkboxRow}>
+              <Ionicons name="square-outline" size={20} color={colors.textSecondary} />
+              <Text style={[s.checkboxText, { color: colors.textSecondary }]}>Mantener sesión activa en turno</Text>
+            </View>
 
             <TouchableOpacity
               style={[s.primaryButton, { backgroundColor: colors.primary }, loading && { opacity: 0.6 }]}
-              onPress={isRegistering ? handleRegister : handleLogin}
+              onPress={handleLogin}
               disabled={loading}
               activeOpacity={0.8}
             >
               <Text style={s.primaryButtonText}>
-                {loading ? "Verificando..." : isRegistering ? "Registrar Personal" : "Iniciar Turno"}
+                {loading ? "Verificando..." : "Iniciar Turno"}
               </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => {
-                if (isRegistering) {
-                  Alert.alert("Cancelar registro", "¿Estás seguro de cancelar el registro?", [
-                    { text: "Seguir registrando", style: "cancel" },
-                    { text: "Cancelar registro", onPress: () => setIsRegistering(false) },
-                  ]);
-                } else {
-                  Alert.alert("Nuevo operador", "¿Eres personal autorizado de Carabineros para registrarte?", [
-                    { text: "Cancelar", style: "cancel" },
-                    { text: "Sí, registrarme", onPress: () => setIsRegistering(true) },
-                  ]);
-                }
-              }}
-              style={s.switchLink}
-              hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
-            >
-               <Text style={[s.switchLinkText, { color: colors.textSecondary }]}>{isRegistering ? "Cancelar registro" : "¿Nuevo operador? Regístrate"}</Text>
             </TouchableOpacity>
 
             <View style={s.footerInfoRow}>
@@ -268,7 +186,7 @@ const makeStyles = (colors) =>
       marginVertical: SPACING.sm,
     },
     portalText: { fontSize: FONT_SIZE.base, letterSpacing: 2, fontWeight: FONT_WEIGHT.bold },
-    
+
     cardContainer: {
       borderRadius: RADIUS.xl,
       padding: SPACING.lg,
@@ -301,7 +219,7 @@ const makeStyles = (colors) =>
     },
     checkboxRow: { flexDirection: "row", alignItems: "center", marginBottom: SPACING.lg },
     checkboxText: { fontSize: FONT_SIZE.base, marginLeft: SPACING.sm },
-    
+
     primaryButton: {
       borderRadius: RADIUS.md,
       height: 54,
@@ -309,10 +227,7 @@ const makeStyles = (colors) =>
       alignItems: "center",
     },
     primaryButtonText: { color: colors.white, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-    
-    switchLink: { marginTop: SPACING.md, alignSelf: "center" },
-    switchLinkText: { fontSize: FONT_SIZE.base },
-    
+
     footerInfoRow: {
       flexDirection: "row",
       justifyContent: "center",
@@ -320,7 +235,7 @@ const makeStyles = (colors) =>
       marginTop: SPACING.xl,
     },
     footerInfoText: { fontSize: FONT_SIZE.xs, marginLeft: SPACING.xs },
-    
+
     backToCitizen: {
       flexDirection: "row",
       justifyContent: "center",
