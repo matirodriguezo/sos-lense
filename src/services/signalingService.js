@@ -1,97 +1,136 @@
-import {
-  doc,
-  setDoc,
-  deleteDoc,
-  onSnapshot,
-  serverTimestamp,
-  arrayUnion,
-  updateDoc,
-} from "firebase/firestore";
-import { db } from "../firebase/firebaseConfig";
+import { io } from "socket.io-client";
+import { API_URL } from "./apiClient";
 
-export function createSignalingChannel(incidentId, uid) {
-  return doc(db, "incidents", incidentId, "signaling", uid);
-}
+const LOG = "[SignalSvc]";
 
-export function listenSignaling(incidentId, remoteUid, callbacks) {
-  const ref = createSignalingChannel(incidentId, remoteUid);
-  const seenIce = new Set();
-  let forwardedOffer = false;
-  let forwardedAnswer = false;
+let socket = null;
+let currentIncidentId = null;
 
-  console.log("[Signal] listen start", incidentId, remoteUid);
+const callbacks = {
+  onOffer: null,
+  onAnswer: null,
+  onIce: null,
+  onBye: null,
+};
 
-  return onSnapshot(ref, (snap) => {
-    if (!snap.exists()) { console.log("[Signal] snap no doc"); return; }
-    const data = snap.data();
-    console.log("[Signal] snap type=" + (data.type || "?") + " ice=" + ((data.ice && data.ice.length) || 0) + " sdp=" + (data.sdp ? "yes" : "no"));
+/**
+ * Connect to the /signaling namespace.
+ * @param {string} token JWT access token
+ */
+export function connectSignaling(token) {
+  if (socket?.connected) {
+    console.log(`${LOG} already connected`);
+    return socket;
+  }
 
-    if (data.type === "offer" && data.sdp && !forwardedOffer) {
-      forwardedOffer = true;
-      console.log("[Signal] forwarding offer");
-      try { callbacks?.onOffer?.(JSON.parse(data.sdp)); } catch { callbacks?.onOffer?.(data.sdp); }
-    }
+  socket = io(`${API_URL}/signaling`, {
+    auth: { token },
+    transports: ["websocket"],
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionAttempts: 5,
+  });
 
-    if (data.type === "answer" && data.sdp && !forwardedAnswer) {
-      forwardedAnswer = true;
-      console.log("[Signal] forwarding answer");
-      try { callbacks?.onAnswer?.(JSON.parse(data.sdp)); } catch { callbacks?.onAnswer?.(data.sdp); }
-    }
-
-    if (data.ice && Array.isArray(data.ice)) {
-      data.ice.forEach((c) => {
-        if (!seenIce.has(c)) {
-          seenIce.add(c);
-          let parsed = c;
-          try { parsed = JSON.parse(c); } catch {}
-          callbacks?.onIce?.(parsed);
-        }
-      });
+  socket.on("connect", () => {
+    console.log(`${LOG} connected ${socket.id}`);
+    if (currentIncidentId) {
+      joinIncident(currentIncidentId);
     }
   });
-}
 
-export async function sendOffer(incidentId, uid, sdp) {
-  console.log("[Signal] sendOffer", incidentId, uid, sdp ? "sdp=" + sdp.sdp?.substring(0, 40) + "..." : "no sdp");
-  const ref = createSignalingChannel(incidentId, uid);
-  await setDoc(ref, {
-    type: "offer",
-    sdp: JSON.stringify(sdp),
-    role: "",
-    createdAt: serverTimestamp(),
-    ice: [],
+  socket.on("connect_error", async (err) => {
+    console.warn(`${LOG} connect_error`, err.message);
   });
-  console.log("[Signal] sendOffer done");
-}
 
-export async function sendAnswer(incidentId, uid, sdp) {
-  console.log("[Signal] sendAnswer", incidentId, uid, sdp ? "sdp=" + sdp.sdp?.substring(0, 40) + "..." : "no sdp");
-  const ref = createSignalingChannel(incidentId, uid);
-  await setDoc(ref, {
-    type: "answer",
-    sdp: JSON.stringify(sdp),
-    role: "",
-    createdAt: serverTimestamp(),
-    ice: [],
+  socket.on("disconnect", (reason) => {
+    console.log(`${LOG} disconnected`, reason);
   });
-  console.log("[Signal] sendAnswer done");
+
+  socket.on("signal:offer", (data) => {
+    console.log(`${LOG} << offer`);
+    callbacks.onOffer?.(data.sdp);
+  });
+
+  socket.on("signal:answer", (data) => {
+    console.log(`${LOG} << answer`);
+    callbacks.onAnswer?.(data.sdp);
+  });
+
+  socket.on("signal:ice", (data) => {
+    console.log(`${LOG} << ice`);
+    callbacks.onIce?.(data.candidate);
+  });
+
+  socket.on("signal:bye", () => {
+    console.log(`${LOG} << bye`);
+    callbacks.onBye?.();
+  });
+
+  return socket;
 }
 
-export async function sendIceCandidate(incidentId, uid, candidate) {
-  console.log("[Signal] sendIce", incidentId, uid);
-  const ref = createSignalingChannel(incidentId, uid);
-  try {
-    await updateDoc(ref, {
-      ice: arrayUnion(JSON.stringify(candidate)),
-    });
-  } catch (e) {
-    console.log("[Signal] sendIce error", e.message);
+/**
+ * Join the room for a specific incident.
+ * @param {string} incidentId
+ */
+export function joinIncident(incidentId) {
+  currentIncidentId = incidentId;
+  if (!socket?.connected) {
+    console.warn(`${LOG} cannot join, socket not connected`);
+    return;
+  }
+  socket.emit("join", { incidentId });
+  console.log(`${LOG} join incident:${incidentId}`);
+}
+
+export function sendOffer(sdp) {
+  if (!socket?.connected || !currentIncidentId) return;
+  console.log(`${LOG} >> offer`);
+  socket.emit("signal:offer", { incidentId: currentIncidentId, sdp });
+}
+
+export function sendAnswer(sdp) {
+  if (!socket?.connected || !currentIncidentId) return;
+  console.log(`${LOG} >> answer`);
+  socket.emit("signal:answer", { incidentId: currentIncidentId, sdp });
+}
+
+export function sendIce(candidate) {
+  if (!socket?.connected || !currentIncidentId) return;
+  console.log(`${LOG} >> ice`);
+  socket.emit("signal:ice", { incidentId: currentIncidentId, candidate });
+}
+
+export function sendBye() {
+  if (!socket?.connected || !currentIncidentId) return;
+  console.log(`${LOG} >> bye`);
+  socket.emit("signal:bye", { incidentId: currentIncidentId });
+}
+
+export function onOffer(cb) {
+  callbacks.onOffer = cb;
+}
+
+export function onAnswer(cb) {
+  callbacks.onAnswer = cb;
+}
+
+export function onIce(cb) {
+  callbacks.onIce = cb;
+}
+
+export function onBye(cb) {
+  callbacks.onBye = cb;
+}
+
+export function disconnect() {
+  currentIncidentId = null;
+  if (socket) {
+    socket.disconnect();
+    socket = null;
   }
 }
 
-export async function clearSignaling(incidentId, uid) {
-  const ref = createSignalingChannel(incidentId, uid);
-  try {
-    await deleteDoc(ref);
-  } catch {}
+export function isConnected() {
+  return !!socket?.connected;
 }

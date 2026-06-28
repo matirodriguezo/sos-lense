@@ -25,8 +25,22 @@ import {
   startManaging,
   markMessageAsRead,
 } from "../../services/incidentService";
-import { getUser } from "../../services/authService";
+import { getUser, getToken } from "../../services/authService";
+import {
+  connectSignaling,
+  joinIncident,
+  sendOffer,
+  sendAnswer,
+  sendIce,
+  sendBye,
+  onOffer,
+  onAnswer,
+  onIce,
+  onBye,
+  disconnect as disconnectSignaling,
+} from "../../services/signalingService";
 import MessageBubble from "../../components/MessageBubble";
+import WebRTCView from "../../components/WebRTCView";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -59,22 +73,57 @@ export default function IncidentManagementScreen({ route, navigation }) {
   const markedRef = useRef(new Set());
   const pulseAnim = useRef(new Animated.Value(0)).current;
   const pollRef = useRef(null);
+  const webRef = useRef(null);
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
-  // Simulated connecting sequence
+  const endCall = useCallback(() => {
+    try {
+      webRef.current?.hangUp?.();
+    } catch {}
+    sendBye();
+    disconnectSignaling();
+    navigation.reset({ index: 0, routes: [{ name: "DispatchPanel" }] });
+  }, [navigation]);
+
   useEffect(() => {
     console.log("[IncidentMgmt] Mounted, incident:", incidentId, "autoOpenChat:", autoOpenChat);
-    const timer = setTimeout(() => {
-      setConnecting(false);
-      setCallActive(true);
-      console.log("[IncidentMgmt] Connection established");
-    }, 3000);
+
+    async function bootstrap() {
+      const token = await getToken();
+      const user = await getUser();
+      if (user?.userId) setUserId(user.userId);
+      if (token) {
+        connectSignaling(token);
+        joinIncident(incidentId);
+      }
+    }
+
+    bootstrap();
+
+    onOffer((sdp) => {
+      console.log("[IncidentMgmt] forwarding offer to WebRTC");
+      webRef.current?.forwardSignaling?.("offer", sdp);
+    });
+    onAnswer((sdp) => {
+      console.log("[IncidentMgmt] forwarding answer to WebRTC");
+      webRef.current?.forwardSignaling?.("answer", sdp);
+    });
+    onIce((candidate) => {
+      console.log("[IncidentMgmt] forwarding ice to WebRTC");
+      webRef.current?.forwardSignaling?.("ice", candidate);
+    });
+    onBye(() => {
+      console.log("[IncidentMgmt] peer hung up");
+      Alert.alert("Llamada finalizada", "El ciudadano ha cerrado la llamada.");
+      endCall();
+    });
+
     return () => {
-      clearTimeout(timer);
+      disconnectSignaling();
       console.log("[IncidentMgmt] Unmounted");
     };
-  }, []);
+  }, [incidentId, autoOpenChat, endCall]);
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -86,6 +135,35 @@ export default function IncidentManagementScreen({ route, navigation }) {
     pulse.start();
     return () => pulse.stop();
   }, []);
+
+  const handleWebRTCMessage = useCallback((type, data) => {
+    console.log("[IncidentMgmt] WebRTC >>", type);
+    switch (type) {
+      case "ready":
+        joinIncident(incidentId);
+        setConnecting(false);
+        setCallActive(true);
+        break;
+      case "offer":
+        sendOffer(data);
+        break;
+      case "answer":
+        sendAnswer(data);
+        break;
+      case "ice":
+        sendIce(data);
+        break;
+      case "disconnected":
+      case "hangup":
+        endCall();
+        break;
+      case "error":
+        console.error("[IncidentMgmt] WebRTC error:", data);
+        break;
+      default:
+        break;
+    }
+  }, [incidentId, endCall]);
 
   const loadData = useCallback(async () => {
     try {
@@ -106,6 +184,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
 
       if (inc && !inc.officerId) {
         await assignOfficer(incidentId);
+        loadData();
       }
     } catch (e) {
       console.warn("[IncidentMgmt] load error:", e.message);
@@ -192,7 +271,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
       { text: "Cancelar", style: "cancel" },
       { text: "Salir", style: "destructive", onPress: () => {
         console.log("[IncidentMgmt] Officer exited");
-        navigation.goBack();
+        endCall();
       }},
     ]);
   };
@@ -236,21 +315,20 @@ export default function IncidentManagementScreen({ route, navigation }) {
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       <View style={{ flex: 1, position: "relative" }}>
-        {/* Connecting overlay */}
-        {connecting ? (
-          <View style={s.connectingContainer}>
+        <WebRTCView
+          ref={webRef}
+          style={StyleSheet.absoluteFill}
+          onWebRTCMessage={handleWebRTCMessage}
+        />
+
+        {connecting && (
+          <View style={s.centerOverlay}>
             <Animated.View style={[s.pulseCircle, { opacity: pulseOpacity }]}>
               <MaterialCommunityIcons name="cellphone-link" size={64} color="#4ADE80" />
             </Animated.View>
             <Text style={s.connectingText}>Conectando...</Text>
             <Text style={s.connectingSub}>Estableciendo enlace con ciudadano</Text>
             <ActivityIndicator size="small" color="#4ADE80" style={{ marginTop: 20 }} />
-          </View>
-        ) : (
-          <View style={s.connectingContainer}>
-            <MaterialCommunityIcons name="video" size={80} color="#4ADE80" />
-            <Text style={s.connectedText}>VIDEOLLAMADA ACTIVA</Text>
-            <Text style={s.connectedSub}>Conexión establecida con el ciudadano</Text>
           </View>
         )}
 
@@ -376,13 +454,10 @@ export default function IncidentManagementScreen({ route, navigation }) {
 const makeStyles = (colors) =>
   StyleSheet.create({
     container: { flex: 1 },
-
-    connectingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" },
+    centerOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.6)", zIndex: 5 },
     pulseCircle: { width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(74,222,128,0.1)", justifyContent: "center", alignItems: "center" },
     connectingText: { color: "#4ADE80", marginTop: 24, fontSize: 22, fontWeight: "900", letterSpacing: 1 },
     connectingSub: { color: "rgba(255,255,255,0.5)", marginTop: 8, fontSize: 13 },
-    connectedText: { color: "#4ADE80", marginTop: 24, fontSize: 22, fontWeight: "900", letterSpacing: 1 },
-    connectedSub: { color: "rgba(255,255,255,0.5)", marginTop: 8, fontSize: 13 },
 
     header: {
       position: "absolute", left: 0, right: 0, zIndex: 10,

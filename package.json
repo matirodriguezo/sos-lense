@@ -24,7 +24,8 @@
     "react-native": "0.81.5",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
-    "react-native-webview": "13.17.0"
+    "react-native-webview": "13.17.0",
+    "socket.io-client": "^4.8.0"
   },
   "resolutions": {
     "postcss": ">=8.5.10",
