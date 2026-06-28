@@ -18,6 +18,7 @@ import { CreateIncidentDto } from './dto/create-incident.dto';
 import { UpdateTypeDto } from './dto/update-type.dto';
 import { CloseIncidentDto } from './dto/close-incident.dto';
 import { RadiusQueryDto } from './dto/radius-query.dto';
+import { SinceQueryDto } from './dto/since-query.dto';
 
 interface RequestWithUser extends Request {
   user: {
@@ -39,6 +40,16 @@ export class IncidentsController {
       req.user.userId,
       dto.citizenAlias || '',
       dto,
+    );
+  }
+
+  @Get()
+  @Roles(Role.CITIZEN, Role.OFFICER)
+  findSince(@Query() query: SinceQueryDto, @Request() req: RequestWithUser) {
+    return this.incidentsService.findSince(
+      req.user.userId,
+      req.user.role,
+      query.since,
     );
   }
 

@@ -1,11 +1,12 @@
 import { io } from "socket.io-client";
-import { API_URL } from "./apiClient";
+import { API_URL, apiFetch } from "./apiClient";
 import { refresh as refreshAuth, logout as logoutAuth } from "./authService";
 
 const LOG = "[RealtimeSvc]";
 
 let socket = null;
 let currentToken = null;
+let lastSeenAt = null;
 let isReconnecting = false;
 let listenersAttached = false;
 
@@ -30,6 +31,15 @@ function dispatch(event, data) {
   });
 }
 
+function updateLastSeen(incident) {
+  const updatedAt = incident?.updatedAt;
+  if (!updatedAt) return;
+  const ts = typeof updatedAt === "string" ? updatedAt : updatedAt.toISOString();
+  if (!lastSeenAt || ts > lastSeenAt) {
+    lastSeenAt = ts;
+  }
+}
+
 function isAuthError(err) {
   const msg = (err?.message || "").toLowerCase();
   return (
@@ -46,6 +56,26 @@ function rejoinRooms() {
     socket.emit("subscribe:incident", { incidentId });
     console.log(`${LOG} re-subscribe incident:${incidentId}`);
   });
+}
+
+async function syncSince() {
+  if (!lastSeenAt || !socket?.connected) return;
+  try {
+    const incidents = await apiFetch(
+      `/incidents?since=${encodeURIComponent(lastSeenAt)}`
+    );
+    if (!Array.isArray(incidents)) return;
+
+    incidents.forEach((incident) => {
+      updateLastSeen(incident);
+      // Push the delta into the same handlers that process live events.
+      // Existing screens reload their lists on any incident event, so
+      // `incident:updated` is sufficient for both modified and newly-visible incidents.
+      dispatch("incident:updated", { incident });
+    });
+  } catch (e) {
+    console.warn(`${LOG} delta sync failed:`, e.message);
+  }
 }
 
 /**
@@ -76,6 +106,7 @@ export function connectRealtime(token) {
     console.log(`${LOG} connected ${socket.id}`);
     isReconnecting = false;
     rejoinRooms();
+    syncSince();
   });
 
   socket.on("connect_error", async (err) => {
@@ -119,6 +150,13 @@ export function connectRealtime(token) {
     Object.keys(listeners).forEach((event) => {
       socket.on(event, (data) => {
         console.log(`${LOG} << ${event}`);
+        if (
+          event === "incident:created" ||
+          event === "incident:updated" ||
+          event === "incident:status-changed"
+        ) {
+          updateLastSeen(data?.incident);
+        }
         dispatch(event, data);
       });
     });
@@ -165,6 +203,7 @@ export function disconnect() {
     socket = null;
   }
   currentToken = null;
+  lastSeenAt = null;
   isReconnecting = false;
   activeSubscriptions.clear();
   Object.keys(listeners).forEach((key) => {

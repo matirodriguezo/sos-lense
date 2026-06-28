@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { IncidentStatus, Role } from '@prisma/client';
+import { IncidentStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 
 export interface RadiusIncident {
@@ -122,6 +122,44 @@ export class IncidentsService {
     return this.prisma.incident.findMany({
       where: { citizenId },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findSince(userId: string, role: Role, since?: string) {
+    let sinceDate: Date | undefined;
+    if (since !== undefined && since !== null && since !== '') {
+      sinceDate = new Date(since);
+      if (Number.isNaN(sinceDate.getTime())) {
+        throw new BadRequestException('since must be a valid ISO8601 timestamp');
+      }
+    }
+
+    const baseWhere: Prisma.IncidentWhereInput =
+      role === Role.OFFICER
+        ? {
+            OR: [
+              {
+                status: {
+                  in: [
+                    IncidentStatus.NO_CLASIFICADO,
+                    IncidentStatus.ACTIVO,
+                    IncidentStatus.EN_CURSO,
+                  ],
+                },
+              },
+              { officerId: userId },
+            ],
+          }
+        : { citizenId: userId };
+
+    const where: Prisma.IncidentWhereInput = { ...baseWhere };
+    if (sinceDate) {
+      where.updatedAt = { gte: sinceDate };
+    }
+
+    return this.prisma.incident.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
     });
   }
 
