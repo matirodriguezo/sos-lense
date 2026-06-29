@@ -11,7 +11,7 @@ import {
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { login, storeUser } from "../../services/authService";
+import { login, register, storeUser } from "../../services/authService";
 import { ROLES } from "../../constants/roles";
 import { useTheme } from "../../context/ThemeContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
