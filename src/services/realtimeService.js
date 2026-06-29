@@ -134,6 +134,10 @@ export function connectRealtime(token) {
       if (!data?.accessToken) {
         throw new Error("refresh returned no access token");
       }
+      // Reset so the new socket re-binds the incident:/message: dispatch
+      // listeners. Without this, the guard at the bottom of connectRealtime
+      // skips attach and live push goes deaf until app restart.
+      listenersAttached = false;
       connectRealtime(data.accessToken);
     } catch (e) {
       console.warn(`${LOG} token refresh failed, logging out:`, e.message);
