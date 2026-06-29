@@ -13,6 +13,9 @@ import { IncidentStatus, Role } from '@prisma/client';
 import { WsJwtGuard, WsUser } from '../auth/ws-jwt.guard';
 import { PrismaService } from '../prisma.service';
 
+// WsJwtGuard is injected and called in handleConnection because
+// @UseGuards does NOT apply to the connection event in Nest WS gateways.
+
 interface RoomPeer {
   socketId: string;
   userId: string;
@@ -31,16 +34,20 @@ export class SignalingGateway
   // socketId -> incidentId
   private socketRoom = new Map<string, string>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly wsGuard: WsJwtGuard,
+  ) {}
 
   handleConnection(client: Socket) {
-    // WsJwtGuard attaches user to client.data.user
-    const user = client.data?.user as WsUser | undefined;
-    if (!user) {
+    try {
+      const user = this.wsGuard.verifyClient(client);
+      client.data.user = user;
+      console.log(`[Signaling] connected ${client.id} user=${user.userId}`);
+    } catch (e) {
+      console.warn(`[Signaling] auth failed ${client.id}: ${e.message}`);
       client.disconnect(true);
-      return;
     }
-    console.log(`[Signaling] connected ${client.id} user=${user.userId}`);
   }
 
   handleDisconnect(client: Socket) {

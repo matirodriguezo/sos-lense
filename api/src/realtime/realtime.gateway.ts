@@ -19,20 +19,24 @@ export class RealtimeGateway
   @WebSocketServer()
   server: Server;
 
-  handleConnection(client: Socket) {
-    const user = client.data?.user as WsUser | undefined;
-    if (!user) {
-      client.disconnect(true);
-      return;
-    }
+  constructor(private readonly wsGuard: WsJwtGuard) {}
 
-    const userRoom =
-      user.role === Role.OFFICER
-        ? `officer:${user.userId}`
-        : `citizen:${user.userId}`;
-    client.join(userRoom);
-    client.join('incidents:active');
-    console.log(`[Realtime] connected ${client.id} → ${userRoom}`);
+  handleConnection(client: Socket) {
+    try {
+      const user = this.wsGuard.verifyClient(client);
+      client.data.user = user;
+
+      const userRoom =
+        user.role === Role.OFFICER
+          ? `officer:${user.userId}`
+          : `citizen:${user.userId}`;
+      client.join(userRoom);
+      client.join('incidents:active');
+      console.log(`[Realtime] connected ${client.id} → ${userRoom}`);
+    } catch (e) {
+      console.warn(`[Realtime] auth failed ${client.id}: ${e.message}`);
+      client.disconnect(true);
+    }
   }
 
   handleDisconnect(client: Socket) {

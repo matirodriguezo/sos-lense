@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { WsException } from '@nestjs/websockets';
 import { Role } from '@prisma/client';
+import { Socket } from 'socket.io';
 import { JwtPayload } from './auth.service';
 
 export interface WsUser {
@@ -18,31 +19,39 @@ export class WsJwtGuard implements CanActivate {
     private readonly config: ConfigService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
-    const client = context.switchToWs().getClient();
+  /**
+   * Verify the JWT from a socket.io client's handshake and return the user.
+   * Throws WsException on any failure (missing/invalid/expired token).
+   * Shared by canActivate (message guards) and handleConnection (gateways).
+   */
+  verifyClient(client: Socket): WsUser {
     const token = client.handshake?.auth?.token;
 
     if (!token || typeof token !== 'string') {
       throw new WsException('Missing authentication token');
     }
 
-    try {
-      const secret = this.config.get<string>('JWT_ACCESS_SECRET');
-      if (!secret) {
-        throw new WsException('JWT secret not configured');
-      }
-      const payload = this.jwt.verify<JwtPayload>(token, { secret });
-      if (!payload?.sub || !Object.values(Role).includes(payload.role)) {
-        throw new WsException('Invalid token payload');
-      }
-      client.data.user = {
-        userId: payload.sub,
-        email: payload.email,
-        role: payload.role,
-      } as WsUser;
-      return true;
-    } catch {
-      throw new WsException('Invalid or expired token');
+    const secret = this.config.get<string>('JWT_ACCESS_SECRET');
+    if (!secret) {
+      throw new WsException('JWT secret not configured');
     }
+
+    const payload = this.jwt.verify<JwtPayload>(token, { secret });
+    if (!payload?.sub || !Object.values(Role).includes(payload.role)) {
+      throw new WsException('Invalid token payload');
+    }
+
+    return {
+      userId: payload.sub,
+      email: payload.email,
+      role: payload.role,
+    } as WsUser;
+  }
+
+  canActivate(context: ExecutionContext): boolean {
+    const client = context.switchToWs().getClient<Socket>();
+    const user = this.verifyClient(client);
+    client.data.user = user;
+    return true;
   }
 }
