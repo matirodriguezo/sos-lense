@@ -17,7 +17,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Location from "expo-location";
-import { logout, getUser, getToken } from "../../services/authService";
+import { getUser, getToken } from "../../services/authService";
 import { triggerSOS, listCitizenHistory } from "../../services/incidentService";
 import {
   connectRealtime,
@@ -27,6 +27,7 @@ import {
 import { getCurrentAlias } from "../../services/userStore";
 import { INCIDENT_STATUS } from "../../constants/roles";
 import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
 import { useNotifications } from "../../context/NotificationContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -41,6 +42,7 @@ const POLL_INTERVAL = 10000;
 
 export default function HomeScreen({ navigation }) {
   const { colors, isDark } = useTheme();
+  const { signOut } = useAuth();
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [isPressing, setIsPressing] = useState(false);
@@ -250,8 +252,9 @@ export default function HomeScreen({ navigation }) {
       }, 1200);
     } catch (e) {
       console.error(`${LOG} SOS error:`, e);
+      const msg = e?.message || e?.error || e?.data?.message || "No se pudo crear la alerta. Verifica tu conexión.";
       setLoading(false);
-      Alert.alert("Error", "No se pudo crear la alerta. Verifica tu conexión.");
+      Alert.alert("Error", String(msg));
     }
   };
 
@@ -259,7 +262,7 @@ export default function HomeScreen({ navigation }) {
     setMenuVisible(false);
     Alert.alert("Cerrar sesión", "¿Estás seguro de que deseas salir?", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Salir", style: "destructive", onPress: () => logout() },
+      { text: "Salir", style: "destructive", onPress: () => signOut() },
     ]);
   };
 

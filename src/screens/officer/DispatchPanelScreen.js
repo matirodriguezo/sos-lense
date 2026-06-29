@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import { logout, getUser, getToken } from "../../services/authService";
+import { getUser, getToken } from "../../services/authService";
 import {
   listActiveIncidents,
   listAllCancelled,
@@ -26,6 +26,7 @@ import {
   disconnect as disconnectRealtime,
 } from "../../services/realtimeService";
 import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
 import { getShiftStart } from "../../services/userStore";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -82,6 +83,7 @@ const getElapsedTime = (createdAt) => {
 
 export default function DispatchPanelScreen({ navigation }) {
   const { colors } = useTheme();
+  const { signOut } = useAuth();
   const [activeTab, setActiveTab] = useState("activos");
   const insets = useSafeAreaInsets();
   const [activos, setActivos] = useState([]);
@@ -153,7 +155,7 @@ export default function DispatchPanelScreen({ navigation }) {
     setMenuVisible(false);
     Alert.alert("Finalizar Turno", "¿Estás seguro de finalizar tu turno? Los casos no cerrados se perderán.", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Finalizar Turno", style: "destructive", onPress: () => logout() },
+      { text: "Finalizar Turno", style: "destructive", onPress: () => signOut() },
     ]);
   };
 

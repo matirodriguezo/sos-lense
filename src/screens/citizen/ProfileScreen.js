@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { logout, getUser } from "../../services/authService";
+import { getUser } from "../../services/authService";
 import { listCitizenHistory } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function CitizenProfileScreen({ navigation }) {
   const { colors, isDark, toggleTheme } = useTheme();
+  const { signOut } = useAuth();
   const [userData, setUserData] = useState(null);
   const [caseCount, setCaseCount] = useState(0);
 
@@ -30,7 +32,7 @@ export default function CitizenProfileScreen({ navigation }) {
 
   const handleLogout = async () => {
     try {
-      await logout();
+      await signOut();
     } catch (e) {
       console.warn("[CitizenProfile] logout error:", e.message);
     }
