@@ -28,6 +28,9 @@ RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
 
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
+
 EXPOSE 3000
 
-CMD ["node", "dist/main.js"]
+CMD ["./entrypoint.sh"]
