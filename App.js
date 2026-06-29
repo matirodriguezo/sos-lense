@@ -2,6 +2,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "./src/context/ThemeContext";
 import { NotificationProvider } from "./src/context/NotificationContext";
+import { AuthProvider } from "./src/context/AuthContext";
 import NotificationBanner from "./src/components/NotificationBanner";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Component } from "react";
@@ -51,10 +52,12 @@ class ErrorBoundary extends Component {
 
 function AppInner() {
   return (
-    <>
-      <AppNavigator />
-      <NotificationBanner />
-    </>
+    <AuthProvider>
+      <>
+        <AppNavigator />
+        <NotificationBanner />
+      </>
+    </AuthProvider>
   );
 }
 

@@ -11,14 +11,16 @@ import {
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { login, register, storeUser } from "../../services/authService";
+import { login, register } from "../../services/authService";
 import { ROLES } from "../../constants/roles";
 import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function LoginScreen({ navigation }) {
   const { colors } = useTheme();
+  const { signIn } = useAuth();
   const [rut, setRut] = useState("");
   const [alias, setAlias] = useState("");
   const [password, setPassword] = useState("");
@@ -41,7 +43,7 @@ export default function LoginScreen({ navigation }) {
     try {
       const email = buildEmail();
       await login(email, password);
-      await storeUser({
+      await signIn({
         email,
         role: ROLES.CITIZEN,
         alias: "",
@@ -72,7 +74,7 @@ export default function LoginScreen({ navigation }) {
     try {
       const email = buildEmail();
       await register(email, password, rut, alias.trim());
-      await storeUser({
+      await signIn({
         email,
         role: ROLES.CITIZEN,
         alias: alias.trim(),
