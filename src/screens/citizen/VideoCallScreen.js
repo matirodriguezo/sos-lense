@@ -14,6 +14,8 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Vibration,
+  ScrollView,
 } from "react-native";
 import {
   addQuickRequest,
@@ -109,6 +111,21 @@ export default function VideoCallScreen({ route, navigation }) {
 
     bootstrap();
 
+    // Safety timeout: if WebRTC never sends "ready" in 15s, hide loading
+    // so the user isn't stuck on "Conectando con CENCO" forever.
+    const timeout = setTimeout(() => {
+      setConnecting((prev) => {
+        if (prev) {
+          console.warn("[VideoCall] safety timeout — WebRTC never became ready");
+          Alert.alert(
+            "Tiempo de espera agotado",
+            "No se pudo establecer la videollamada. Es posible que necesites conceder permisos de cámara y micrófono."
+          );
+        }
+        return false;
+      });
+    }, 15000);
+
     onRealtime("message:created", loadData);
     onRealtime("message:read", loadData);
     onRealtime("incident:updated", loadData);
@@ -133,6 +150,7 @@ export default function VideoCallScreen({ route, navigation }) {
     });
 
     return () => {
+      clearTimeout(timeout);
       disconnectSignaling();
       disconnectRealtime();
       console.log("[VideoCall] Unmounted");
@@ -173,6 +191,8 @@ export default function VideoCallScreen({ route, navigation }) {
         break;
       case "error":
         console.error("[VideoCall] WebRTC error:", data);
+        setConnecting(false);
+        Alert.alert("Error de videollamada", String(data || "No se pudo acceder a la cámara/micrófono. Verificá los permisos en la configuración del dispositivo."));
         break;
       default:
         break;
