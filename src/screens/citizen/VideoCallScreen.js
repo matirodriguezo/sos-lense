@@ -16,6 +16,7 @@ import {
   Easing,
   Vibration,
   ScrollView,
+  PermissionsAndroid,
 } from "react-native";
 import {
   addQuickRequest,
@@ -75,6 +76,7 @@ export default function VideoCallScreen({ route, navigation }) {
   const [incident, setIncident] = useState(null);
   const [callActive, setCallActive] = useState(false);
   const [connecting, setConnecting] = useState(true);
+  const [mediaReady, setMediaReady] = useState(false);
   const [userId, setUserId] = useState(null);
   const flatListRef = useRef(null);
   const insets = useSafeAreaInsets();
@@ -97,7 +99,50 @@ export default function VideoCallScreen({ route, navigation }) {
   useEffect(() => {
     console.log("[VideoCall] Mounted, incident:", incidentId, "autoOpenChat:", autoOpenChat);
 
+    async function requestMediaPermissions() {
+      if (Platform.OS === "android") {
+        try {
+          const camera = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+            {
+              title: "Permiso de micrófono",
+              message: "S.O.S. Carabineros necesita acceso al micrófono para la videollamada con CENCO.",
+              buttonPositive: "Permitir",
+              buttonNegative: "Denegar",
+            }
+          );
+          const audio = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.CAMERA,
+            {
+              title: "Permiso de cámara",
+              message: "S.O.S. Carabineros necesita acceso a la cámara para la videollamada con CENCO.",
+              buttonPositive: "Permitir",
+              buttonNegative: "Denegar",
+            }
+          );
+          if (camera === PermissionsAndroid.RESULTS.GRANTED && audio === PermissionsAndroid.RESULTS.GRANTED) {
+            console.log("[VideoCall] media permissions granted");
+            setMediaReady(true);
+          } else {
+            console.warn("[VideoCall] media permissions denied");
+            Alert.alert(
+              "Permisos denegados",
+              "Necesitás conceder permisos de cámara y micrófono para la videollamada.",
+              [{ text: "Volver", onPress: () => navigation.goBack() }]
+            );
+            setConnecting(false);
+          }
+        } catch (e) {
+          console.warn("[VideoCall] permission request error:", e.message);
+          setMediaReady(true); // try anyway; WebView may still prompt
+        }
+      } else {
+        setMediaReady(true); // iOS: WebView triggers system dialog
+      }
+    }
+
     async function bootstrap() {
+      await requestMediaPermissions();
       const token = await getToken();
       const user = await getUser();
       if (user?.userId) setUserId(user.userId);
@@ -317,11 +362,13 @@ export default function VideoCallScreen({ route, navigation }) {
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       <View style={{ flex: 1, position: "relative" }}>
-        <WebRTCView
-          ref={webRef}
-          style={StyleSheet.absoluteFill}
-          onWebRTCMessage={handleWebRTCMessage}
-        />
+        {mediaReady && (
+          <WebRTCView
+            ref={webRef}
+            style={StyleSheet.absoluteFill}
+            onWebRTCMessage={handleWebRTCMessage}
+          />
+        )}
 
         {connecting && (
           <View style={s.centerOverlay}>
