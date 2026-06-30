@@ -18,12 +18,14 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useFocusEffect } from "@react-navigation/native";
 import { signOut } from "firebase/auth";
 import * as Location from "expo-location";
+import NetInfo from "@react-native-community/netinfo";
 import { auth } from "../../firebase/firebaseConfig";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../firebase/firebaseConfig";
 import { triggerSOS, listenCitizenHistory } from "../../services/incidentService";
 import { getCurrentAlias } from "../../services/userStore";
-import { INCIDENT_STATUS } from "../../constants/roles";
+import { INCIDENT_STATUS, CENCO_PHONE } from "../../constants/roles";
+import { sendSOSBySMS } from "../../services/smsFallback";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
@@ -218,14 +220,24 @@ export default function HomeScreen({ navigation }) {
 
       setLoadingMessage("Enviando ubicación a CENCO...");
       const address = await getAddress(latitude, longitude);
-      const incidentId = await triggerSOS(user.uid, { latitude, longitude, address, citizenAlias });
 
-      console.log(`${LOG} Incident created: ${incidentId}`);
+      const netState = await NetInfo.fetch();
+      const isOnline = netState.isConnected && netState.isInternetReachable !== false;
+
+      let incidentId = null;
+      if (isOnline) {
+        incidentId = await triggerSOS(user.uid, { latitude, longitude, address, citizenAlias });
+        console.log(`${LOG} Incident created: ${incidentId}`);
+      } else {
+        console.log(`${LOG} Offline — falling back to SMS`);
+        await sendSOSBySMS([CENCO_PHONE], { latitude, longitude, address, alias: citizenAlias });
+      }
+
       setLoadingMessage("Ubicación enviada ✓");
 
       setTimeout(() => {
         setLoading(false);
-        navigation.navigate("DetailPrompt", { incidentId, address });
+        navigation.navigate("DetailPrompt", { incidentId, address, sentViaSMS: !isOnline });
       }, 1200);
     } catch (e) {
       console.error(`${LOG} SOS error:`, e);

@@ -14,7 +14,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 export default function DetailPromptScreen({ route, navigation }) {
   const { colors, isDark } = useTheme();
-  const { incidentId, address } = route.params;
+  const { incidentId, address, sentViaSMS } = route.params;
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -53,7 +53,9 @@ export default function DetailPromptScreen({ route, navigation }) {
 
         <Text style={[s.title, { color: colors.textPrimary }]}>Alerta Enviada</Text>
         <Text style={[s.subtitle, { color: colors.textSecondary }]}>
-          Tu ubicación ha sido enviada a la Central de Carabineros (CENCO).
+          {sentViaSMS
+            ? "Tu ubicacion fue enviada por SMS a CENCO. Cuando recuperes conexion podras dar mas detalles."
+            : "Tu ubicacion ha sido enviada a la Central de Carabineros (CENCO)."}
         </Text>
 
         <View style={[s.locationCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -70,24 +72,35 @@ export default function DetailPromptScreen({ route, navigation }) {
           ¿Deseas dar más detalles sobre la emergencia?
         </Text>
 
-        <TouchableOpacity
-          style={[s.yesBtn, { backgroundColor: colors.primary }]}
-          onPress={handleYes}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons name="gesture-tap" size={22} color={colors.white} />
-          <Text style={s.yesBtnText}>Sí, clasificar mi emergencia</Text>
-        </TouchableOpacity>
+        {sentViaSMS ? (
+          <View style={[s.smsBanner, { backgroundColor: colors.warning + "20", borderColor: colors.warning }]}>
+            <Ionicons name="information-circle-outline" size={20} color={colors.warning} />
+            <Text style={[s.smsBannerText, { color: colors.textPrimary }]}>
+              Conectate a internet para clasificar tu emergencia y videollamar con CENCO.
+            </Text>
+          </View>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={[s.yesBtn, { backgroundColor: colors.primary }]}
+              onPress={handleYes}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="gesture-tap" size={22} color={colors.white} />
+              <Text style={s.yesBtnText}>Sí, clasificar mi emergencia</Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[s.noBtn, { borderColor: colors.border }]}
-          onPress={handleNo}
-          activeOpacity={0.8}
-        >
-          <Text style={[s.noBtnText, { color: colors.textSecondary }]}>
-            No, conectar directamente con CENCO
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.noBtn, { borderColor: colors.border }]}
+              onPress={handleNo}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.noBtnText, { color: colors.textSecondary }]}>
+                No, conectar directamente con CENCO
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
       </Animated.View>
     </SafeAreaView>
   );
@@ -126,4 +139,10 @@ const makeStyles = (colors) =>
       width: "100%",
     },
     noBtnText: { fontSize: 14, fontWeight: "600" },
+    smsBanner: {
+      flexDirection: "row", alignItems: "center",
+      borderRadius: 12, padding: 16, borderWidth: 1,
+      gap: 12, width: "100%", marginBottom: 16,
+    },
+    smsBannerText: { flex: 1, fontSize: 13, lineHeight: 18 },
   });

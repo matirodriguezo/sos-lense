@@ -18,6 +18,8 @@ export const INCIDENT_TYPES = [
   { id: "OTRO", label: "Otro", icon: "help-circle-outline" },
 ];
 
+export const CENCO_PHONE = "+56944481456";
+
 export const QUICK_REQUESTS = [
   "Necesito una ambulancia",
   "Necesito intérprete de señas",
