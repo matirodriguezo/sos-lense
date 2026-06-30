@@ -11,3 +11,5 @@ npm-debug.*
 web-build/
 .DS_Store
 *.log
+api/.env
+.env
