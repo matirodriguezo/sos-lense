@@ -18,7 +18,7 @@ export const INCIDENT_TYPES = [
   { id: "OTRO", label: "Otro", icon: "help-circle-outline" },
 ];
 
-export const CENCO_PHONE = "+56944481456";
+export const CENCO_PHONE = process.env.EXPO_PUBLIC_FIREBASE_CENCO_PHONE;
 
 export const QUICK_REQUESTS = [
   "Necesito una ambulancia",
