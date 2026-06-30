@@ -50,7 +50,7 @@ const makeStyles = (colors) =>
   StyleSheet.create({
     container: {
       position: "absolute",
-      bottom: 160,
+      bottom: 100,
       right: 16,
       zIndex: 999,
     },

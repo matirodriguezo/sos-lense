@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { View } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useTheme } from "../context/ThemeContext";
 import CitizenTabs from "./CitizenTabs";
@@ -7,18 +6,12 @@ import ClassificationScreen from "../screens/citizen/ClassificationScreen";
 import VideoCallScreen from "../screens/citizen/VideoCallScreen";
 import DetailPromptScreen from "../screens/citizen/DetailPromptScreen";
 import CitizenProfileScreen from "../screens/citizen/ProfileScreen";
-import CamouflageButton from "../components/CamouflageButton";
 import { FONT_SIZE, FONT_WEIGHT } from "../constants/theme";
 
 const Stack = createNativeStackNavigator();
 
 function CitizenLayout() {
-  return (
-    <View style={{ flex: 1 }}>
-      <CitizenTabs />
-      <CamouflageButton />
-    </View>
-  );
+  return <CitizenTabs />;
 }
 
 export default function CitizenStack() {

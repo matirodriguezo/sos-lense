@@ -9,6 +9,7 @@ import { setCurrentAlias, setShiftStart } from "../services/userStore";
 import AuthStack from "./AuthStack";
 import CitizenStack from "./CitizenStack";
 import OfficerTabs from "./OfficerTabs";
+import CamouflageButton from "../components/CamouflageButton";
 
 export default function AppNavigator() {
   const { colors } = useTheme();
@@ -62,7 +63,13 @@ export default function AppNavigator() {
   }
 
   if (!user) { console.log("[AppNavigator] No user → AuthStack"); return <AuthStack />; }
-  if (role === ROLES.OFFICER) { console.log("[AppNavigator] Role OFFICER → OfficerTabs"); return <OfficerTabs />; }
-  console.log("[AppNavigator] Role CITIZEN → CitizenStack");
-  return <CitizenStack />;
+
+  const content = role === ROLES.OFFICER ? <OfficerTabs /> : <CitizenStack />;
+
+  return (
+    <View style={{ flex: 1 }}>
+      {content}
+      <CamouflageButton />
+    </View>
+  );
 }
