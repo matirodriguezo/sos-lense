@@ -30,7 +30,6 @@ import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-
 const LOG = "[HomeScreen]";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -302,7 +301,7 @@ export default function HomeScreen({ navigation }) {
               </View>
               <Text style={s.drawerName}>{userData?.alias || "Ciudadano"}</Text>
               {userData?.rut && <Text style={s.drawerRut}>RUT: {userData.rut}</Text>}
-              <Text style={[s.drawerEmail, { color: colors.textSecondary }]}>{auth.currentUser?.email}</Text>
+               <Text style={[s.drawerEmail, { color: colors.whiteTranslucent }]}>{auth.currentUser?.email}</Text>
             </View>
 
             <View style={s.drawerBody}>
@@ -357,7 +356,7 @@ export default function HomeScreen({ navigation }) {
           <TouchableOpacity
             style={[s.activeCallBanner, { backgroundColor: colors.primary }]}
             activeOpacity={0.9}
-            onPress={() => navigation.navigate("VideoCall", { incidentId: activeIncident.id })}
+            onPress={() => navigation.navigate("Classification", { incidentId: activeIncident.id })}
           >
             <View style={s.activeCallDot} />
             <View style={s.activeCallInfo}>
@@ -447,8 +446,8 @@ const makeStyles = (colors, isDark) =>
     drawerHeader: { paddingVertical: 24, paddingHorizontal: 24 },
     drawerAvatar: { width: 60, height: 60, borderRadius: 30, justifyContent: "center", alignItems: "center", marginBottom: 12 },
     drawerName: { color: colors.white, fontSize: 20, fontWeight: "bold" },
-    drawerRut: { color: colors.textSecondary, fontSize: 13, marginTop: 4 },
-    drawerEmail: { color: colors.iconMuted, fontSize: 11, marginTop: 2 },
+    drawerRut: { color: colors.gold, fontSize: 13, marginTop: 4 },
+    drawerEmail: { color: colors.whiteTranslucent, fontSize: 11, marginTop: 2 },
     drawerBody: { flex: 1, paddingTop: 20 },
     lenseDrawerSection: { paddingHorizontal: 24, paddingBottom: 16, marginBottom: 8, borderBottomWidth: 1 },
     lenseDrawerTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 4 },

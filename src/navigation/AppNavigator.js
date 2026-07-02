@@ -69,7 +69,7 @@ export default function AppNavigator() {
   return (
     <View style={{ flex: 1 }}>
       {content}
-      <CamouflageButton />
+      {role === ROLES.CITIZEN && <CamouflageButton />}
     </View>
   );
 }

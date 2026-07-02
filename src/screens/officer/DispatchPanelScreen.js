@@ -20,7 +20,6 @@ import { listenAllActiveIncidents, listenAllCancelled, listenMyCases } from "../
 import { useTheme } from "../../context/ThemeContext";
 import { getShiftStart } from "../../services/userStore";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-
 const STATUS_CONFIG = {
   NO_CLASIFICADO: { label: "Sin clasificar", color: "#F57C00", bg: "#FFF3E0" },
   ACTIVO: { label: "Activo", color: "#D32F2F", bg: "#FFEBEE" },
@@ -264,12 +263,12 @@ export default function DispatchPanelScreen({ navigation }) {
                   <Text style={s.drawerRole}>OPERADOR ACTIVO</Text>
                   <Text style={s.drawerName}>{userData?.alias || "Oficial"}</Text>
                   {userData?.rut && <Text style={s.drawerUnit}>Placa: {userData.rut}</Text>}
-                  <Text style={[s.drawerEmail, { color: colors.emptyText }]}>{auth.currentUser?.email}</Text>
+                  <Text style={[s.drawerEmail, { color: colors.whiteTranslucent }]}>{auth.currentUser?.email}</Text>
                 </View>
               </View>
               <View style={s.statusPillsRow}>
                 <View style={[s.statusPillGreen, { backgroundColor: colors.primary, borderColor: colors.success }]}><Text style={[s.pillTextW, { color: colors.white }]}>● Turno Activo</Text></View>
-                <View style={[s.statusPillDark, { backgroundColor: colors.blackTranslucent }]}><Text style={[s.pillTextG, { color: colors.emptyText }]}>Sector Sur</Text></View>
+                <View style={[s.statusPillDark, { backgroundColor: colors.blackTranslucent }]}><Text style={[s.pillTextG, { color: colors.whiteTranslucent }]}>Sector Sur</Text></View>
               </View>
             </View>
 
@@ -382,7 +381,7 @@ export default function DispatchPanelScreen({ navigation }) {
             <Text style={[s.emptyTitle, { color: colors.textSecondary }]}>
               {activeTab === "activos" ? "Sin incidentes activos" : activeTab === "cancelados" ? "Sin cancelaciones" : "Sin casos asignados"}
             </Text>
-            <Text style={[s.emptySub, { color: colors.emptyText }]}>
+            <Text style={[s.emptySub, { color: colors.textSecondary }]}>
               {activeTab === "activos" ? "Los nuevos requerimientos aparecerán aquí." : activeTab === "cancelados" ? "No hay incidentes cancelados por usuarios." : "Los casos que tomes aparecerán aquí."}
             </Text>
           </View>

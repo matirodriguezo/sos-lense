@@ -18,7 +18,6 @@ import { ROLES } from "../../constants/roles";
 import { useTheme } from "../../context/ThemeContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-
 export default function OfficerLoginScreen({ navigation }) {
   const { colors } = useTheme();
   const [rut, setRut] = useState("");
@@ -93,7 +92,7 @@ export default function OfficerLoginScreen({ navigation }) {
             <View style={s.logoCircle}>
               <MaterialCommunityIcons name="star-circle" size={50} color={colors.gold} />
             </View>
-            <Text style={[s.republicText, { color: colors.textSecondary }]}>REPÚBLICA DE CHILE</Text>
+            <Text style={[s.republicText, { color: colors.whiteTranslucent }]}>REPÚBLICA DE CHILE</Text>
             <Text style={s.welcomeTitle}>S.O.S. CARABINEROS</Text>
             <View style={s.divider} />
             <Text style={[s.portalText, { color: colors.gold }]}>PORTAL DE OPERADORES</Text>

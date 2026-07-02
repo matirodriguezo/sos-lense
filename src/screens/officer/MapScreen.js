@@ -5,7 +5,6 @@ import { auth } from "../../firebase/firebaseConfig";
 import { listenMyCases } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-
 const ACTIVE_STATUSES = ["ACTIVO", "EN_CURSO", "NO_CLASIFICADO"];
 
 const sortByTimeAsc = (a, b) => {
@@ -89,7 +88,7 @@ export default function MapScreen({ navigation }) {
         </TouchableOpacity>
         <View style={{ alignItems: "center" }}>
           <Text style={[s.headerTitle, { color: colors.gold }]}>Mapa Global</Text>
-          <Text style={[s.headerSub, { color: colors.emptyText }]}>
+          <Text style={[s.headerSub, { color: colors.whiteTranslucent }]}>
             {incidents.length} caso{incidents.length !== 1 ? "s" : ""} activo{incidents.length !== 1 ? "s" : ""}
           </Text>
         </View>
@@ -111,12 +110,12 @@ export default function MapScreen({ navigation }) {
         </View>
 
         <View style={[s.bottomList, { backgroundColor: colors.surface }]}>
-          <Text style={[s.listTitle, { color: colors.emptyText }]}>MIS INCIDENTES ACTIVOS</Text>
+          <Text style={[s.listTitle, { color: colors.textSecondary }]}>MIS INCIDENTES ACTIVOS</Text>
           {incidents.length === 0 ? (
             <View style={s.emptyState}>
               <Ionicons name="shield-checkmark-outline" size={48} color={colors.border} />
               <Text style={[s.emptyTitle, { color: colors.textSecondary }]}>Sin incidentes activos</Text>
-              <Text style={[s.emptySub, { color: colors.emptyText }]}>Los casos que tomes aparecerán aquí.</Text>
+              <Text style={[s.emptySub, { color: colors.textSecondary }]}>Los casos que tomes aparecerán aquí.</Text>
             </View>
           ) : (
             incidents.map((item) => (
@@ -215,7 +214,7 @@ const makeStyles = (colors) =>
       position: "absolute", top: 16, left: 16,
       padding: 12, borderRadius: 8,
     },
-    legendTitle: { color: colors.emptyText, fontSize: 10, fontWeight: "bold", marginBottom: 8, letterSpacing: 1 },
+    legendTitle: { color: colors.white, fontSize: 10, fontWeight: "bold", marginBottom: 8, letterSpacing: 1 },
     legendText: { color: colors.white, fontSize: 11, marginBottom: 4 },
 
     bottomList: {

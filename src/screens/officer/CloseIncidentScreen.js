@@ -18,7 +18,6 @@ import { auth } from "../../firebase/firebaseConfig";
 import { useTheme } from "../../context/ThemeContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
 import { Ionicons } from "@expo/vector-icons";
-
 export default function CloseIncidentScreen({ route, navigation }) {
   const { colors, isDark } = useTheme();
   const { incidentId } = route.params;
@@ -82,7 +81,7 @@ export default function CloseIncidentScreen({ route, navigation }) {
       <View style={[s.header, { backgroundColor: colors.drawerHeaderBg }]}>
         <View style={[s.headerIconBox, { backgroundColor: colors.whiteTranslucent }]}><Ionicons name="document-text" size={24} color={colors.gold} /></View>
         <View style={s.headerTexts}>
-            <Text style={[s.headerSub, { color: colors.textSecondary }]}>Caso #{incidentId.slice(0, 8).toUpperCase()}</Text>
+            <Text style={[s.headerSub, { color: colors.gold }]}>Caso #{incidentId.slice(0, 8).toUpperCase()}</Text>
             <Text style={[s.headerTitle, { color: colors.white }]}>Clasificación Final</Text>
         </View>
       </View>

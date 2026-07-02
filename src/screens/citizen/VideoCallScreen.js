@@ -29,7 +29,6 @@ import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-
 const QUICK_OPTIONS = [
   { icon: "medical-outline", label: "Necesito Ambulancia" },
   { icon: "shield-outline", label: "Robo en progreso" },
@@ -41,7 +40,7 @@ const QUICK_OPTIONS = [
 
 export default function VideoCallScreen({ route, navigation }) {
   const { colors } = useTheme();
-  const { incidentId, autoOpenChat } = route.params;
+  const { incidentId, autoOpenChat, chatOnly } = route.params;
   const { enterChat, leaveChat } = useNotifications();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -62,7 +61,13 @@ export default function VideoCallScreen({ route, navigation }) {
 
   // Simulated connecting sequence
   useEffect(() => {
-    console.log("[VideoCall] Mounted, incident:", incidentId, "autoOpenChat:", autoOpenChat);
+    console.log("[VideoCall] Mounted, incident:", incidentId, "chatOnly:", chatOnly, "autoOpenChat:", autoOpenChat);
+    if (chatOnly) {
+      setConnecting(false);
+      setCallActive(false);
+      setShowChatModal(true);
+      return;
+    }
     const timer = setTimeout(() => {
       setConnecting(false);
       setCallActive(true);
@@ -182,6 +187,14 @@ export default function VideoCallScreen({ route, navigation }) {
 
   const isMine = (msg) => msg.senderId === uid;
 
+  const handleGoBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.reset({ index: 0, routes: [{ name: "Home" }] });
+    }
+  };
+
   const pulseOpacity = pulseAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0.3, 1],
@@ -192,8 +205,33 @@ export default function VideoCallScreen({ route, navigation }) {
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       <View style={{ flex: 1, position: "relative" }}>
-        {/* Connecting overlay */}
-        {connecting ? (
+        <TouchableOpacity
+          style={[s.backBtn, { top: insets.top + 8 }]}
+          onPress={handleGoBack}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
+
+        {chatOnly ? (
+          <View style={s.center}>
+            <View style={[s.chatOnlyBadge, { backgroundColor: colors.blueDispatch }]}>
+              <Ionicons name="chatbubbles" size={32} color="#fff" />
+            </View>
+            <Text style={s.connectedText}>Chat con CENCO</Text>
+            <Text style={s.connectingSub}>Comunicación por texto</Text>
+            {!showChatModal && (
+              <TouchableOpacity
+                style={[s.openChatBtn, { backgroundColor: colors.blueDispatch }]}
+                onPress={() => setShowChatModal(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
+                <Text style={s.openChatLabel}>Abrir Chat</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : connecting ? (
           <View style={s.center}>
             <Animated.View style={[s.pulseCircle, { opacity: pulseOpacity }]}>
               <MaterialCommunityIcons name="cellphone-link" size={64} color="#4ADE80" />
@@ -210,13 +248,15 @@ export default function VideoCallScreen({ route, navigation }) {
           </View>
         )}
 
-        <View style={[s.topBar, { top: insets.top }]}>
-          <View style={s.liveBadge}>
-            <View style={s.liveDot} />
-            <Text style={s.liveText}>LLAMADA</Text>
+        {!chatOnly && (
+          <View style={[s.topBar, { top: insets.top }]}>
+            <View style={s.liveBadge}>
+              <View style={s.liveDot} />
+              <Text style={s.liveText}>LLAMADA</Text>
+            </View>
+            {callActive && <View style={[s.liveBadge, { backgroundColor: "#16A34A" }]}><Text style={s.liveText}>CONECTADO</Text></View>}
           </View>
-          {callActive && <View style={[s.liveBadge, { backgroundColor: "#16A34A" }]}><Text style={s.liveText}>CONECTADO</Text></View>}
-        </View>
+        )}
 
         {callActive && (
           <View style={[s.bottomArea, { paddingBottom: insets.bottom + 8 }]}>
@@ -339,6 +379,19 @@ const makeStyles = (colors) =>
     connectingSub: { color: "rgba(255,255,255,0.5)", marginTop: 8, fontSize: 13 },
     connectedText: { color: "#4ADE80", marginTop: 24, fontSize: 22, fontWeight: "900", letterSpacing: 1 },
     connectedSub: { color: "rgba(255,255,255,0.5)", marginTop: 8, fontSize: 13 },
+    backBtn: {
+      position: "absolute", left: 12, zIndex: 20,
+      width: 40, height: 40, borderRadius: 20,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center", alignItems: "center",
+    },
+    chatOnlyBadge: { width: 72, height: 72, borderRadius: 36, justifyContent: "center", alignItems: "center" },
+    openChatBtn: {
+      flexDirection: "row", alignItems: "center", gap: 8,
+      paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24,
+      marginTop: 32,
+    },
+    openChatLabel: { color: "#fff", fontSize: 15, fontWeight: "bold" },
 
     topBar: {
       position: "absolute", left: 0, right: 0, zIndex: 10,

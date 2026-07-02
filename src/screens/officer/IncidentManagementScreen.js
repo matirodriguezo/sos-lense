@@ -32,7 +32,6 @@ import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-
 const DISPATCH_OPTIONS = [
   { id: 1, icon: "police-badge", label: "Despachar Patrulla", color: "#1976D2" },
   { id: 2, icon: "ambulance", label: "Solicitar SAMU", color: "#D32F2F" },

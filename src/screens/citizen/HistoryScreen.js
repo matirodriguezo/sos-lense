@@ -9,14 +9,16 @@ import {
   ActivityIndicator,
   Image,
   Platform,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../firebase/firebaseConfig";
-import { listenCitizenHistory, cancelIncident, sendMessage } from "../../services/incidentService";
+import { listenCitizenHistory, cancelIncident } from "../../services/incidentService";
 import { INCIDENT_STATUS } from "../../constants/roles";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
-
 const TYPE_CONFIG = {
   ACCIDENTE: { icon: "car-outline", label: "Accidente de Tránsito", gifPath: require("../../../assets/gifs/Accidente de transito.gif") },
   ROBO: { icon: "shield-half-outline", label: "Robo o Asalto", gifPath: require("../../../assets/gifs/Robo o Asalto.gif") },
@@ -52,6 +54,9 @@ export default function HistoryScreen({ navigation }) {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("activas");
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelTarget, setCancelTarget] = useState(null);
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
@@ -78,37 +83,30 @@ export default function HistoryScreen({ navigation }) {
   const data = activeTab === "activas" ? activeIncidents : closedIncidents;
 
   const handleCancel = (incident) => {
-    Alert.alert(
-      "Anular incidente",
-      `¿Estás seguro de anular el caso #${incident.id.slice(0, 7).toUpperCase()}?`,
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Sí, anular",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await cancelIncident(incident.id, "Anulado por el ciudadano desde historial");
-              await sendMessage(
-                incident.id,
-                "[ANULADO] Incidente anulado por el ciudadano.",
-                auth.currentUser.uid,
-                "CITIZEN"
-              );
-              Alert.alert("Anulado", "El incidente ha sido cancelado.");
-            } catch {
-              Alert.alert("Error", "No se pudo anular el incidente.");
-            }
-          },
-        },
-      ]
-    );
+    setCancelTarget(incident);
+    setCancelReason("");
+    setShowCancelModal(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelReason.trim()) {
+      Alert.alert("Motivo requerido", "Por favor indica el motivo de la anulación.");
+      return;
+    }
+    try {
+      await cancelIncident(cancelTarget.id, cancelReason.trim());
+      setShowCancelModal(false);
+      setCancelTarget(null);
+      Alert.alert("Anulado", "El incidente ha sido cancelado.");
+    } catch {
+      Alert.alert("Error", "No se pudo anular el incidente.");
+    }
   };
 
   const handleRejoin = (incident) => {
     Alert.alert("Reingresar", "¿Deseas reingresar a este incidente activo?", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Reingresar", onPress: () => navigation.navigate("VideoCall", { incidentId: incident.id }) },
+      { text: "Reingresar", onPress: () => navigation.navigate("Classification", { incidentId: incident.id }) },
     ]);
   };
 
@@ -143,7 +141,7 @@ export default function HistoryScreen({ navigation }) {
 
             <View style={s.locationRow}>
               <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-              <Text style={[s.locationText, { color: colors.emptyText }]} numberOfLines={1}>
+              <Text style={[s.locationText, { color: colors.textSecondary }]} numberOfLines={1}>
                 {item.address || (item.latitude ? `${item.latitude?.toFixed(4)}, ${item.longitude?.toFixed(4)}` : "Sin ubicación")}
               </Text>
             </View>
@@ -178,7 +176,7 @@ export default function HistoryScreen({ navigation }) {
 
         {!isActive && item.closedReason && (
           <View style={[s.reasonRow, { borderTopColor: colors.border }]}>
-            <Text style={[s.reasonLabel, { color: colors.emptyText }]}>Motivo:</Text>
+            <Text style={[s.reasonLabel, { color: colors.textSecondary }]}>Motivo:</Text>
             <Text style={[s.reasonText, { color: colors.textSecondary }]}>{item.closedReason}</Text>
           </View>
         )}
@@ -186,7 +184,7 @@ export default function HistoryScreen({ navigation }) {
     );
   };
 
-  if (loading) {
+    if (loading) {
     return (
       <SafeAreaView style={[s.safeArea, { backgroundColor: colors.background }]}>
         <View style={s.loadingContainer}>
@@ -248,7 +246,7 @@ export default function HistoryScreen({ navigation }) {
             <Text style={[s.emptyTitle, { color: colors.textSecondary }]}>
               {activeTab === "activas" ? "Sin incidentes activos" : "Sin historial"}
             </Text>
-            <Text style={[s.emptySub, { color: colors.emptyText }]}>
+            <Text style={[s.emptySub, { color: colors.textSecondary }]}>
               {activeTab === "activas"
                 ? "No tienes llamadas SOS activas en este momento."
                 : "Los incidentes cerrados aparecerán aquí."}
@@ -256,6 +254,33 @@ export default function HistoryScreen({ navigation }) {
           </View>
         }
       />
+
+      {/* Cancel modal */}
+      <Modal visible={showCancelModal} transparent animationType="fade">
+        <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <View style={[s.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[s.modalTitle, { color: colors.textPrimary }]}>Anular Incidente</Text>
+            <Text style={[s.modalSub, { color: colors.textSecondary }]}>Indica el motivo de la anulación:</Text>
+            <TextInput
+              style={[s.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.textPrimary }]}
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              placeholder="Motivo de la anulación..."
+              placeholderTextColor={colors.iconMuted}
+              multiline
+              textAlignVertical="top"
+            />
+            <View style={s.modalButtons}>
+              <TouchableOpacity style={[s.modalCancelBtn, { borderColor: colors.border }]} onPress={() => setShowCancelModal(false)}>
+                <Text style={[s.modalCancelText, { color: colors.textPrimary }]}>Volver</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.modalConfirmBtn, { backgroundColor: colors.danger }]} onPress={handleConfirmCancel}>
+                <Text style={s.modalConfirmText}>Anular Incidente</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -320,4 +345,15 @@ const makeStyles = (colors) =>
     reasonRow: { marginTop: 12, borderTopWidth: 1, paddingTop: 12 },
     reasonLabel: { fontSize: 11, fontWeight: "bold", marginBottom: 4 },
     reasonText: { fontSize: 13, fontStyle: "italic" },
+
+    modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.6)" },
+    modalContent: { borderRadius: 16, padding: 24, width: "85%", maxWidth: 400 },
+    modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 4 },
+    modalSub: { fontSize: 14, marginBottom: 16 },
+    modalInput: { borderRadius: 10, padding: 16, fontSize: 14, borderWidth: 1, minHeight: 100 },
+    modalButtons: { flexDirection: "row", gap: 12, marginTop: 20 },
+    modalCancelBtn: { flex: 1, height: 48, borderRadius: 10, justifyContent: "center", alignItems: "center", borderWidth: 1 },
+    modalCancelText: { fontWeight: "bold" },
+    modalConfirmBtn: { flex: 1, height: 48, borderRadius: 10, justifyContent: "center", alignItems: "center" },
+    modalConfirmText: { color: "#fff", fontWeight: "bold" },
   });

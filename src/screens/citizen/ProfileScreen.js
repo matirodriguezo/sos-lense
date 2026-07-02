@@ -7,7 +7,6 @@ import { auth, db } from "../../firebase/firebaseConfig";
 import { listenCitizenHistory } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-
 export default function CitizenProfileScreen({ navigation }) {
   const { colors, isDark, toggleTheme } = useTheme();
   const [userData, setUserData] = useState(null);

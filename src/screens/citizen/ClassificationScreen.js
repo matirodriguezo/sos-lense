@@ -1,22 +1,25 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   StatusBar,
   Alert,
   Image,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase/firebaseConfig";
-import { cancelIncident } from "../../services/incidentService";
+import { cancelIncident, getIncident } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
-
 const INCIDENT_OPTIONS = [
   { id: "ACCIDENTE", icon: "car-outline", label: "Accidente de Tránsito", gifPath: require("../../../assets/gifs/Accidente de transito.gif") },
   { id: "ROBO", icon: "shield-half-outline", label: "Robo o Asalto", gifPath: require("../../../assets/gifs/Robo o Asalto.gif") },
@@ -28,18 +31,31 @@ export default function ClassificationScreen({ route, navigation }) {
   const { colors, isDark } = useTheme();
   const { incidentId } = route.params;
   const [selected, setSelected] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [restored, setRestored] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
   const insets = useSafeAreaInsets();
 
   const [loadedCount, setLoadedCount] = useState(0);
   const numGifs = INCIDENT_OPTIONS.filter((opt) => opt.gifPath).length;
   const allGifsReady = loadedCount >= numGifs;
 
-  const s = useMemo(() => makeStyles(colors), [colors]);
+  const s = useMemo(() => makeStyles(colors, insets), [colors, insets]);
 
-  const classifyAndNavigate = async (id) => {
+  useEffect(() => {
+    (async () => {
+      const incident = await getIncident(incidentId);
+      if (incident?.type && incident.type !== "Por definir") {
+        setSelected(incident.type);
+        setRestored(true);
+        console.log("[Classification] Pre-selected type:", incident.type);
+      }
+    })();
+  }, [incidentId]);
+
+  const selectCategory = async (id) => {
     setSelected(id);
-    setSubmitting(true);
+    setRestored(false);
     console.log("[Classification] Selected type:", id, "incident:", incidentId);
 
     try {
@@ -48,34 +64,57 @@ export default function ClassificationScreen({ route, navigation }) {
         status: "ACTIVO",
         updatedAt: new Date().toISOString(),
       });
-
-      setTimeout(() => {
-        navigation.replace("VideoCall", { incidentId });
-      }, 1200);
     } catch {
-      setSubmitting(false);
       Alert.alert("Error", "No se pudo actualizar el tipo de emergencia.");
     }
   };
 
-  const confirmCancel = () => {
-    Alert.alert(
-      "Cancelar alerta",
-      "¿Estás seguro de que deseas cancelar esta alerta?",
-      [
-        { text: "Seguir reportando", style: "cancel" },
-        {
-          text: "Cancelar alerta",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await cancelIncident(incidentId, "Cancelado por el usuario");
-            } catch {}
-            navigation.goBack();
-          },
+  const handleOpenCancel = () => {
+    setCancelReason("");
+    setShowCancelModal(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelReason.trim()) {
+      Alert.alert("Motivo requerido", "Por favor indica el motivo de la anulación.");
+      return;
+    }
+    Alert.alert("Confirmar anulación", `¿Estás seguro de anular este incidente?\n\nMotivo: ${cancelReason.trim()}`, [
+      { text: "Seguir reportando", style: "cancel" },
+      {
+        text: "Anular incidente",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await cancelIncident(incidentId, cancelReason.trim());
+            setShowCancelModal(false);
+            navigation.reset({ index: 0, routes: [{ name: "Home" }] });
+          } catch (e) {
+            Alert.alert("Error", "No se pudo anular el incidente.");
+          }
         },
-      ]
-    );
+      },
+    ]);
+  };
+
+  const handleGoBack = () => {
+    navigation.goBack();
+  };
+
+  const handleVideoCall = () => {
+    if (!selected) {
+      Alert.alert("Selecciona un tipo", "Primero debes clasificar tu emergencia para continuar.");
+      return;
+    }
+    navigation.navigate("VideoCall", { incidentId });
+  };
+
+  const handleChatOnly = () => {
+    if (!selected) {
+      Alert.alert("Selecciona un tipo", "Primero debes clasificar tu emergencia para continuar.");
+      return;
+    }
+    navigation.navigate("VideoCall", { incidentId, chatOnly: true });
   };
 
   return (
@@ -97,103 +136,191 @@ export default function ClassificationScreen({ route, navigation }) {
       )}
 
       {/* Navbar */}
-      <View style={[s.navbar, { backgroundColor: colors.headerBg, borderBottomColor: colors.border, paddingTop: 12 + insets.top }]}>
-        <TouchableOpacity style={s.closeButton} onPress={confirmCancel}>
-          <Ionicons name="close" size={28} color={colors.textPrimary} />
+      <View style={[s.navbar, { backgroundColor: colors.headerBg, height: insets.top + 32 }]}>
+        <TouchableOpacity style={s.backButton} onPress={handleGoBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="arrow-back" size={20} color={colors.white} />
         </TouchableOpacity>
-        <Text style={[s.stepText, { color: colors.textPrimary }]}>Paso 1 de 2</Text>
-        <Text style={[s.sosLabel, { color: colors.primary }]}>S.O.S.</Text>
       </View>
 
       <View style={s.content}>
-        <Text style={[s.questionTitle, { color: colors.textPrimary }]}>¿Qué pasó?</Text>
-        <Text style={[s.questionSub, { color: colors.textSecondary }]}>
-          Seleccione la categoría de su emergencia
-        </Text>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={s.scrollInner} showsVerticalScrollIndicator={false}>
+          <Text style={[s.questionTitle, { color: colors.textPrimary }]}>¿Qué pasó?</Text>
+          <Text style={[s.questionSub, { color: colors.textSecondary }]}>
+            Seleccione la categoría de su emergencia
+          </Text>
+          {restored && (
+            <View style={[s.restoredHint, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "30" }]}>
+              <Ionicons name="refresh" size={12} color={colors.primary} />
+              <Text style={[s.restoredHintText, { color: colors.primary }]}>Se ha restaurado tu última selección</Text>
+            </View>
+          )}
 
-        {/* 2x2 Grid */}
-        <View style={s.grid}>
-          {INCIDENT_OPTIONS.map((item) => {
-            const isSelected = selected === item.id;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  s.card,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                  isSelected && { borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.greenTranslucent },
-                ]}
-                onPress={() => classifyAndNavigate(item.id)}
-                disabled={submitting}
-                activeOpacity={0.7}
-              >
-                {isSelected && (
-                  <View style={[s.checkBadge, { backgroundColor: colors.primary }]}>
-                    <Ionicons name="checkmark" size={14} color={colors.white} />
-                  </View>
-                )}
-                {item.gifPath ? (
-                  allGifsReady ? (
-                    <Image 
-                      source={item.gifPath}
-                      style={s.gifIcon}
-                      resizeMode="contain"
-                    />
-                  ) : (
-                    <View style={s.gifIconLoader}>
-                      <ActivityIndicator color={colors.primary} />
+          {/* 2x2 Grid */}
+          <View style={s.grid}>
+            {INCIDENT_OPTIONS.map((item) => {
+              const isSelected = selected === item.id;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    s.card,
+                    { backgroundColor: colors.surface, borderColor: colors.border },
+                    isSelected && { borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.greenTranslucent },
+                  ]}
+                  onPress={() => selectCategory(item.id)}
+                  disabled={false}
+                  activeOpacity={0.7}
+                >
+                  {isSelected && (
+                    <View style={[s.checkBadge, { backgroundColor: colors.primary }]}>
+                      <Ionicons name="checkmark" size={14} color={colors.white} />
                     </View>
-                  )
-                ) : (
-                  <Ionicons 
-                    name={item.icon} 
-                    size={42} 
-                    color={isSelected ? colors.primary : colors.iconMuted}
-                    style={{ marginBottom: 12 }} 
-                  />
-                )}
-                <Text style={[s.cardLabel, { color: colors.textPrimary }, isSelected && { color: colors.primary }]}>
-                  {item.label}
-                </Text>
+                  )}
+                  {item.gifPath ? (
+                    allGifsReady ? (
+                      <Image 
+                        source={item.gifPath}
+                        style={s.gifIcon}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <View style={s.gifIconLoader}>
+                        <ActivityIndicator color={colors.primary} />
+                      </View>
+                    )
+                  ) : (
+                    <Ionicons 
+                      name={item.icon} 
+                      size={42} 
+                      color={isSelected ? colors.primary : colors.iconMuted}
+                      style={{ marginBottom: 12 }} 
+                    />
+                  )}
+                  <Text style={[s.cardLabel, { color: colors.textPrimary }, isSelected && { color: colors.primary }]}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <TouchableOpacity
+            style={[
+              s.otherCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              selected === "OTRO" && { borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.greenTranslucent },
+            ]}
+            onPress={() => selectCategory("OTRO")}
+            activeOpacity={0.7}
+          >
+            {selected === "OTRO" && (
+              <View style={[s.otherCheckBadge, { backgroundColor: colors.primary }]}>
+                <Ionicons name="checkmark" size={14} color={colors.white} />
+              </View>
+            )}
+            <Ionicons name="help-circle-outline" size={24} color={selected === "OTRO" ? colors.primary : colors.iconMuted} />
+            <Text style={[s.otherCardText, { color: colors.textPrimary }, selected === "OTRO" && { color: colors.primary }]}>
+              No sé / Otro tipo de emergencia
+            </Text>
+          </TouchableOpacity>
+
+          {/* Direct options */}
+          <View style={s.directSection}>
+            <Text style={[s.directLabel, { color: colors.textSecondary }]}>O accede directamente a:</Text>
+
+            <View style={s.directRow}>
+              <TouchableOpacity
+                style={[
+                  s.directBtn,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  !selected && { opacity: 0.45, borderColor: colors.iconMuted },
+                ]}
+                onPress={handleVideoCall}
+                activeOpacity={0.8}
+              >
+                <View style={[s.directIconWrap, { backgroundColor: colors.primary + "20" }]}>
+                  <Ionicons name="videocam" size={22} color={selected ? colors.primary : colors.iconMuted} />
+                </View>
+                <Text style={[s.directBtnLabel, { color: selected ? colors.textPrimary : colors.textSecondary }]}>Videollamada</Text>
+                <Text style={[s.directBtnSub, { color: colors.textSecondary }]}>Con CENCO</Text>
               </TouchableOpacity>
-            );
-          })}
-        </View>
 
-        <TouchableOpacity style={s.otherLink} onPress={() => classifyAndNavigate("OTRO")} disabled={submitting}>
-          <Text style={[s.otherLinkText, { color: colors.primary }]}>No sé / Otro tipo de emergencia</Text>
+              <TouchableOpacity
+                style={[
+                  s.directBtn,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  !selected && { opacity: 0.45, borderColor: colors.iconMuted },
+                ]}
+                onPress={handleChatOnly}
+                activeOpacity={0.8}
+              >
+                <View style={[s.directIconWrap, { backgroundColor: colors.blueDispatch + "20" }]}>
+                  <Ionicons name="chatbubbles" size={22} color={selected ? colors.blueDispatch : colors.iconMuted} />
+                </View>
+                <Text style={[s.directBtnLabel, { color: selected ? colors.textPrimary : colors.textSecondary }]}>Solo Chat</Text>
+                <Text style={[s.directBtnSub, { color: colors.textSecondary }]}>Texto con CENCO</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Cancel + selected bar (pinned at bottom) */}
+        <TouchableOpacity style={s.cancelLink} onPress={handleOpenCancel}>
+          <Ionicons name="close-circle-outline" size={16} color={colors.danger} />
+          <Text style={[s.cancelLinkText, { color: colors.danger }]}>Anular este incidente</Text>
         </TouchableOpacity>
-      </View>
 
-      {/* Loading overlay */}
-      {submitting && (
-        <View style={[s.loadingOverlay, { backgroundColor: colors.overlay }]}>
-          <View style={[s.loadingBox, { backgroundColor: colors.surface }]}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[s.loadingText, { color: colors.textPrimary }]}>
-              Conectando con CENCO...
+        {selected && (
+          <View style={s.selectedBar}>
+            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+            <Text style={[s.selectedBarText, { color: colors.success }]} numberOfLines={1}>
+              {restored ? "Clasificación anterior — elige cómo comunicarte" : "Incidente clasificado — elige cómo comunicarte"}
             </Text>
           </View>
-        </View>
-      )}
+        )}
+      </View>
+
+      {/* Cancel modal */}
+      <Modal visible={showCancelModal} transparent animationType="fade">
+        <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <View style={[s.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[s.modalTitle, { color: colors.textPrimary }]}>Anular Incidente</Text>
+            <Text style={[s.modalSub, { color: colors.textSecondary }]}>Indica el motivo de la anulación:</Text>
+            <TextInput
+              style={[s.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.textPrimary }]}
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              placeholder="Motivo de la anulación..."
+              placeholderTextColor={colors.iconMuted}
+              multiline
+              textAlignVertical="top"
+            />
+            <View style={s.modalButtons}>
+              <TouchableOpacity style={[s.modalCancelBtn, { borderColor: colors.border }]} onPress={() => setShowCancelModal(false)}>
+                <Text style={[s.modalCancelText, { color: colors.textPrimary }]}>Volver</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.modalConfirmBtn, { backgroundColor: colors.danger }]} onPress={handleConfirmCancel}>
+                <Text style={s.modalConfirmText}>Anular Incidente</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
-const makeStyles = (colors) =>
+const makeStyles = (colors, insets) =>
   StyleSheet.create({
     safeArea: { flex: 1 },
     navbar: {
-      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-      paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1,
+      flexDirection: "row", alignItems: "flex-end",
+      paddingHorizontal: 8, paddingBottom: 4,
     },
-    closeButton: { width: 44, height: 44, justifyContent: "center", alignItems: "center" },
-    stepText: { fontSize: 16, fontWeight: "bold" },
-    sosLabel: { fontSize: 16, fontWeight: "900", letterSpacing: 1 },
+    backButton: { width: 32, height: 32, justifyContent: "center", alignItems: "center" },
     
-    content: { flex: 1, paddingHorizontal: 24, paddingTop: 24 },
+    content: { flex: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(insets.bottom, 12) },
+    scrollInner: { paddingBottom: 8 },
     
     questionTitle: { fontSize: 26, fontWeight: "bold", marginBottom: 4 },
     questionSub: { fontSize: 14, marginBottom: 24 },
@@ -203,7 +330,6 @@ const makeStyles = (colors) =>
       width: "47%", aspectRatio: 1.05,
       borderRadius: 12, justifyContent: "center", alignItems: "center",
       borderWidth: 1, position: "relative", padding: 10,
-      shadowColor: colors.textPrimary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
     },
     checkBadge: {
       position: "absolute", top: 10, right: 10, width: 20, height: 20,
@@ -218,17 +344,56 @@ const makeStyles = (colors) =>
     },
     cardLabel: { fontSize: 13, fontWeight: "600", textAlign: "center", paddingHorizontal: 4 },
     
-    otherLink: { alignItems: "center", marginTop: 32 },
-    otherLinkText: { fontSize: 14, fontWeight: "bold", textDecorationLine: "underline" },
-    
-    loadingOverlay: {
-      position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-      justifyContent: "center", alignItems: "center", zIndex: 200,
+    otherCard: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
+      marginTop: 24, paddingVertical: 14, paddingHorizontal: 20,
+      borderRadius: 12, borderWidth: 1, gap: 8, position: "relative",
     },
-    loadingBox: {
-      borderRadius: 20, padding: 36, alignItems: "center",
-      width: SCREEN_WIDTH * 0.75,
-      shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 8,
+    otherCheckBadge: {
+      position: "absolute", top: 6, right: 6, width: 18, height: 18,
+      borderRadius: 9, justifyContent: "center", alignItems: "center",
+      zIndex: 2,
     },
-    loadingText: { fontSize: 16, fontWeight: "600", marginTop: 20, textAlign: "center" },
+    otherCardText: { fontSize: 14, fontWeight: "600" },
+
+    restoredHint: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
+      gap: 6, paddingVertical: 6, paddingHorizontal: 12,
+      borderRadius: 8, borderWidth: 1, marginBottom: 6,
+    },
+    restoredHintText: { fontSize: 11, fontWeight: "600" },
+
+    directSection: { marginTop: 32, gap: 12 },
+    directLabel: { fontSize: 12, fontWeight: "600", textAlign: "center", letterSpacing: 0.5 },
+    directRow: { flexDirection: "row", gap: 12 },
+    directBtn: {
+      flex: 1, alignItems: "center", paddingVertical: 16, paddingHorizontal: 12,
+      borderRadius: 14, borderWidth: 1, gap: 8,
+    },
+    directIconWrap: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
+    directBtnLabel: { fontSize: 14, fontWeight: "bold", textAlign: "center" },
+    directBtnSub: { fontSize: 11, textAlign: "center" },
+
+    cancelLink: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
+      paddingVertical: 8, gap: 6,
+    },
+    cancelLinkText: { fontSize: 13, fontWeight: "600" },
+
+    selectedBar: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
+      gap: 8, paddingVertical: 10, paddingHorizontal: 20, paddingBottom: 6,
+    },
+    selectedBarText: { fontSize: 13, fontWeight: "600", flexShrink: 1 },
+
+    modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.6)" },
+    modalContent: { borderRadius: 16, padding: 24, width: "85%", maxWidth: 400 },
+    modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 4 },
+    modalSub: { fontSize: 14, marginBottom: 16 },
+    modalInput: { borderRadius: 10, padding: 16, fontSize: 14, borderWidth: 1, minHeight: 100 },
+    modalButtons: { flexDirection: "row", gap: 12, marginTop: 20 },
+    modalCancelBtn: { flex: 1, height: 48, borderRadius: 10, justifyContent: "center", alignItems: "center", borderWidth: 1 },
+    modalCancelText: { fontWeight: "bold" },
+    modalConfirmBtn: { flex: 1, height: 48, borderRadius: 10, justifyContent: "center", alignItems: "center" },
+    modalConfirmText: { color: "#fff", fontWeight: "bold" },
   });

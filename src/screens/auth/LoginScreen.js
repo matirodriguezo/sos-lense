@@ -18,7 +18,6 @@ import { ROLES } from "../../constants/roles";
 import { useTheme } from "../../context/ThemeContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS, SHADOWS } from "../../constants/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-
 export default function LoginScreen({ navigation }) {
   const { colors } = useTheme();
   const [rut, setRut] = useState("");

@@ -8,118 +8,151 @@ import {
   Animated,
   Dimensions,
   ScrollView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-
+import { Ionicons } from "@expo/vector-icons";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const COL = 4;
+const GAP = 16;
+const PAD = 24;
+const APP_SIZE = Math.floor((SCREEN_WIDTH - PAD * 2 - GAP * (COL - 1)) / COL);
+
 const APPS = [
-  { name: "Calculadora", icon: "calculator-outline", color: "#2563EB" },
-  { name: "Notas", icon: "document-text-outline", color: "#D97706" },
-  { name: "Clima", icon: "partly-sunny-outline", color: "#0891B2" },
-  { name: "Calendario", icon: "calendar-outline", color: "#7C3AED" },
-  { name: "Reloj", icon: "time-outline", color: "#DC2626" },
-  { name: "Galería", icon: "images-outline", color: "#059669" },
-  { name: "Música", icon: "musical-notes-outline", color: "#DB2777" },
-  { name: "Ajustes", icon: "settings-outline", color: "#475569" },
-  { name: "Mapas", icon: "map-outline", color: "#16A34A" },
-  { name: "Teléfono", icon: "call-outline", color: "#2563EB" },
-  { name: "Contactos", icon: "people-outline", color: "#0891B2" },
-  { name: "Cámara", icon: "camera-outline", color: "#475569" },
+  { name: "Teléfono", icon: "call-outline", color: "#34C759" },
+  { name: "Mensajes", icon: "chatbubble-outline", color: "#34C759" },
+  { name: "Correo", icon: "mail-outline", color: "#007AFF" },
+  { name: "Cámara", icon: "camera-outline", color: "#8E8E93" },
+  { name: "Fotos", icon: "images-outline", color: "#FF3B30" },
+  { name: "WhatsApp", icon: "logo-whatsapp", color: "#25D366" },
+  { name: "YouTube", icon: "logo-youtube", color: "#FF0000" },
+  { name: "Instagram", icon: "logo-instagram", color: "#C13584" },
+  { name: "Chrome", icon: "globe-outline", color: "#4285F4" },
+  { name: "Gmail", icon: "mail-unread-outline", color: "#EA4335" },
+  { name: "Mapas", icon: "map-outline", color: "#34C759" },
+  { name: "Reloj", icon: "time-outline", color: "#007AFF" },
+  { name: "Calculadora", icon: "calculator-outline", color: "#5856D6" },
+  { name: "Calendario", icon: "calendar-outline", color: "#FF3B30" },
+  { name: "Notas", icon: "document-text-outline", color: "#FFD60A" },
+  { name: "Clima", icon: "partly-sunny-outline", color: "#5AC8FA" },
+  { name: "Música", icon: "musical-notes-outline", color: "#FF2D55" },
+  { name: "Ajustes", icon: "settings-outline", color: "#8E8E93" },
 ];
 
-export default function FakeAppScreen({ navigation }) {
+const chunkArray = (arr, size) => {
+  const result = [];
+  for (let i = 0; i < arr.length; i += size) {
+    result.push(arr.slice(i, i + size));
+  }
+  return result;
+};
+
+const rows = chunkArray(APPS, COL);
+
+export default function FakeAppScreen({ route, navigation }) {
   const { colors } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.spring(scaleAnim, { toValue: 1, friction: 6, tension: 40, useNativeDriver: true }),
-    ]).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
   }, []);
 
   const handleGoBack = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 0.8, duration: 200, useNativeDriver: true }),
-    ]).start(() => navigation.goBack());
+    const { fromDirectAlert } = route.params || {};
+    Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+      if (fromDirectAlert) {
+        navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+      } else {
+        navigation.goBack();
+      }
+    });
   };
 
   return (
-    <Animated.View style={[s.container, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+    <Animated.View style={[s.container, { opacity: fadeAnim }]}>
       <SafeAreaView style={s.safeArea}>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <StatusBar barStyle="dark-content" backgroundColor={Platform.OS === "android" ? "#fff" : undefined} />
 
-        {/* Home screen content */}
-        <ScrollView contentContainerStyle={s.grid}>
-          {APPS.map((app, i) => (
-            <TouchableOpacity key={i} style={s.appItem} activeOpacity={0.5} onPress={() => {}}>
-              <View style={[s.appIcon, { backgroundColor: app.color + "18" }]}>
-                <Ionicons name={app.icon} size={28} color={app.color} />
-              </View>
-              <Text style={s.appLabel}>{app.name}</Text>
-            </TouchableOpacity>
+        <ScrollView contentContainerStyle={s.grid} showsVerticalScrollIndicator={false}>
+          {rows.map((row, rowIndex) => (
+            <View key={rowIndex} style={s.row}>
+              {row.map((app, colIndex) => (
+                <TouchableOpacity key={colIndex} style={s.appItem} activeOpacity={0.5} onPress={() => {}}>
+                  <View style={[s.appIcon, { backgroundColor: app.color + "18" }]}>
+                    <Ionicons name={app.icon} size={26} color={app.color} />
+                  </View>
+                  <Text style={s.appLabel} numberOfLines={1}>{app.name}</Text>
+                </TouchableOpacity>
+              ))}
+              {row.length < COL && Array.from({ length: COL - row.length }).map((_, i) => (
+                <View key={`ph-${i}`} style={s.appItem} />
+              ))}
+            </View>
           ))}
         </ScrollView>
 
         {/* Dock */}
         <View style={s.dock}>
           <TouchableOpacity style={s.dockItem} activeOpacity={0.5}>
-            <Ionicons name="call-outline" size={24} color="#000" />
+            <Ionicons name="call-outline" size={26} color="#34C759" />
           </TouchableOpacity>
           <TouchableOpacity style={s.dockItem} activeOpacity={0.5}>
-            <Ionicons name="chatbubbles-outline" size={24} color="#000" />
+            <Ionicons name="globe-outline" size={26} color="#007AFF" />
           </TouchableOpacity>
           <TouchableOpacity style={s.dockItem} activeOpacity={0.5}>
-            <Ionicons name="safari-outline" size={24} color="#000" />
+            <Ionicons name="chatbubble-ellipses-outline" size={26} color="#34C759" />
           </TouchableOpacity>
           <TouchableOpacity style={s.dockItem} activeOpacity={0.5}>
-            <Ionicons name="musical-notes-outline" size={24} color="#000" />
+            <Ionicons name="musical-notes-outline" size={26} color="#FF2D55" />
           </TouchableOpacity>
         </View>
 
-        {/* Return button - MUCHO MÁS GRANDE */}
+        {/* Return button */}
         <TouchableOpacity style={s.returnBtn} onPress={handleGoBack} activeOpacity={0.7}>
-          <MaterialCommunityIcons name="arrow-left-circle" size={44} color={colors.primary} />
-          <Text style={s.returnText}>Volver</Text>
+          <Ionicons name="chevron-down" size={18} color="#8E8E93" />
         </TouchableOpacity>
       </SafeAreaView>
     </Animated.View>
   );
 }
 
-const W = (SCREEN_WIDTH - 24 * 5) / 4;
-
 const makeStyles = (colors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: "#fff" },
     safeArea: { flex: 1, backgroundColor: "#fff" },
+
     grid: {
-      flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 24, paddingTop: 48,
-      rowGap: 20, columnGap: 16, paddingBottom: 100,
+      paddingHorizontal: PAD, paddingTop: 32, paddingBottom: 150,
     },
-    appItem: { width: W, alignItems: "center" },
-    appIcon: { width: 56, height: 56, borderRadius: 14, justifyContent: "center", alignItems: "center", marginBottom: 6 },
-    appLabel: { fontSize: 11, color: "#000", fontWeight: "500", textAlign: "center" },
+    row: {
+      flexDirection: "row", justifyContent: "space-between",
+      marginBottom: 22,
+    },
+    appItem: { width: APP_SIZE, alignItems: "center" },
+    appIcon: {
+      width: 58, height: 58, borderRadius: 14,
+      justifyContent: "center", alignItems: "center", marginBottom: 6,
+    },
+    appLabel: { fontSize: 11, color: "#000", fontWeight: "500", textAlign: "center", maxWidth: APP_SIZE - 4 },
+
     dock: {
-      flexDirection: "row", justifyContent: "center", gap: 24,
-      backgroundColor: "rgba(0,0,0,0.05)", paddingVertical: 12,
-      marginHorizontal: 24, borderRadius: 24,
-      position: "absolute", bottom: 100, left: 0, right: 0,
+      flexDirection: "row", justifyContent: "center", gap: 22,
+      paddingVertical: 14, marginHorizontal: 28, borderRadius: 22,
+      position: "absolute", bottom: 68, left: 0, right: 0,
     },
-    dockItem: { width: 50, height: 50, borderRadius: 25, backgroundColor: "rgba(0,0,0,0.05)", justifyContent: "center", alignItems: "center" },
-    returnBtn: {
-      position: "absolute", bottom: 40,
-      left: SCREEN_WIDTH / 2 - 60,
-      width: 120, height: 60, borderRadius: 30,
-      backgroundColor: "rgba(0,0,0,0.06)",
+    dockItem: {
+      width: 52, height: 52, borderRadius: 26,
+      backgroundColor: "rgba(0,0,0,0.04)",
       justifyContent: "center", alignItems: "center",
-      flexDirection: "row", gap: 6,
     },
-    returnText: { fontSize: 16, fontWeight: "600", color: colors.primary },
+
+    returnBtn: {
+      position: "absolute", bottom: 20, alignSelf: "center",
+      width: 44, height: 44, borderRadius: 22,
+      backgroundColor: "rgba(0,0,0,0.04)",
+      justifyContent: "center", alignItems: "center",
+    },
   });

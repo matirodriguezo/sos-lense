@@ -25,7 +25,7 @@ export function NotificationProvider({ children }) {
     if (bannerTimer.current) clearTimeout(bannerTimer.current);
     const navTarget = role === "OFFICER"
       ? { route: "Emergencia", params: { screen: "IncidentManagement", params: { incidentId, autoOpenChat: true } } }
-      : { route: "VideoCall", params: { incidentId, autoOpenChat: true } };
+      : { route: "VideoCall", params: { incidentId, chatOnly: true } };
     setBanner({ senderName, text, incidentId, ...navTarget });
     bannerTimer.current = setTimeout(() => setBanner(null), 4000);
   }, []);
