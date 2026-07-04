@@ -16,7 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { signOut } from "firebase/auth";
 import { auth, db } from "../../firebase/firebaseConfig";
 import { doc, getDoc } from "firebase/firestore";
-import { listenAllActiveIncidents, listenAllCancelled, listenMyCases } from "../../services/incidentService";
+import { listenAllActiveIncidents, listenAllCancelled, listenMyCases, COMM_MODE } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
 import { getShiftStart } from "../../services/userStore";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -42,7 +42,21 @@ const sortByTime = (a, b) => {
   return tB - tA;
 };
 
-  const formatElapsed = (ms) => {
+  const COMM_MODE_LABELS = {
+    NOT_SET: { label: "Sin definir", color: "#94A3B8" },
+    VIDEO_CALL: { label: "Videollamada", color: "#22C55E" },
+    CHAT_ONLY: { label: "Solo Chat", color: "#3B82F6" },
+    ALERT_ONLY: { label: "Alerta ubicación", color: "#F59E0B" },
+  };
+
+  const CITIZEN_STATUS_LABELS = {
+  CITIZEN_IDLE: { label: "Inactivo", color: "#94A3B8" },
+  CITIZEN_CLASSIFYING: { label: "Clasificando", color: "#F59E0B" },
+  CITIZEN_IN_CALL: { label: "En videollamada", color: "#22C55E" },
+  CITIZEN_CHAT_ONLY: { label: "En chat", color: "#3B82F6" },
+};
+
+const formatElapsed = (ms) => {
     const totalSec = Math.floor(ms / 1000);
     const hours = Math.floor(totalSec / 3600);
     const minutes = Math.floor((totalSec % 3600) / 60);
@@ -194,7 +208,24 @@ export default function DispatchPanelScreen({ navigation }) {
             )}
           </View>
           <View style={s.cardInfo}>
-            <Text style={[s.citizenName, { color: colors.textPrimary }]}>{item.citizenAlias || "Usuario LENSE"}</Text>
+            <View style={s.citizenNameRow}>
+              <Text style={[s.citizenName, { color: colors.textPrimary }]}>{item.citizenAlias || "Usuario LENSE"}</Text>
+              {(item.citizenId) && (
+                <View style={[s.citizenStatusBadge, { backgroundColor: (item.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[item.participantStatus.citizen]?.color || "#94A3B8") : "#94A3B8") + "20" }]}>
+                  <View style={[s.citizenStatusDot, { backgroundColor: item.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[item.participantStatus.citizen]?.color || "#94A3B8") : "#94A3B8" }]} />
+                  <Text style={[s.citizenStatusLabel, { color: item.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[item.participantStatus.citizen]?.color || "#94A3B8") : "#94A3B8" }]}>
+                    {item.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[item.participantStatus.citizen]?.label || "Desconocido") : "Sin datos"}
+                  </Text>
+                </View>
+              )}
+              {item.participantStatus?.communication && (
+                <View style={[s.commModeBadge, { backgroundColor: (COMM_MODE_LABELS[item.participantStatus.communication]?.color || "#94A3B8") + "20" }]}>
+                  <Text style={[s.commModeLabel, { color: COMM_MODE_LABELS[item.participantStatus.communication]?.color || "#94A3B8" }]}>
+                    {COMM_MODE_LABELS[item.participantStatus.communication]?.label}
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text style={[s.locationText, { color: colors.textSecondary }]}>{item.address || (item.latitude ? `${item.latitude?.toFixed(4)}, ${item.longitude?.toFixed(4)}` : "Ubicación no disponible")}</Text>
             <Text style={[s.folioText, { color: colors.emptyText }]}>Folio #{item.id.slice(0, 8).toUpperCase()}</Text>
             <Text style={[s.timeLabel, { color: colors.badgeRed }]}>{getElapsedTime(item.createdAt)}</Text>
@@ -470,7 +501,13 @@ const makeStyles = (colors) =>
     iconBox: { width: 48, height: 48, borderRadius: 12, justifyContent: "center", alignItems: "center", marginRight: 16 },
     cardGif: { width: 32, height: 32 },
     cardInfo: { flex: 1 },
+    citizenNameRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 },
     citizenName: { fontSize: 16, fontWeight: "bold" },
+    citizenStatusBadge: { flexDirection: "row", alignItems: "center", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+    citizenStatusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 4 },
+    commModeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+    commModeLabel: { fontSize: 10, fontWeight: "700" },
+    citizenStatusLabel: { fontSize: 10, fontWeight: "bold" },
     locationText: { fontSize: 13, marginTop: 4 },
     folioText: { fontSize: 11, marginTop: 4 },
     assignBtn: { paddingVertical: 14, alignItems: "center" },

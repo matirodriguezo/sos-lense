@@ -11,6 +11,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { updateParticipantStatus, CITIZEN_STATUS, updateCommunicationMode, COMM_MODE } from "../../services/incidentService";
 export default function DetailPromptScreen({ route, navigation }) {
   const { colors, isDark } = useTheme();
   const { incidentId, address, sentViaSMS } = route.params;
@@ -34,6 +35,9 @@ export default function DetailPromptScreen({ route, navigation }) {
   };
 
   const handleDirectAlert = useCallback(async () => {
+    updateCommunicationMode(incidentId, COMM_MODE.ALERT_ONLY).catch(() => {});
+    updateParticipantStatus(incidentId, "CITIZEN", CITIZEN_STATUS.IDLE).catch(() => {});
+
     setSubmitting(true);
     setSubmitPhase("loading");
 

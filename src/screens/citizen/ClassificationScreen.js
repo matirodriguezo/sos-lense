@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,10 +14,11 @@ import {
   Platform,
   ScrollView,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase/firebaseConfig";
-import { cancelIncident, getIncident } from "../../services/incidentService";
+import { cancelIncident, getIncident, updateParticipantStatus, CITIZEN_STATUS, updateCommunicationMode, COMM_MODE } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 const INCIDENT_OPTIONS = [
@@ -41,6 +42,12 @@ export default function ClassificationScreen({ route, navigation }) {
   const allGifsReady = loadedCount >= numGifs;
 
   const s = useMemo(() => makeStyles(colors, insets), [colors, insets]);
+
+  useFocusEffect(
+    useCallback(() => {
+      updateParticipantStatus(incidentId, "CITIZEN", CITIZEN_STATUS.CLASSIFYING).catch(() => {});
+    }, [incidentId])
+  );
 
   useEffect(() => {
     (async () => {
@@ -106,6 +113,7 @@ export default function ClassificationScreen({ route, navigation }) {
       Alert.alert("Selecciona un tipo", "Primero debes clasificar tu emergencia para continuar.");
       return;
     }
+    updateCommunicationMode(incidentId, COMM_MODE.VIDEO_CALL);
     navigation.navigate("VideoCall", { incidentId });
   };
 
@@ -114,6 +122,7 @@ export default function ClassificationScreen({ route, navigation }) {
       Alert.alert("Selecciona un tipo", "Primero debes clasificar tu emergencia para continuar.");
       return;
     }
+    updateCommunicationMode(incidentId, COMM_MODE.CHAT_ONLY);
     navigation.navigate("VideoCall", { incidentId, chatOnly: true });
   };
 
@@ -140,6 +149,7 @@ export default function ClassificationScreen({ route, navigation }) {
         <TouchableOpacity style={s.backButton} onPress={handleGoBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={20} color={colors.white} />
         </TouchableOpacity>
+        <Text style={[s.navTitle, { color: colors.textSecondary }]}>REPÚBLICA DE CHILE</Text>
       </View>
 
       <View style={s.content}>
@@ -318,6 +328,7 @@ const makeStyles = (colors, insets) =>
       paddingHorizontal: 8, paddingBottom: 4,
     },
     backButton: { width: 32, height: 32, justifyContent: "center", alignItems: "center" },
+    navTitle: { fontSize: 13, fontWeight: "600", letterSpacing: 0.5, marginLeft: 10 },
     
     content: { flex: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Math.max(insets.bottom, 12) },
     scrollInner: { paddingBottom: 8 },

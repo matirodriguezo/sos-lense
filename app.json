@@ -45,7 +45,13 @@
       ]
     ],
     "web": {
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "S.O.S. Carabineros — CENCO",
+      "description": "Central de Comunicaciones — Portal de Operadores",
+      "backgroundColor": "#0C0E14",
+      "themeColor": "#083D1E",
+      "barStyle": "light-content",
+      "viewport": "width=device-width, initial-scale=1, maximum-scale=1"
     }
   }
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -23,6 +24,10 @@ import {
   listenIncidentById,
   cancelIncident,
   markMessageAsRead,
+  updateParticipantStatus,
+  CITIZEN_STATUS,
+  COMM_MODE,
+  updateCommunicationMode,
 } from "../../services/incidentService";
 import MessageBubble from "../../components/MessageBubble";
 import { useTheme } from "../../context/ThemeContext";
@@ -79,6 +84,20 @@ export default function VideoCallScreen({ route, navigation }) {
     };
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      const status = chatOnly ? CITIZEN_STATUS.CHAT_ONLY : CITIZEN_STATUS.IN_CALL;
+      updateParticipantStatus(incidentId, "CITIZEN", status).catch(() => {});
+    }, [chatOnly, incidentId])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      const mode = chatOnly ? COMM_MODE.CHAT_ONLY : COMM_MODE.VIDEO_CALL;
+      updateCommunicationMode(incidentId, mode).catch(() => {});
+    }, [chatOnly, incidentId])
+  );
+
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
@@ -103,8 +122,24 @@ export default function VideoCallScreen({ route, navigation }) {
   }, [showChatModal, incidentId]);
 
   useEffect(() => {
+    if (chatOnly) return;
+    if (showChatModal) {
+      updateParticipantStatus(incidentId, "CITIZEN", CITIZEN_STATUS.CHAT_ONLY).catch(() => {});
+    } else {
+      updateParticipantStatus(incidentId, "CITIZEN", CITIZEN_STATUS.IN_CALL).catch(() => {});
+    }
+  }, [showChatModal, chatOnly, incidentId]);
+
+  useEffect(() => {
     if (route.params?.autoOpenChat) setShowChatModal(true);
   }, [route.params]);
+
+  // Auto-scroll to latest message
+  useEffect(() => {
+    if (messages.length > 0 && showChatModal) {
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  }, [messages, showChatModal]);
 
   useEffect(() => {
     if (incident?.status === "CERRADO" || incident?.status === "ANULADO") {

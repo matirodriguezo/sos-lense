@@ -207,3 +207,47 @@ export async function getIncident(incidentId) {
   }
   return null;
 }
+
+/* ─── Participant Status Tracking ─── */
+export const CITIZEN_STATUS = {
+  IDLE: "CITIZEN_IDLE",
+  CLASSIFYING: "CITIZEN_CLASSIFYING",
+  IN_CALL: "CITIZEN_IN_CALL",
+  CHAT_ONLY: "CITIZEN_CHAT_ONLY",
+};
+
+export const OFFICER_STATUS = {
+  IDLE: "OFFICER_IDLE",
+  DISPATCHING: "OFFICER_DISPATCHING",
+  IN_CALL: "OFFICER_IN_CALL",
+  CHATTING: "OFFICER_CHATTING",
+  CLOSING: "OFFICER_CLOSING",
+};
+
+export async function updateParticipantStatus(incidentId, role, status) {
+  const update = { updatedAt: serverTimestamp() };
+  if (role === "CITIZEN") {
+    update["participantStatus.citizen"] = status;
+    update["participantStatus.citizenUpdatedAt"] = serverTimestamp();
+  } else {
+    update["participantStatus.officer"] = status;
+    update["participantStatus.officerUpdatedAt"] = serverTimestamp();
+  }
+  await updateDoc(doc(db, "incidents", incidentId), update);
+}
+
+/* ─── Communication Mode ─── */
+export const COMM_MODE = {
+  NOT_SET: "NOT_SET",
+  VIDEO_CALL: "VIDEO_CALL",
+  CHAT_ONLY: "CHAT_ONLY",
+  ALERT_ONLY: "ALERT_ONLY",
+};
+
+export async function updateCommunicationMode(incidentId, mode) {
+  await updateDoc(doc(db, "incidents", incidentId), {
+    "participantStatus.communication": mode,
+    "participantStatus.communicationUpdatedAt": serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}

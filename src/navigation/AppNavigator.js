@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, View, Platform } from "react-native";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase/firebaseConfig";
@@ -10,6 +10,7 @@ import AuthStack from "./AuthStack";
 import CitizenStack from "./CitizenStack";
 import OfficerTabs from "./OfficerTabs";
 import CamouflageButton from "../components/CamouflageButton";
+import WebNavigator from "./WebNavigator";
 
 export default function AppNavigator() {
   const { colors } = useTheme();
@@ -17,6 +18,10 @@ export default function AppNavigator() {
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const retryCount = useRef(0);
+
+  if (Platform.OS === "web") {
+    return <WebNavigator />;
+  }
 
   useEffect(() => {
     console.log("[AppNavigator] Initializing...");

@@ -25,6 +25,10 @@ import {
   assignOfficer,
   sendSystemMessage,
   markMessageAsRead,
+  updateParticipantStatus,
+  OFFICER_STATUS,
+  CITIZEN_STATUS,
+  COMM_MODE,
 } from "../../services/incidentService";
 import { getCurrentAlias } from "../../services/userStore";
 import MessageBubble from "../../components/MessageBubble";
@@ -37,6 +41,20 @@ const DISPATCH_OPTIONS = [
   { id: 2, icon: "ambulance", label: "Solicitar SAMU", color: "#D32F2F" },
   { id: 3, icon: "chat-processing", label: "Chat de Texto", color: "#424242" },
 ];
+
+const CITIZEN_STATUS_MAP = {
+  [CITIZEN_STATUS.IDLE]: { label: "Ciudadano inactivo", color: "#9E9E9E" },
+  [CITIZEN_STATUS.CLASSIFYING]: { label: "Ciudadano clasificando", color: "#FBC02D" },
+  [CITIZEN_STATUS.IN_CALL]: { label: "Ciudadano en videollamada", color: "#4ADE80" },
+  [CITIZEN_STATUS.CHAT_ONLY]: { label: "Ciudadano en chat", color: "#42A5F5" },
+};
+
+const COMM_MODE_MAP = {
+  [COMM_MODE.NOT_SET]: { label: "Sin definir", color: "#9E9E9E" },
+  [COMM_MODE.VIDEO_CALL]: { label: "Videollamada", color: "#4ADE80" },
+  [COMM_MODE.CHAT_ONLY]: { label: "Solo Chat", color: "#42A5F5" },
+  [COMM_MODE.ALERT_ONLY]: { label: "Alerta de ubicación", color: "#FBC02D" },
+};
 
 export default function IncidentManagementScreen({ route, navigation }) {
   const { colors } = useTheme();
@@ -71,6 +89,23 @@ export default function IncidentManagementScreen({ route, navigation }) {
       console.log("[IncidentMgmt] Unmounted");
     };
   }, []);
+
+  // Track officer status on mount/unmount
+  useEffect(() => {
+    updateParticipantStatus(incidentId, "OFFICER", OFFICER_STATUS.IN_CALL);
+    return () => {
+      updateParticipantStatus(incidentId, "OFFICER", OFFICER_STATUS.IDLE);
+    };
+  }, [incidentId]);
+
+  // Track chat modal open/close
+  useEffect(() => {
+    if (showChatModal) {
+      updateParticipantStatus(incidentId, "OFFICER", OFFICER_STATUS.CHATTING);
+    } else {
+      updateParticipantStatus(incidentId, "OFFICER", OFFICER_STATUS.IN_CALL);
+    }
+  }, [showChatModal, incidentId]);
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -143,6 +178,13 @@ export default function IncidentManagementScreen({ route, navigation }) {
       markMessageAsRead(incidentId, m.id, uid);
     });
   }, [showChatModal, incident?.citizenId]);
+
+  // Auto-scroll to latest message
+  useEffect(() => {
+    if (messages.length > 0 && showChatModal) {
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  }, [messages, showChatModal]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -251,6 +293,16 @@ export default function IncidentManagementScreen({ route, navigation }) {
               <Text style={[s.headerTitle, { color: colors.white }]}>#{incidentId?.slice(0, 8)?.toUpperCase()}</Text>
               <Text style={[s.elapsedText, { color: colors.whiteTranslucent }]}>{elapsed}</Text>
             </View>
+            {(incident?.citizenId) && (
+              <View style={[s.citizenBadge, { backgroundColor: CITIZEN_STATUS_MAP[incident?.participantStatus?.citizen]?.color || "#9E9E9E" }]}>
+                <Text style={s.citizenBadgeText}>{incident?.participantStatus?.citizen ? (CITIZEN_STATUS_MAP[incident.participantStatus.citizen]?.label || "Desconocido") : "Sin datos"}</Text>
+              </View>
+            )}
+            {incident?.participantStatus?.communication && (
+              <View style={[s.commBadge, { backgroundColor: COMM_MODE_MAP[incident.participantStatus.communication]?.color || "#9E9E9E" }]}>
+                <Text style={s.citizenBadgeText}>{COMM_MODE_MAP[incident.participantStatus.communication]?.label || "Desconocido"}</Text>
+              </View>
+            )}
           </View>
           <View style={[s.statusBadge, { backgroundColor: colors.badgeRed }]}>
             <Text style={[s.statusBadgeText, { color: colors.white }]}>● EN CURSO</Text>
@@ -413,4 +465,7 @@ const makeStyles = (colors) =>
     inputRow: { flexDirection: "row", gap: 12, marginTop: 16 },
     chatInput: { flex: 1, borderRadius: 8, paddingHorizontal: 16, height: 48, borderWidth: 1, textAlignVertical: "center" },
     sendBtn: { width: 48, height: 48, borderRadius: 8, justifyContent: "center", alignItems: "center" },
+    citizenBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 4, alignSelf: "center" },
+    commBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 2, alignSelf: "center" },
+    citizenBadgeText: { color: "#fff", fontSize: 9, fontWeight: "bold", letterSpacing: 0.3 },
   });
