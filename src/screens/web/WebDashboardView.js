@@ -93,10 +93,12 @@ const formatShiftTime = () => {
 const ACTIVE_STATUSES = ["NO_CLASIFICADO", "ACTIVO", "EN_CURSO"];
 
 const CITIZEN_STATUS_LABELS = {
+  CITIZEN_ALERT_SENT: { label: "Alerta enviada", color: "#E040FB" },
   CITIZEN_IDLE: { label: "Inactivo", color: "#94A3B8" },
   CITIZEN_CLASSIFYING: { label: "Clasificando", color: "#F59E0B" },
   CITIZEN_IN_CALL: { label: "En videollamada", color: "#22C55E" },
   CITIZEN_CHAT_ONLY: { label: "En chat", color: "#3B82F6" },
+  CITIZEN_IN_FAKE_APP: { label: "En AppCamuflaje", color: "#F97316" },
 };
 
 const COMM_MODE_LABELS = {
@@ -160,7 +162,7 @@ function WebVideoCallPanel({ incidentDetail, onClose }) {
       </View>
       {incidentDetail?.participantStatus?.citizen && (
         <View style={vpStyles.footer}>
-          <View style={[vpStyles.statusDot, { backgroundColor: (CITIZEN_STATUS_LABELS[incidentDetail.participantStatus.citizen]?.color || "#94A3B8") }]} />
+          <View style={[vpStyles.statusDot, { backgroundColor: (incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (CITIZEN_STATUS_LABELS[incidentDetail.participantStatus.citizen]?.color || "#94A3B8") }]} />
           <Text style={vpStyles.footerText}>
             {CITIZEN_STATUS_LABELS[incidentDetail.participantStatus.citizen]?.label || "Desconocido"}
           </Text>
@@ -240,6 +242,8 @@ export default function WebDashboardView() {
   const detailActive = incidentDetail && ACTIVE_STATUSES.includes(incidentDetail.status);
   const selectedActive = selectedIncident && ACTIVE_STATUSES.includes(selectedIncident.status);
   const isSelectedActive = incidentDetail ? detailActive : selectedActive;
+  const isFinal = incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO";
+  const GRAY = "#9CA3AF";
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
@@ -273,23 +277,35 @@ export default function WebDashboardView() {
     }
   }, [messages]);
 
+  // Mark CITIZEN messages as read by officer
+  useEffect(() => {
+    if (!isAssignedToMe || !incidentDetail?.id) return;
+    const msgs = messages.filter(
+      (m) => m.senderRole === "CITIZEN" && !m.readBy?.includes(uid) && !markedRef.current.has(m.id)
+    );
+    msgs.forEach((m) => {
+      markedRef.current.add(m.id);
+      markMessageAsRead(incidentDetail.id, m.id, uid);
+    });
+  }, [messages, isAssignedToMe, incidentDetail?.id]);
+
   // (no auto video call — videollamada is triggered manually via button)
 
   // Officer status tracking
   useEffect(() => {
     if (selectedIncident?.id) {
-      updateParticipantStatus(selectedIncident.id, "OFFICER", OFFICER_STATUS.DISPATCHING);
+      updateParticipantStatus(selectedIncident.id, "OFFICER", OFFICER_STATUS.DISPATCHING).catch(() => {});
     }
     return () => {
       if (selectedIncident?.id) {
-        updateParticipantStatus(selectedIncident.id, "OFFICER", OFFICER_STATUS.IDLE);
+        updateParticipantStatus(selectedIncident.id, "OFFICER", OFFICER_STATUS.IDLE).catch(() => {});
       }
     };
   }, [selectedIncident?.id]);
 
   useEffect(() => {
     if (isAssignedToMe && incidentDetail?.id) {
-      updateParticipantStatus(incidentDetail.id, "OFFICER", OFFICER_STATUS.IN_CALL);
+      updateParticipantStatus(incidentDetail.id, "OFFICER", OFFICER_STATUS.IN_CALL).catch(() => {});
     }
   }, [isAssignedToMe, incidentDetail?.id]);
 
@@ -319,7 +335,7 @@ export default function WebDashboardView() {
     setChatInput("");
     try {
       await sendMessage(selectedIncident.id, text, uid, "OFFICER");
-      updateParticipantStatus(selectedIncident.id, "OFFICER", OFFICER_STATUS.CHATTING);
+      updateParticipantStatus(selectedIncident.id, "OFFICER", OFFICER_STATUS.CHATTING).catch(() => {});
     } catch {}
   };
 
@@ -421,6 +437,8 @@ export default function WebDashboardView() {
     const isSelected = selectedIncident?.id === incident.id;
     const statusCfg = STATUS_CONFIG[incident.status] || {};
     const isMine = incident.officerId === uid;
+    const isFinal = incident.status === "CERRADO" || incident.status === "ANULADO";
+    const GRAY = "#9CA3AF";
     return (
       <TouchableOpacity
         key={incident.id}
@@ -431,26 +449,34 @@ export default function WebDashboardView() {
         ]}
         onPress={() => handleSelectIncident(incident)}
       >
-        <View style={[s.sidebarIcon, { backgroundColor: config.color + "18" }]}>
-          <Ionicons name={config.icon} size={20} color={config.color} />
+        <View style={[s.sidebarIcon, { backgroundColor: isFinal ? GRAY + "18" : config.color + "18" }]}>
+          <Ionicons name={config.icon} size={20} color={isFinal ? GRAY : config.color} />
         </View>
         <View style={s.sidebarContent}>
           <View style={s.sidebarTop}>
-            <Text style={[s.sidebarTitle, { color: colors.textPrimary }]} numberOfLines={1}>{config.label}</Text>
-            <Text style={[s.sidebarTime, { color: colors.danger }]}>{formatElapsed(incident.createdAt)}</Text>
+            <Text style={[s.sidebarTitle, { color: isFinal ? GRAY : colors.textPrimary }]} numberOfLines={1}>{config.label}</Text>
+            <Text style={[s.sidebarTime, { color: isFinal ? GRAY : colors.danger }]}>{formatElapsed(incident.createdAt)}</Text>
           </View>
-          <Text style={[s.sidebarCitizen, { color: colors.textSecondary }]} numberOfLines={1}>
+          <Text style={[s.sidebarCitizen, { color: isFinal ? GRAY : colors.textSecondary }]} numberOfLines={1}>
             {incident.citizenAlias || "Usuario LENSE"}
           </Text>
+          {incident.citizenId && (
+            <View style={s.sidebarCSRow}>
+              <View style={[s.sidebarCSDot, { backgroundColor: isFinal ? GRAY : (incident.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[incident.participantStatus.citizen]?.color || "#94A3B8") : "#94A3B8") }]} />
+              <Text style={[s.sidebarCSText, { color: isFinal ? GRAY : (incident.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[incident.participantStatus.citizen]?.color || "#94A3B8") : "#94A3B8") }]}>
+                {incident.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[incident.participantStatus.citizen]?.label || "Desconocido") : "Sin datos"}
+              </Text>
+            </View>
+          )}
           <View style={s.sidebarBadges}>
             {statusCfg.label && (
-              <View style={[s.badge, { backgroundColor: statusCfg.color + "18" }]}>
-                <Text style={[s.badgeText, { color: statusCfg.color }]}>{statusCfg.label}</Text>
+              <View style={[s.badge, { backgroundColor: (isFinal ? GRAY : statusCfg.color) + "18" }]}>
+                <Text style={[s.badgeText, { color: isFinal ? GRAY : statusCfg.color }]}>{statusCfg.label}</Text>
               </View>
             )}
             {isMine && (
-              <View style={[s.badge, { backgroundColor: colors.primary + "18" }]}>
-                <Text style={[s.badgeText, { color: colors.primary }]}>Mi caso</Text>
+              <View style={[s.badge, { backgroundColor: (isFinal ? GRAY : colors.primary) + "18" }]}>
+                <Text style={[s.badgeText, { color: isFinal ? GRAY : colors.primary }]}>Mi caso</Text>
               </View>
             )}
           </View>
@@ -668,34 +694,34 @@ export default function WebDashboardView() {
               {/* Incident Header */}
               <View style={[s.detailHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
                 <View style={s.detailHeaderLeft}>
-                  <Text style={[s.detailType, { color: colors.textPrimary }]}>
+                  <Text style={[s.detailType, { color: isFinal ? GRAY : colors.textPrimary }]}>
                     {TYPE_CONFIG[incidentDetail?.type]?.label || "Sin clasificar"}
                   </Text>
-                  <Text style={[s.detailFolio, { color: colors.textSecondary }]}>
+                  <Text style={[s.detailFolio, { color: isFinal ? GRAY : colors.textSecondary }]}>
                     Folio #{incidentDetail?.id?.slice(0, 8)?.toUpperCase()}
                   </Text>
                 </View>
                 <View style={s.detailHeaderRight}>
-                  <Text style={[s.detailElapsed, { color: colors.textSecondary }]}>{incidentDetail?.createdAt ? formatElapsed(incidentDetail.createdAt) : ""}</Text>
+                  <Text style={[s.detailElapsed, { color: isFinal ? GRAY : colors.textSecondary }]}>{incidentDetail?.createdAt ? formatElapsed(incidentDetail.createdAt) : ""}</Text>
                   {incidentDetail?.participantStatus?.citizen && (
-                    <View style={[s.citizenHBadge, { backgroundColor: (CITIZEN_STATUS_LABELS[incidentDetail.participantStatus.citizen]?.color || "#94A3B8") + "18" }]}>
-                      <View style={[s.citizenHDot, { backgroundColor: CITIZEN_STATUS_LABELS[incidentDetail.participantStatus.citizen]?.color || "#94A3B8" }]} />
-                      <Text style={[s.citizenHText, { color: CITIZEN_STATUS_LABELS[incidentDetail.participantStatus.citizen]?.color || "#94A3B8" }]}>
+                    <View style={[s.citizenHBadge, { backgroundColor: ((incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (CITIZEN_STATUS_LABELS[incidentDetail.participantStatus.citizen]?.color || "#94A3B8")) + "18" }]}>
+                      <View style={[s.citizenHDot, { backgroundColor: (incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (CITIZEN_STATUS_LABELS[incidentDetail.participantStatus.citizen]?.color || "#94A3B8") }]} />
+                      <Text style={[s.citizenHText, { color: (incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (CITIZEN_STATUS_LABELS[incidentDetail.participantStatus.citizen]?.color || "#94A3B8") }]}>
                         {CITIZEN_STATUS_LABELS[incidentDetail.participantStatus.citizen]?.label}
                       </Text>
                     </View>
                   )}
                   {incidentDetail?.participantStatus?.communication && (
-                    <View style={[s.commBadge, { backgroundColor: (COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8") + "18" }]}>
-                      <MaterialCommunityIcons name={incidentDetail.participantStatus.communication === "VIDEO_CALL" ? "video" : incidentDetail.participantStatus.communication === "CHAT_ONLY" ? "chat" : "map-marker"} size={12} color={COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8"} />
-                      <Text style={[s.commText, { color: COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8" }]}>
+                    <View style={[s.commBadge, { backgroundColor: ((incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8")) + "18" }]}>
+                      <MaterialCommunityIcons name={incidentDetail.participantStatus.communication === "VIDEO_CALL" ? "video" : incidentDetail.participantStatus.communication === "CHAT_ONLY" ? "chat" : "map-marker"} size={12} color={(incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8")} />
+                      <Text style={[s.commText, { color: (incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8") }]}>
                         {COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.label}
                       </Text>
                     </View>
                   )}
                   {incidentDetail?.status && (
-                    <View style={[s.statusBadgeDetail, { backgroundColor: (STATUS_CONFIG[incidentDetail.status]?.color || "#666") + "18" }]}>
-                      <Text style={[s.statusBadgeDetailText, { color: STATUS_CONFIG[incidentDetail.status]?.color || "#666" }]}>
+                    <View style={[s.statusBadgeDetail, { backgroundColor: (isFinal ? GRAY : (STATUS_CONFIG[incidentDetail.status]?.color || "#666")) + "18" }]}>
+                      <Text style={[s.statusBadgeDetailText, { color: isFinal ? GRAY : (STATUS_CONFIG[incidentDetail.status]?.color || "#666") }]}>
                         ● {STATUS_CONFIG[incidentDetail.status]?.label}
                       </Text>
                     </View>
@@ -707,10 +733,10 @@ export default function WebDashboardView() {
                 {/* Left: Chat */}
                 <View style={s.chatSection}>
                   <View style={s.chatHeader}>
-                    <Ionicons name="chatbubble-ellipses" size={18} color={colors.primary} />
-                    <Text style={[s.chatHeaderText, { color: colors.textPrimary }]}>Chat con el ciudadano</Text>
+                    <Ionicons name="chatbubble-ellipses" size={18} color={isFinal ? GRAY : colors.primary} />
+                    <Text style={[s.chatHeaderText, { color: isFinal ? GRAY : colors.textPrimary }]}>Chat con el ciudadano</Text>
                     {incidentDetail?.citizenAlias && (
-                      <Text style={[s.chatHeaderAlias, { color: colors.textSecondary }]}>— {incidentDetail.citizenAlias}</Text>
+                      <Text style={[s.chatHeaderAlias, { color: isFinal ? GRAY : colors.textSecondary }]}>— {incidentDetail.citizenAlias}</Text>
                     )}
                   </View>
 
@@ -736,19 +762,20 @@ export default function WebDashboardView() {
                     <View ref={chatEndRef} />
                   </ScrollView>
 
-                  {isAssignedToMe && (
+                  {(isAssignedToMe || isFinal) && (
                     <View style={[s.chatInputRow, { borderTopColor: colors.border }]}>
                       <TextInput
-                        style={[s.chatInputField, { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border }]}
+                        style={[s.chatInputField, { backgroundColor: isFinal ? GRAY + "20" : colors.inputBg, color: isFinal ? GRAY : colors.textPrimary, borderColor: isFinal ? GRAY : colors.border }]}
                         value={chatInput}
                         onChangeText={setChatInput}
-                        placeholder="Escriba un mensaje..."
-                        placeholderTextColor={colors.textSecondary}
-                        onKeyPress={handleKeyPress}
+                        placeholder={isFinal ? "Chat cerrado" : "Escriba un mensaje..."}
+                        placeholderTextColor={isFinal ? GRAY : colors.textSecondary}
+                        onKeyPress={isFinal ? undefined : handleKeyPress}
                         multiline
+                        editable={!isFinal}
                       />
-                      <TouchableOpacity style={[s.sendBtn, { backgroundColor: colors.primary }]} onPress={handleSendMessage}>
-                        <Ionicons name="send" size={18} color={colors.white} />
+                      <TouchableOpacity style={[s.sendBtn, { backgroundColor: isFinal ? GRAY : colors.primary }]} onPress={handleSendMessage} disabled={isFinal}>
+                        <Ionicons name="send" size={18} color={isFinal ? "#6B7280" : colors.white} />
                       </TouchableOpacity>
                     </View>
                   )}
@@ -778,11 +805,11 @@ export default function WebDashboardView() {
 
                   {/* Citizen Status + Comm Mode */}
                   {(incidentDetail?.participantStatus?.citizen || incidentDetail?.citizenId) && (
-                    <View style={[s.citizenStatusBar, { backgroundColor: (CITIZEN_STATUS_LABELS[incidentDetail?.participantStatus?.citizen]?.color || "#94A3B8") + "18", borderColor: (CITIZEN_STATUS_LABELS[incidentDetail?.participantStatus?.citizen]?.color || "#94A3B8") }]}>
-                      <MaterialCommunityIcons name="account-alert-outline" size={18} color={CITIZEN_STATUS_LABELS[incidentDetail?.participantStatus?.citizen]?.color || "#94A3B8"} />
+                    <View style={[s.citizenStatusBar, { backgroundColor: ((incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (CITIZEN_STATUS_LABELS[incidentDetail?.participantStatus?.citizen]?.color || "#94A3B8")) + "18", borderColor: (incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (CITIZEN_STATUS_LABELS[incidentDetail?.participantStatus?.citizen]?.color || "#94A3B8") }]}>
+                      <MaterialCommunityIcons name="account-alert-outline" size={18} color={(incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (CITIZEN_STATUS_LABELS[incidentDetail?.participantStatus?.citizen]?.color || "#94A3B8")} />
                       <View style={{ flex: 1 }}>
                         <Text style={[s.citizenStatusLabel, { color: colors.textSecondary }]}>Estado del ciudadano</Text>
-                        <Text style={[s.citizenStatusText, { color: CITIZEN_STATUS_LABELS[incidentDetail?.participantStatus?.citizen]?.color || "#94A3B8" }]}>
+                        <Text style={[s.citizenStatusText, { color: (incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (CITIZEN_STATUS_LABELS[incidentDetail?.participantStatus?.citizen]?.color || "#94A3B8") }]}>
                           {incidentDetail?.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[incidentDetail.participantStatus.citizen]?.label || "Desconocido") : "Sin datos"}
                         </Text>
                       </View>
@@ -795,11 +822,11 @@ export default function WebDashboardView() {
                   )}
                   {/* Communication Mode */}
                   {incidentDetail?.participantStatus?.communication && (
-                    <View style={[s.commModeBar, { backgroundColor: (COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8") + "18", borderColor: (COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8") }]}>
-                      <MaterialCommunityIcons name={incidentDetail.participantStatus.communication === "VIDEO_CALL" ? "video" : incidentDetail.participantStatus.communication === "CHAT_ONLY" ? "chat" : "map-marker-radius"} size={18} color={COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8"} />
+                    <View style={[s.commModeBar, { backgroundColor: ((incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8")) + "18", borderColor: (incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8") }]}>
+                      <MaterialCommunityIcons name={incidentDetail.participantStatus.communication === "VIDEO_CALL" ? "video" : incidentDetail.participantStatus.communication === "CHAT_ONLY" ? "chat" : "map-marker-radius"} size={18} color={(incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8")} />
                       <View style={{ flex: 1 }}>
                         <Text style={[s.citizenStatusLabel, { color: colors.textSecondary }]}>Modo de comunicación</Text>
-                        <Text style={[s.citizenStatusText, { color: COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8" }]}>
+                        <Text style={[s.citizenStatusText, { color: (incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO") ? "#9E9E9E" : (COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.color || "#94A3B8") }]}>
                           {COMM_MODE_LABELS[incidentDetail.participantStatus.communication]?.label}
                         </Text>
                       </View>
@@ -812,7 +839,7 @@ export default function WebDashboardView() {
                   )}
 
                   {/* Tomar Procedimiento */}
-                  {!incidentDetail?.officerId && isSelectedActive && (
+                  {!incidentDetail?.officerId && isSelectedActive && !isFinal && (
                     <TouchableOpacity style={[s.actionBtnPrimary, { backgroundColor: colors.primary }]} onPress={handleTakeProcedure}>
                       <MaterialCommunityIcons name="police-badge" size={20} color={colors.white} />
                       <Text style={s.actionBtnPrimaryText}>Tomar Procedimiento</Text>
@@ -828,34 +855,34 @@ export default function WebDashboardView() {
                     </View>
                   )}
 
-                  {isAssignedToMe && (
+                  {(isAssignedToMe || isFinal) && (
                     <>
                       {/* Videollamada Button */}
-                      <TouchableOpacity style={[s.videoCallBtn, { backgroundColor: "#080A0F", borderColor: "#4ADE80" }]} onPress={() => setShowVideoCallPanel(true)}>
-                        <MaterialCommunityIcons name="video" size={22} color="#4ADE80" />
-                        <Text style={s.videoCallBtnText}>Videollamada</Text>
+                      <TouchableOpacity style={[s.videoCallBtn, { backgroundColor: isFinal ? GRAY + "30" : "#080A0F", borderColor: isFinal ? GRAY : "#4ADE80" }]} onPress={() => setShowVideoCallPanel(true)} disabled={isFinal}>
+                        <MaterialCommunityIcons name="video" size={22} color={isFinal ? GRAY : "#4ADE80"} />
+                        <Text style={[s.videoCallBtnText, { color: isFinal ? GRAY : "#4ADE80" }]}>Videollamada</Text>
                       </TouchableOpacity>
 
                       {/* Dispatch Modal Trigger + Buttons */}
                       <View style={s.dispatchRow}>
-                        <TouchableOpacity style={[s.dispatchBtn, { backgroundColor: "#1976D2" }]} onPress={() => setShowDispatchModal(true)}>
-                          <MaterialCommunityIcons name="police-badge" size={22} color={colors.white} />
-                          <Text style={s.dispatchBtnText}>Patrulla</Text>
+                        <TouchableOpacity style={[s.dispatchBtn, { backgroundColor: isFinal ? GRAY : "#1976D2" }]} onPress={() => setShowDispatchModal(true)} disabled={isFinal}>
+                          <MaterialCommunityIcons name="police-badge" size={22} color={isFinal ? "#6B7280" : colors.white} />
+                          <Text style={[s.dispatchBtnText, { color: isFinal ? "#6B7280" : colors.white }]}>Patrulla</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[s.dispatchBtn, { backgroundColor: "#D32F2F" }]} onPress={() => setShowDispatchModal(true)}>
-                          <MaterialCommunityIcons name="ambulance" size={22} color={colors.white} />
-                          <Text style={s.dispatchBtnText}>SAMU</Text>
+                        <TouchableOpacity style={[s.dispatchBtn, { backgroundColor: isFinal ? GRAY : "#D32F2F" }]} onPress={() => setShowDispatchModal(true)} disabled={isFinal}>
+                          <MaterialCommunityIcons name="ambulance" size={22} color={isFinal ? "#6B7280" : colors.white} />
+                          <Text style={[s.dispatchBtnText, { color: isFinal ? "#6B7280" : colors.white }]}>SAMU</Text>
                         </TouchableOpacity>
                       </View>
 
                       {/* Meta actions */}
                       <View style={s.metaActionsRow}>
-                        <TouchableOpacity style={[s.metaBtn, { backgroundColor: "#16A34A" }]} onPress={openMaps}>
-                          <Ionicons name="location-outline" size={16} color={colors.white} />
-                          <Text style={s.metaBtnText}>Ver Mapa</Text>
+                        <TouchableOpacity style={[s.metaBtn, { backgroundColor: isFinal ? GRAY : "#16A34A" }]} onPress={openMaps} disabled={isFinal}>
+                          <Ionicons name="location-outline" size={16} color={isFinal ? "#6B7280" : colors.white} />
+                          <Text style={[s.metaBtnText, { color: isFinal ? "#6B7280" : colors.white }]}>Ver Mapa</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[s.metaBtn, { backgroundColor: colors.danger }]} onPress={() => { setShowCloseForm(true); setCloseError(null); if (selectedIncident?.id) updateParticipantStatus(selectedIncident.id, "OFFICER", OFFICER_STATUS.CLOSING); }}>
-                          <Text style={[s.metaBtnText, { fontSize: 14 }]}>Finalizar</Text>
+                        <TouchableOpacity style={[s.metaBtn, { backgroundColor: isFinal ? GRAY : colors.danger }]} onPress={isFinal ? undefined : () => { setShowCloseForm(true); setCloseError(null); if (selectedIncident?.id) updateParticipantStatus(selectedIncident.id, "OFFICER", OFFICER_STATUS.CLOSING).catch(() => {}); }} disabled={isFinal}>
+                          <Text style={[s.metaBtnText, { fontSize: 14, color: isFinal ? "#6B7280" : colors.white }]}>Finalizar</Text>
                         </TouchableOpacity>
                       </View>
 
@@ -864,10 +891,11 @@ export default function WebDashboardView() {
                         {QUICK_RESPONSES.map((text) => (
                           <TouchableOpacity
                             key={text}
-                            style={[s.quickChip, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "30" }]}
-                            onPress={() => handleQuickResponse(text)}
+                            style={[s.quickChip, { backgroundColor: isFinal ? GRAY + "20" : colors.primary + "15", borderColor: isFinal ? GRAY : colors.primary + "30" }]}
+                            onPress={isFinal ? undefined : () => handleQuickResponse(text)}
+                            disabled={isFinal}
                           >
-                            <Text style={[s.quickChipText, { color: colors.primary }]}>{text}</Text>
+                            <Text style={[s.quickChipText, { color: isFinal ? GRAY : colors.primary }]}>{text}</Text>
                           </TouchableOpacity>
                         ))}
                       </View>
@@ -953,6 +981,9 @@ const makeStyles = (colors) =>
     sidebarTitle: { fontSize: 13, fontWeight: "700", flex: 1 },
     sidebarTime: { fontSize: 11, fontWeight: "700", marginLeft: 6 },
     sidebarCitizen: { fontSize: 12, marginTop: 2 },
+    sidebarCSRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+    sidebarCSDot: { width: 6, height: 6, borderRadius: 3 },
+    sidebarCSText: { fontSize: 10, fontWeight: "700" },
     sidebarBadges: { flexDirection: "row", gap: 4, marginTop: 4 },
     badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
     badgeText: { fontSize: 10, fontWeight: "700" },

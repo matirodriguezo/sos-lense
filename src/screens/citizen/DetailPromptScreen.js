@@ -8,6 +8,7 @@ import {
   Animated,
   ActivityIndicator,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -22,7 +23,15 @@ export default function DetailPromptScreen({ route, navigation }) {
 
   useEffect(() => {
     console.log("[DetailPrompt] Mounted, incidentId:", incidentId);
-  }, []);
+  }, [incidentId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (incidentId) {
+        updateParticipantStatus(incidentId, "CITIZEN", CITIZEN_STATUS.ALERT_SENT).catch(() => {});
+      }
+    }, [incidentId])
+  );
 
   const s = useMemo(() => makeStyles(colors, insets), [colors, insets]);
 

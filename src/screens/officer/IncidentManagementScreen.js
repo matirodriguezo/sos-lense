@@ -43,10 +43,12 @@ const DISPATCH_OPTIONS = [
 ];
 
 const CITIZEN_STATUS_MAP = {
+  [CITIZEN_STATUS.ALERT_SENT]: { label: "Alerta enviada", color: "#E040FB" },
   [CITIZEN_STATUS.IDLE]: { label: "Ciudadano inactivo", color: "#9E9E9E" },
   [CITIZEN_STATUS.CLASSIFYING]: { label: "Ciudadano clasificando", color: "#FBC02D" },
   [CITIZEN_STATUS.IN_CALL]: { label: "Ciudadano en videollamada", color: "#4ADE80" },
   [CITIZEN_STATUS.CHAT_ONLY]: { label: "Ciudadano en chat", color: "#42A5F5" },
+  [CITIZEN_STATUS.IN_FAKE_APP]: { label: "En AppCamuflaje", color: "#F97316" },
 };
 
 const COMM_MODE_MAP = {
@@ -92,18 +94,18 @@ export default function IncidentManagementScreen({ route, navigation }) {
 
   // Track officer status on mount/unmount
   useEffect(() => {
-    updateParticipantStatus(incidentId, "OFFICER", OFFICER_STATUS.IN_CALL);
+    updateParticipantStatus(incidentId, "OFFICER", OFFICER_STATUS.IN_CALL).catch(() => {});
     return () => {
-      updateParticipantStatus(incidentId, "OFFICER", OFFICER_STATUS.IDLE);
+      updateParticipantStatus(incidentId, "OFFICER", OFFICER_STATUS.IDLE).catch(() => {});
     };
   }, [incidentId]);
 
   // Track chat modal open/close
   useEffect(() => {
     if (showChatModal) {
-      updateParticipantStatus(incidentId, "OFFICER", OFFICER_STATUS.CHATTING);
+      updateParticipantStatus(incidentId, "OFFICER", OFFICER_STATUS.CHATTING).catch(() => {});
     } else {
-      updateParticipantStatus(incidentId, "OFFICER", OFFICER_STATUS.IN_CALL);
+      updateParticipantStatus(incidentId, "OFFICER", OFFICER_STATUS.IN_CALL).catch(() => {});
     }
   }, [showChatModal, incidentId]);
 
@@ -131,25 +133,12 @@ export default function IncidentManagementScreen({ route, navigation }) {
       }
       if (!data.officerId) {
         const officerAlias = getCurrentAlias();
-        assignOfficer(incidentId, auth.currentUser.uid, officerAlias);
-        sendSystemMessage(incidentId, `${officerAlias || "Un oficial"} ha tomado tu caso.`);
+        assignOfficer(incidentId, auth.currentUser.uid, officerAlias).catch(() => {});
+        sendSystemMessage(incidentId, `${officerAlias || "Un oficial"} ha tomado tu caso.`).catch(() => {});
       }
     });
     const unsubMessages = listenMessages(incidentId, (data) => {
       setMessages(data);
-      if (showChatModal) {
-        const uid = auth.currentUser?.uid;
-        const citizenId = data.find(m => m.senderRole === "CITIZEN")?.senderId;
-        if (citizenId) {
-          const unread = data.filter(
-            (m) => m.senderRole === "CITIZEN" && !m.readBy?.includes(uid) && !markedRef.current.has(m.id)
-          );
-          unread.forEach((m) => {
-            markedRef.current.add(m.id);
-            markMessageAsRead(incidentId, m.id, uid);
-          });
-        }
-      }
     });
 
     const startTime = Date.now();
@@ -177,7 +166,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
       markedRef.current.add(m.id);
       markMessageAsRead(incidentId, m.id, uid);
     });
-  }, [showChatModal, incident?.citizenId]);
+  }, [messages, showChatModal, incident?.citizenId]);
 
   // Auto-scroll to latest message
   useEffect(() => {
@@ -260,13 +249,34 @@ export default function IncidentManagementScreen({ route, navigation }) {
     outputRange: [0.3, 1],
   });
 
+  const isFinal = incident?.status === "CERRADO" || incident?.status === "ANULADO";
+  const GRAY = "#6B7280";
+
+  const renderMessage = useCallback(({ item }) => (
+    <MessageBubble
+      message={item}
+      isMine={item.senderId === auth.currentUser?.uid}
+      otherRole="CITIZEN"
+      otherUserId={incident?.citizenId}
+      currentUserId={auth.currentUser?.uid}
+      citizenAlias={incident?.citizenAlias}
+      officerAlias={incident?.officerAlias}
+    />
+  ), [incident?.citizenId, incident?.citizenAlias, incident?.officerAlias]);
+
   return (
     <KeyboardAvoidingView style={[s.container, { backgroundColor: "#000" }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       <View style={{ flex: 1, position: "relative" }}>
         {/* Connecting overlay */}
-        {connecting ? (
+        {isFinal ? (
+          <View style={s.connectingContainer}>
+            <MaterialCommunityIcons name="check-circle-outline" size={80} color={GRAY} />
+            <Text style={[s.connectedText, { color: GRAY }]}>PROCEDIMIENTO FINALIZADO</Text>
+            <Text style={[s.connectedSub, { color: GRAY }]}>Este caso ha sido cerrado.</Text>
+          </View>
+        ) : connecting ? (
           <View style={s.connectingContainer}>
             <Animated.View style={[s.pulseCircle, { opacity: pulseOpacity }]}>
               <MaterialCommunityIcons name="cellphone-link" size={64} color="#4ADE80" />
@@ -284,47 +294,47 @@ export default function IncidentManagementScreen({ route, navigation }) {
         )}
 
         <View style={[s.header, { top: insets.top }]}>
-          <TouchableOpacity style={s.backBtn} onPress={handleBack}>
-            <Ionicons name="arrow-back" size={24} color={colors.white} />
+          <TouchableOpacity style={[s.backBtn, { backgroundColor: isFinal ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.15)" }]} onPress={handleBack}>
+            <Ionicons name="arrow-back" size={24} color={isFinal ? GRAY : colors.white} />
           </TouchableOpacity>
           <View style={s.headerCenter}>
-            <Text style={[s.headerSub, { color: colors.whiteTranslucent }]}>Procedimiento</Text>
+            <Text style={[s.headerSub, { color: isFinal ? GRAY : colors.whiteTranslucent }]}>Procedimiento</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Text style={[s.headerTitle, { color: colors.white }]}>#{incidentId?.slice(0, 8)?.toUpperCase()}</Text>
-              <Text style={[s.elapsedText, { color: colors.whiteTranslucent }]}>{elapsed}</Text>
+              <Text style={[s.headerTitle, { color: isFinal ? GRAY : colors.white }]}>#{incidentId?.slice(0, 8)?.toUpperCase()}</Text>
+              <Text style={[s.elapsedText, { color: isFinal ? GRAY : colors.whiteTranslucent }]}>{elapsed}</Text>
             </View>
             {(incident?.citizenId) && (
-              <View style={[s.citizenBadge, { backgroundColor: CITIZEN_STATUS_MAP[incident?.participantStatus?.citizen]?.color || "#9E9E9E" }]}>
+              <View style={[s.citizenBadge, { backgroundColor: isFinal ? GRAY : (CITIZEN_STATUS_MAP[incident?.participantStatus?.citizen]?.color || "#9E9E9E") }]}>
                 <Text style={s.citizenBadgeText}>{incident?.participantStatus?.citizen ? (CITIZEN_STATUS_MAP[incident.participantStatus.citizen]?.label || "Desconocido") : "Sin datos"}</Text>
               </View>
             )}
             {incident?.participantStatus?.communication && (
-              <View style={[s.commBadge, { backgroundColor: COMM_MODE_MAP[incident.participantStatus.communication]?.color || "#9E9E9E" }]}>
+              <View style={[s.commBadge, { backgroundColor: isFinal ? GRAY : (COMM_MODE_MAP[incident.participantStatus.communication]?.color || "#9E9E9E") }]}>
                 <Text style={s.citizenBadgeText}>{COMM_MODE_MAP[incident.participantStatus.communication]?.label || "Desconocido"}</Text>
               </View>
             )}
           </View>
-          <View style={[s.statusBadge, { backgroundColor: colors.badgeRed }]}>
-            <Text style={[s.statusBadgeText, { color: colors.white }]}>● EN CURSO</Text>
+          <View style={[s.statusBadge, { backgroundColor: isFinal ? GRAY : colors.badgeRed }]}>
+            <Text style={[s.statusBadgeText, { color: colors.white }]}>● {isFinal ? incident?.status === "ANULADO" ? "ANULADO" : "FINALIZADO" : "EN CURSO"}</Text>
           </View>
         </View>
 
-        {callActive && (
+        {(callActive || isFinal) && (
           <View style={[s.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
-            <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: colors.blueDispatch }]} onPress={() => setShowDispatchModal(true)}>
-              <MaterialCommunityIcons name="radio-handheld" size={22} color={colors.white} />
-              <Text style={s.ctrlLabel}>Despacho</Text>
+            <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: isFinal ? GRAY : colors.blueDispatch }]} onPress={() => setShowDispatchModal(true)} disabled={isFinal}>
+              <MaterialCommunityIcons name="radio-handheld" size={22} color={isFinal ? "#4B5563" : colors.white} />
+              <Text style={[s.ctrlLabel, { color: isFinal ? "#4B5563" : colors.white }]}>Despacho</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: "#16A34A" }]} onPress={openMaps}>
-              <Ionicons name="location-outline" size={22} color={colors.white} />
-              <Text style={s.ctrlLabel}>Ubicación</Text>
+            <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: isFinal ? GRAY : "#16A34A" }]} onPress={openMaps} disabled={isFinal}>
+              <Ionicons name="location-outline" size={22} color={isFinal ? "#4B5563" : colors.white} />
+              <Text style={[s.ctrlLabel, { color: isFinal ? "#4B5563" : colors.white }]}>Ubicación</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[s.ctrlBtnLarge, { backgroundColor: colors.badgeRed }]} onPress={handleFinalize}>
-              <Text style={s.finalizeLabel}>Finalizar</Text>
+            <TouchableOpacity style={[s.ctrlBtnLarge, { backgroundColor: isFinal ? GRAY : colors.badgeRed }]} onPress={handleFinalize} disabled={isFinal}>
+              <Text style={[s.finalizeLabel, { color: isFinal ? "#4B5563" : colors.white }]}>Finalizar</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: "rgba(255,255,255,0.2)" }]} onPress={() => setShowChatModal(true)}>
-              <Ionicons name="chatbubble-ellipses" size={22} color={colors.white} />
-              <Text style={s.ctrlLabel}>Chat</Text>
+            <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: isFinal ? GRAY : "rgba(255,255,255,0.2)" }]} onPress={() => setShowChatModal(true)} disabled={isFinal}>
+              <Ionicons name="chatbubble-ellipses" size={22} color={isFinal ? "#4B5563" : colors.white} />
+              <Text style={[s.ctrlLabel, { color: isFinal ? "#4B5563" : colors.white }]}>Chat</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -371,32 +381,23 @@ export default function IncidentManagementScreen({ route, navigation }) {
               initialNumToRender={15}
               maxToRenderPerBatch={10}
               windowSize={5}
-              removeClippedSubviews={Platform.OS === "android"}
+              removeClippedSubviews={Platform.OS !== "web"}
               onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
               ListEmptyComponent={<Text style={[s.emptyChat, { color: colors.textSecondary }]}>Sin mensajes.</Text>}
-              renderItem={({ item }) => (
-                <MessageBubble
-                  message={item}
-                  isMine={isMine(item)}
-                  otherRole="CITIZEN"
-                  otherUserId={incident?.citizenId}
-                  currentUserId={auth.currentUser?.uid}
-                  citizenAlias={incident?.citizenAlias}
-                  officerAlias={incident?.officerAlias}
-                />
-              )}
+              renderItem={renderMessage}
             />
             <View style={s.inputRow}>
               <TextInput
-                style={[s.chatInput, { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border }]}
+                style={[s.chatInput, { backgroundColor: isFinal ? GRAY : colors.inputBg, color: isFinal ? GRAY : colors.textPrimary, borderColor: isFinal ? GRAY : colors.border }]}
                 value={input}
                 onChangeText={setInput}
-                placeholder="Escriba un mensaje..."
-                placeholderTextColor={colors.textSecondary}
-                onSubmitEditing={handleSend}
+                placeholder={isFinal ? "Chat cerrado" : "Escriba un mensaje..."}
+                placeholderTextColor={isFinal ? GRAY : colors.textSecondary}
+                onSubmitEditing={isFinal ? undefined : handleSend}
+                editable={!isFinal}
               />
-              <TouchableOpacity style={[s.sendBtn, { backgroundColor: colors.primary }]} onPress={handleSend}>
-                <Ionicons name="send" size={18} color={colors.white} />
+              <TouchableOpacity style={[s.sendBtn, { backgroundColor: isFinal ? GRAY : colors.primary }]} onPress={handleSend} disabled={isFinal}>
+                <Ionicons name="send" size={18} color={isFinal ? "#4B5563" : colors.white} />
               </TouchableOpacity>
             </View>
           </View>

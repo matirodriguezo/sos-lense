@@ -34,7 +34,7 @@ function MessageBubble({ message, isMine, otherRole, otherUserId, currentUserId,
   const time = useMemo(() => formatTime(message.createdAt), [message.createdAt]);
 
   return (
-    <View style={[s.bubble, isMine ? [s.bubbleMine, { backgroundColor: colors.primary }] : [s.bubbleOther, { backgroundColor: colors.border }]]}>
+    <View style={[s.bubble, isMine ? [s.bubbleMine, { backgroundColor: colors.chatMineBg }] : [s.bubbleOther, { backgroundColor: colors.border }]]}>
       <Text style={[s.meta, isMine ? { color: colors.whiteTranslucent, textAlign: "right" } : { color: colors.textSecondary }]}>
         {senderName}
       </Text>

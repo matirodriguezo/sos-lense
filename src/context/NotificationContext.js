@@ -93,54 +93,74 @@ export function NotificationProvider({ children }) {
             where("status", "in", ["ACTIVO", "EN_CURSO", "NO_CLASIFICADO"])
           ),
           (snapshot) => {
-            msgUnsubs.current.forEach((u) => u());
-            msgUnsubs.current = [];
+            try {
+              msgUnsubs.current.forEach((u) => u());
+              msgUnsubs.current = [];
 
-            if (snapshot.empty) {
-              console.log(`${LOG_TAG} No active incidents found`);
-              return;
-            }
+              if (snapshot.empty) {
+                console.log(`${LOG_TAG} No active incidents found`);
+                return;
+              }
 
-            console.log(`${LOG_TAG} Found ${snapshot.docs.length} active incident(s)`);
+              console.log(`${LOG_TAG} Found ${snapshot.docs.length} active incident(s)`);
 
-            snapshot.docs.forEach((d) => {
-              const incident = { id: d.id, ...d.data() };
+              snapshot.docs.forEach((d) => {
+                const incident = { id: d.id, ...d.data() };
 
-              const iq = query(
-                collection(db, "incidents", incident.id, "messages"),
-                orderBy("createdAt", "asc")
-              );
-              const unsub = onSnapshot(iq, (msgSnap) => {
-                msgSnap.docChanges().forEach((change) => {
-                  if (change.type !== "added") return;
-                  const msg = { id: change.doc.id, ...change.doc.data() };
-                  if (msg.senderId === uid) return;
-                  if (msg.senderRole === "SYSTEM") return;
-                  if (seenMessages.current.has(msg.id)) return;
-                  const msgTime = msg.createdAt?.toMillis?.() || Date.now();
-                  if (msgTime < initializedAt.current) return;
-                  seenMessages.current.add(msg.id);
+                const iq = query(
+                  collection(db, "incidents", incident.id, "messages"),
+                  orderBy("createdAt", "asc")
+                );
+                const unsub = onSnapshot(iq, (msgSnap) => {
+                  try {
+                    msgSnap.docChanges().forEach((change) => {
+                      if (change.type !== "added") return;
+                      const msg = { id: change.doc.id, ...change.doc.data() };
+                      if (msg.senderId === uid) return;
+                      if (msg.senderRole === "SYSTEM") return;
+                      if (seenMessages.current.has(msg.id)) return;
+                      const msgTime = msg.createdAt?.toMillis?.() || Date.now();
+                      if (msgTime < initializedAt.current) return;
+                      seenMessages.current.add(msg.id);
 
-                  const senderName = isOfficer
-                    ? (incident.citizenAlias || "Ciudadano")
-                    : (incident.officerAlias || "Oficial");
+                      if (seenMessages.current.size > 200) {
+                        const entries = [...seenMessages.current];
+                        seenMessages.current = new Set(entries.slice(-100));
+                      }
 
-                  if (inChatListRef.current) {
-                    showBanner(senderName, msg.text, incident.id, role);
-                  } else if (activeChatIdRef.current !== incident.id) {
-                    setUnreadCount((prev) => {
-                      const next = prev + 1;
-                      prevCountRef.current = next;
-                      return next;
+                      const senderName = isOfficer
+                        ? (incident.citizenAlias || "Ciudadano")
+                        : (incident.officerAlias || "Oficial");
+
+                      if (inChatListRef.current) {
+                        showBanner(senderName, msg.text, incident.id, role);
+                      } else if (activeChatIdRef.current !== incident.id) {
+                        setUnreadCount((prev) => {
+                          const next = prev + 1;
+                          prevCountRef.current = next;
+                          return next;
+                        });
+                        showBanner(senderName, msg.text, incident.id, role);
+                      }
                     });
-                    showBanner(senderName, msg.text, incident.id, role);
+                  } catch (e) {
+                    console.warn(`${LOG_TAG} message listener callback error:`, e);
                   }
+                }, (error) => {
+                  console.warn(`${LOG_TAG} message listener error:`, error?.code || error);
                 });
+                msgUnsubs.current.push(unsub);
               });
-              msgUnsubs.current.push(unsub);
-            });
+            } catch (e) {
+              console.warn(`${LOG_TAG} incident listener callback error:`, e);
+            }
+          },
+          (error) => {
+            console.warn(`${LOG_TAG} incident listener error:`, error?.code || error);
           }
         );
+      }).catch((e) => {
+        console.warn(`${LOG_TAG} getDoc error:`, e);
       });
     });
 

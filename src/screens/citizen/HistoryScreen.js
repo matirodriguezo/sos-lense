@@ -82,11 +82,11 @@ export default function HistoryScreen({ navigation }) {
 
   const data = activeTab === "activas" ? activeIncidents : closedIncidents;
 
-  const handleCancel = (incident) => {
+  const handleCancel = useCallback((incident) => {
     setCancelTarget(incident);
     setCancelReason("");
     setShowCancelModal(true);
-  };
+  }, []);
 
   const handleConfirmCancel = async () => {
     if (!cancelReason.trim()) {
@@ -103,14 +103,14 @@ export default function HistoryScreen({ navigation }) {
     }
   };
 
-  const handleRejoin = (incident) => {
+  const handleRejoin = useCallback((incident) => {
     Alert.alert("Reingresar", "¿Deseas reingresar a este incidente activo?", [
       { text: "Cancelar", style: "cancel" },
       { text: "Reingresar", onPress: () => navigation.navigate("Classification", { incidentId: incident.id }) },
     ]);
-  };
+  }, [navigation]);
 
-  const renderItem = ({ item }) => {
+  const renderItem = useCallback(({ item }) => {
     const config = TYPE_CONFIG[item.type] || { icon: "alert-circle-outline", label: item.type || "Sin clasificar" };
     const statusColor = getStatusColor(item.status);
     const isActive =
@@ -182,7 +182,7 @@ export default function HistoryScreen({ navigation }) {
         )}
       </View>
     );
-  };
+  }, [colors, handleRejoin, handleCancel]);
 
     if (loading) {
     return (
@@ -233,7 +233,7 @@ export default function HistoryScreen({ navigation }) {
         renderItem={renderItem}
         contentContainerStyle={data.length === 0 ? s.emptyContainer : s.list}
         windowSize={5}
-        removeClippedSubviews={Platform.OS === "android"}
+        removeClippedSubviews={Platform.OS !== "web"}
         maxToRenderPerBatch={10}
         initialNumToRender={6}
         ListEmptyComponent={

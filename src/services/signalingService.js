@@ -48,6 +48,8 @@ export function listenSignaling(incidentId, remoteUid, callbacks) {
         }
       });
     }
+  }, (error) => {
+    console.warn("[Signal] listen error:", error?.code || error);
   });
 }
 

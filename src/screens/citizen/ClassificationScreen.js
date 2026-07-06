@@ -113,7 +113,7 @@ export default function ClassificationScreen({ route, navigation }) {
       Alert.alert("Selecciona un tipo", "Primero debes clasificar tu emergencia para continuar.");
       return;
     }
-    updateCommunicationMode(incidentId, COMM_MODE.VIDEO_CALL);
+    updateCommunicationMode(incidentId, COMM_MODE.VIDEO_CALL).catch(() => {});
     navigation.navigate("VideoCall", { incidentId });
   };
 
@@ -122,7 +122,7 @@ export default function ClassificationScreen({ route, navigation }) {
       Alert.alert("Selecciona un tipo", "Primero debes clasificar tu emergencia para continuar.");
       return;
     }
-    updateCommunicationMode(incidentId, COMM_MODE.CHAT_ONLY);
+    updateCommunicationMode(incidentId, COMM_MODE.CHAT_ONLY).catch(() => {});
     navigation.navigate("VideoCall", { incidentId, chatOnly: true });
   };
 
@@ -149,7 +149,6 @@ export default function ClassificationScreen({ route, navigation }) {
         <TouchableOpacity style={s.backButton} onPress={handleGoBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={20} color={colors.white} />
         </TouchableOpacity>
-        <Text style={[s.navTitle, { color: colors.textSecondary }]}>REPÚBLICA DE CHILE</Text>
       </View>
 
       <View style={s.content}>

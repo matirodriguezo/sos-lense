@@ -34,6 +34,12 @@ export async function triggerSOS(citizenId, { latitude, longitude, address, citi
     observations: "",
     closedReason: "",
     cancelled: false,
+    participantStatus: {
+      citizen: "CITIZEN_ALERT_SENT",
+      citizenUpdatedAt: serverTimestamp(),
+      communication: "NOT_SET",
+      communicationUpdatedAt: serverTimestamp(),
+    },
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -48,6 +54,8 @@ export function listenAllActiveIncidents(callback) {
   );
   return onSnapshot(q, (snapshot) => {
     callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (error) => {
+    console.warn(`${LOG} listenAllActiveIncidents error:`, error?.code || error);
   });
 }
 
@@ -58,6 +66,8 @@ export function listenAllCancelled(callback) {
   );
   return onSnapshot(q, (snapshot) => {
     callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (error) => {
+    console.warn(`${LOG} listenAllCancelled error:`, error?.code || error);
   });
 }
 
@@ -68,6 +78,8 @@ export function listenMyCases(officerId, callback) {
   );
   return onSnapshot(q, (snapshot) => {
     callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (error) => {
+    console.warn(`${LOG} listenMyCases error:`, error?.code || error);
   });
 }
 
@@ -84,14 +96,18 @@ export function listenCitizenHistory(citizenId, callback) {
       return tB - tA;
     });
     callback(data);
+  }, (error) => {
+    console.warn(`${LOG} listenCitizenHistory error:`, error?.code || error);
   });
 }
 
 export function listenIncidentById(incidentId, callback) {
   return onSnapshot(doc(db, "incidents", incidentId), (snapshot) => {
-    if (snapshot.exists()) {
+    if (snapshot?.exists()) {
       callback({ id: snapshot.id, ...snapshot.data() });
     }
+  }, (error) => {
+    console.warn(`${LOG} listenIncidentById error:`, error?.code || error);
   });
 }
 
@@ -102,6 +118,8 @@ export function listenMessages(incidentId, callback) {
   );
   return onSnapshot(q, (snapshot) => {
     callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (error) => {
+    console.warn(`${LOG} listenMessages error:`, error?.code || error);
   });
 }
 
@@ -190,6 +208,8 @@ export function listenMessagesWithStatus(incidentId, callback) {
   );
   return onSnapshot(q, (snapshot) => {
     callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (error) => {
+    console.warn(`${LOG} listenMessagesWithStatus error:`, error?.code || error);
   });
 }
 
@@ -211,9 +231,11 @@ export async function getIncident(incidentId) {
 /* ─── Participant Status Tracking ─── */
 export const CITIZEN_STATUS = {
   IDLE: "CITIZEN_IDLE",
+  ALERT_SENT: "CITIZEN_ALERT_SENT",
   CLASSIFYING: "CITIZEN_CLASSIFYING",
   IN_CALL: "CITIZEN_IN_CALL",
   CHAT_ONLY: "CITIZEN_CHAT_ONLY",
+  IN_FAKE_APP: "CITIZEN_IN_FAKE_APP",
 };
 
 export const OFFICER_STATUS = {

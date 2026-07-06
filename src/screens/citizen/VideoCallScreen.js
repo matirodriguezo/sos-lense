@@ -235,6 +235,18 @@ export default function VideoCallScreen({ route, navigation }) {
     outputRange: [0.3, 1],
   });
 
+  const renderMessage = useCallback(({ item }) => (
+    <MessageBubble
+      message={item}
+      isMine={item.senderId === uid}
+      otherRole="OFFICER"
+      otherUserId={incident?.officerId}
+      currentUserId={uid}
+      citizenAlias={incident?.citizenAlias}
+      officerAlias={incident?.officerAlias}
+    />
+  ), [uid, incident?.officerId, incident?.citizenAlias, incident?.officerAlias]);
+
   return (
     <KeyboardAvoidingView style={[s.container, { backgroundColor: "#000" }]} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
@@ -304,7 +316,7 @@ export default function VideoCallScreen({ route, navigation }) {
               initialNumToRender={6}
               maxToRenderPerBatch={6}
               windowSize={3}
-              removeClippedSubviews={Platform.OS === "android"}
+              removeClippedSubviews={Platform.OS !== "web"}
               renderItem={({ item }) => (
                 <TouchableOpacity style={s.quickPill} onPress={() => handleQuickRequest(item.label)} activeOpacity={0.7}>
                   <Ionicons name={item.icon} size={14} color="#fff" style={{ marginRight: 5 }} />
@@ -344,20 +356,10 @@ export default function VideoCallScreen({ route, navigation }) {
               initialNumToRender={15}
               maxToRenderPerBatch={10}
               windowSize={5}
-              removeClippedSubviews={Platform.OS === "android"}
+              removeClippedSubviews={Platform.OS !== "web"}
               onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
               ListEmptyComponent={<Text style={{ textAlign: "center", marginTop: 20, color: colors.textSecondary }}>Sin mensajes.</Text>}
-              renderItem={({ item }) => (
-                <MessageBubble
-                  message={item}
-                  isMine={isMine(item)}
-                  otherRole="OFFICER"
-                  otherUserId={incident?.officerId}
-                  currentUserId={uid}
-                  citizenAlias={incident?.citizenAlias}
-                  officerAlias={incident?.officerAlias}
-                />
-              )}
+              renderItem={renderMessage}
             />
             <View style={s.inputRow}>
               <TextInput

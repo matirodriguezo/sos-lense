@@ -13,6 +13,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+import { auth, db } from "../firebase/firebaseConfig";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { updateParticipantStatus, CITIZEN_STATUS } from "../services/incidentService";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const COL = 4;
 const GAP = 16;
@@ -53,11 +56,41 @@ const rows = chunkArray(APPS, COL);
 export default function FakeAppScreen({ route, navigation }) {
   const { colors } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const incidentRef = useRef(null);
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+  }, []);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const unsub = onSnapshot(
+      query(
+        collection(db, "incidents"),
+        where("citizenId", "==", uid),
+        where("status", "in", ["NO_CLASIFICADO", "ACTIVO", "EN_CURSO"])
+      ),
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const inc = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+          if (!incidentRef.current) {
+            incidentRef.current = { id: inc.id, prevStatus: inc.participantStatus?.citizen || null };
+          }
+          updateParticipantStatus(inc.id, "CITIZEN", CITIZEN_STATUS.IN_FAKE_APP).catch(() => {});
+        }
+      }
+    );
+    return () => {
+      unsub();
+      const inc = incidentRef.current;
+      if (inc?.id) {
+        const restored = inc.prevStatus || CITIZEN_STATUS.IDLE;
+        updateParticipantStatus(inc.id, "CITIZEN", restored).catch(() => {});
+      }
+    };
   }, []);
 
   const handleGoBack = () => {

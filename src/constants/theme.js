@@ -44,6 +44,7 @@ export const LIGHT_COLORS = {
   blueDispatch: "#2563EB",
   warningAmber: "#9A3412",
   cardShadow: "#0F172A",
+  chatMineBg: "#0B5E2E",
 };
 
 export const DARK_COLORS = {
@@ -92,6 +93,7 @@ export const DARK_COLORS = {
   blueDispatch: "#3B82F6",
   warningAmber: "#D97706",
   cardShadow: "#000000",
+  chatMineBg: "#065F46",
 };
 
 export const COLORS = LIGHT_COLORS;

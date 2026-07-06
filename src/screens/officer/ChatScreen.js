@@ -180,6 +180,107 @@ export default function ChatScreen({ navigation }) {
     finalizedItems.forEach((i) => sections.push({ type: "item", data: i }));
   }
 
+  const renderItem = useCallback(({ item }) => {
+    if (item.type === "header") {
+      return (
+        <View style={s.sectionHeader}>
+          <Text style={[s.sectionHeaderText, { color: colors.textSecondary }]}>
+            {item.title}
+          </Text>
+          <View style={[s.sectionLine, { backgroundColor: colors.border }]} />
+        </View>
+      );
+    }
+    const inc = item.data;
+    const config = TYPE_CONFIG[inc.type] || { icon: "alert-circle", label: "Sin clasificar", color: "#6B7280" };
+    const statusCfg = STATUS_CONFIG[inc.status] || { label: inc.status || "Desconocido", color: "#6B7280" };
+    const isFinalized = FINALIZED_STATUSES.includes(inc.status);
+    const perIncUnread = unreadMap[inc.id] || 0;
+    return (
+      <TouchableOpacity
+        style={[s.chatCard, { backgroundColor: colors.surface, borderColor: colors.border }, isFinalized && { opacity: 0.65 }]}
+        activeOpacity={0.7}
+        onPress={() => {
+          if (isFinalized) {
+            Alert.alert("Incidente finalizado", "Este caso ya fue cerrado. Puedes revisar el historial.");
+            return;
+          }
+          Alert.alert("Abrir chat", "¿Deseas abrir el chat de este incidente?", [
+            { text: "Cancelar", style: "cancel" },
+            {
+              text: "Abrir",
+              onPress: () =>
+                navigation.navigate("Emergencia", {
+                  screen: "IncidentManagement",
+                  params: { incidentId: inc.id, autoOpenChat: true },
+                }),
+            },
+          ]);
+        }}
+      >
+        <View style={[s.chatAvatar, { backgroundColor: config.color + "22" }]}>
+          <MaterialCommunityIcons name={config.icon} size={24} color={isFinalized ? "#6B7280" : config.color} />
+        </View>
+        <View style={s.chatContent}>
+          <View style={s.chatHeader}>
+            <Text style={[s.chatName, { color: isFinalized ? colors.textSecondary : colors.textPrimary }]} numberOfLines={1}>
+              {config.label}
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              {perIncUnread > 0 && (
+                <View style={[s.perIncBadge, { backgroundColor: colors.badgeRed }]}>
+                  <Text style={[s.perIncBadgeText, { color: colors.white }]}>
+                    {perIncUnread > 9 ? "9+" : perIncUnread}
+                  </Text>
+                </View>
+              )}
+              <View style={[s.chatBadge, { backgroundColor: statusCfg.color + "22" }]}>
+                <Text style={[s.chatBadgeText, { color: statusCfg.color }]}>{statusCfg.label}</Text>
+              </View>
+            </View>
+          </View>
+
+          <Text style={[s.chatFolio, { color: colors.textSecondary }]}>
+            Folio #{inc.id.slice(0, 8).toUpperCase()}
+          </Text>
+
+          <View style={s.metaRow}>
+            <Ionicons name="time-outline" size={12} color={colors.textSecondary} />
+            <Text style={[s.metaText, { color: colors.textSecondary }]}>
+              {getElapsed(inc.createdAt)}
+            </Text>
+          </View>
+
+          {inc.address && (
+            <View style={s.metaRow}>
+              <Ionicons name="location-outline" size={12} color={colors.textSecondary} />
+              <Text style={[s.metaText, { color: colors.textSecondary }]} numberOfLines={1}>
+                {inc.address}
+              </Text>
+            </View>
+          )}
+
+          {!inc.address && inc.latitude && (
+            <Text style={[s.coords, { color: colors.textSecondary }]}>
+              {inc.latitude.toFixed(6)}, {inc.longitude.toFixed(6)}
+            </Text>
+          )}
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+      </TouchableOpacity>
+    );
+  }, [colors, navigation, unreadMap]);
+
+  const renderEmpty = useCallback(() => (
+    <View style={s.emptyState}>
+      <Ionicons name="chatbubbles-outline" size={48} color={colors.iconMuted} />
+      <Text style={[s.emptyTitle, { color: colors.textSecondary }]}>Sin chats</Text>
+      <Text style={[s.emptySub, { color: colors.textSecondary }]}>
+        Los chats con ciudadanos aparecerán aquí cuando tomes un procedimiento.
+      </Text>
+    </View>
+  ), [colors]);
+
   return (
     <SafeAreaView style={[s.safeArea, { backgroundColor: colors.background }]}>
       <View style={[s.navbar, { backgroundColor: colors.primary }]}>
@@ -204,108 +305,11 @@ export default function ChatScreen({ navigation }) {
         keyExtractor={(item, idx) => item.type === "header" ? `hdr-${item.title}` : item.data.id}
         contentContainerStyle={sections.length === 0 ? s.emptyContainer : s.list}
         windowSize={5}
-        removeClippedSubviews={Platform.OS === "android"}
+        removeClippedSubviews={Platform.OS !== "web"}
         maxToRenderPerBatch={10}
         initialNumToRender={6}
-        ListEmptyComponent={
-          <View style={s.emptyState}>
-            <Ionicons name="chatbubbles-outline" size={48} color={colors.iconMuted} />
-            <Text style={[s.emptyTitle, { color: colors.textSecondary }]}>Sin chats</Text>
-            <Text style={[s.emptySub, { color: colors.textSecondary }]}>
-              Los chats con ciudadanos aparecerán aquí cuando tomes un procedimiento.
-            </Text>
-          </View>
-        }
-        renderItem={({ item }) => {
-          if (item.type === "header") {
-            return (
-              <View style={s.sectionHeader}>
-                <Text style={[s.sectionHeaderText, { color: colors.textSecondary }]}>
-                  {item.title}
-                </Text>
-                <View style={[s.sectionLine, { backgroundColor: colors.border }]} />
-              </View>
-            );
-          }
-          const inc = item.data;
-          const config = TYPE_CONFIG[inc.type] || { icon: "alert-circle", label: "Sin clasificar", color: "#6B7280" };
-          const statusCfg = STATUS_CONFIG[inc.status] || { label: inc.status || "Desconocido", color: "#6B7280" };
-          const isFinalized = FINALIZED_STATUSES.includes(inc.status);
-          const perIncUnread = unreadMap[inc.id] || 0;
-          return (
-            <TouchableOpacity
-              style={[s.chatCard, { backgroundColor: colors.surface, borderColor: colors.border }, isFinalized && { opacity: 0.65 }]}
-              activeOpacity={0.7}
-              onPress={() => {
-                if (isFinalized) {
-                  Alert.alert("Incidente finalizado", "Este caso ya fue cerrado. Puedes revisar el historial.");
-                  return;
-                }
-                Alert.alert("Abrir chat", "¿Deseas abrir el chat de este incidente?", [
-                  { text: "Cancelar", style: "cancel" },
-                  {
-                    text: "Abrir",
-                    onPress: () =>
-                      navigation.navigate("Emergencia", {
-                        screen: "IncidentManagement",
-                        params: { incidentId: inc.id, autoOpenChat: true },
-                      }),
-                  },
-                ]);
-              }}
-            >
-              <View style={[s.chatAvatar, { backgroundColor: config.color + "22" }]}>
-                <MaterialCommunityIcons name={config.icon} size={24} color={isFinalized ? "#6B7280" : config.color} />
-              </View>
-              <View style={s.chatContent}>
-                <View style={s.chatHeader}>
-                  <Text style={[s.chatName, { color: isFinalized ? colors.textSecondary : colors.textPrimary }]} numberOfLines={1}>
-                    {config.label}
-                  </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    {perIncUnread > 0 && (
-                      <View style={[s.perIncBadge, { backgroundColor: colors.badgeRed }]}>
-                        <Text style={[s.perIncBadgeText, { color: colors.white }]}>
-                          {perIncUnread > 9 ? "9+" : perIncUnread}
-                        </Text>
-                      </View>
-                    )}
-                    <View style={[s.chatBadge, { backgroundColor: statusCfg.color + "22" }]}>
-                      <Text style={[s.chatBadgeText, { color: statusCfg.color }]}>{statusCfg.label}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                <Text style={[s.chatFolio, { color: colors.textSecondary }]}>
-                  Folio #{inc.id.slice(0, 8).toUpperCase()}
-                </Text>
-
-                <View style={s.metaRow}>
-                  <Ionicons name="time-outline" size={12} color={colors.textSecondary} />
-                  <Text style={[s.metaText, { color: colors.textSecondary }]}>
-                    {getElapsed(inc.createdAt)}
-                  </Text>
-                </View>
-
-                {inc.address && (
-                  <View style={s.metaRow}>
-                    <Ionicons name="location-outline" size={12} color={colors.textSecondary} />
-                    <Text style={[s.metaText, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {inc.address}
-                    </Text>
-                  </View>
-                )}
-
-                {!inc.address && inc.latitude && (
-                  <Text style={[s.coords, { color: colors.textSecondary }]}>
-                    {inc.latitude.toFixed(6)}, {inc.longitude.toFixed(6)}
-                  </Text>
-                )}
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          );
-        }}
+        ListEmptyComponent={renderEmpty}
+        renderItem={renderItem}
       />
     </SafeAreaView>
   );

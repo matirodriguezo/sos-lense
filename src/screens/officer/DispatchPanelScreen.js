@@ -50,10 +50,12 @@ const sortByTime = (a, b) => {
   };
 
   const CITIZEN_STATUS_LABELS = {
+  CITIZEN_ALERT_SENT: { label: "Alerta enviada", color: "#E040FB" },
   CITIZEN_IDLE: { label: "Inactivo", color: "#94A3B8" },
   CITIZEN_CLASSIFYING: { label: "Clasificando", color: "#F59E0B" },
   CITIZEN_IN_CALL: { label: "En videollamada", color: "#22C55E" },
   CITIZEN_CHAT_ONLY: { label: "En chat", color: "#3B82F6" },
+  CITIZEN_IN_FAKE_APP: { label: "En AppCamuflaje", color: "#F97316" },
 };
 
 const formatElapsed = (ms) => {
@@ -123,7 +125,7 @@ export default function DispatchPanelScreen({ navigation }) {
     };
   }, []);
 
-  const handleTakeProcedure = (incidentId) => {
+  const handleTakeProcedure = useCallback((incidentId) => {
     Alert.alert("Tomar Procedimiento", "¿Confirmas asignación de este caso?", [
       { text: "Cancelar", style: "cancel" },
       {
@@ -131,7 +133,7 @@ export default function DispatchPanelScreen({ navigation }) {
         onPress: () => navigation.navigate("IncidentManagement", { incidentId }),
       },
     ]);
-  };
+  }, [navigation]);
 
   const handleLogout = () => {
     setMenuVisible(false);
@@ -141,7 +143,7 @@ export default function DispatchPanelScreen({ navigation }) {
     ]);
   };
 
-  const renderCard = ({ item }) => {
+  const renderCard = useCallback(({ item }) => {
     const config = TYPE_CONFIG[item.type] || { icon: "alert-circle-outline", label: item.type || "Sin clasificar" };
     const isAssignedToMe = item.officerId === auth.currentUser?.uid;
     const isTakenByOther = !!item.officerId && !isAssignedToMe;
@@ -150,6 +152,7 @@ export default function DispatchPanelScreen({ navigation }) {
     const statusKey = item.status || "NO_CLASIFICADO";
     const statusCfg = STATUS_CONFIG[statusKey] || { label: statusKey, color: "#666", bg: "#F5F5F5" };
     const isFinal = statusKey === "CERRADO" || statusKey === "ANULADO";
+    const GRAY = "#9CA3AF";
 
     const handleCardPress = () => {
       if (isFinal || isTakenByOther) {
@@ -191,44 +194,44 @@ export default function DispatchPanelScreen({ navigation }) {
       >
         <View style={[s.cardHeader, { borderBottomColor: colors.border }]}>
           <View style={s.cardHeaderLeft}>
-            <View style={[s.statusDot, { backgroundColor: isActive ? colors.badgeRed : isEnCurso ? colors.primary : colors.emptyText }]} />
-            <Text style={[s.cardTitle, { color: cardTitleColor }]}>{config.label}</Text>
+            <View style={[s.statusDot, { backgroundColor: isFinal ? GRAY : (isActive ? colors.badgeRed : isEnCurso ? colors.primary : colors.emptyText) }]} />
+            <Text style={[s.cardTitle, { color: isFinal ? GRAY : cardTitleColor }]}>{config.label}</Text>
           </View>
-          <View style={[s.statusBadge, { backgroundColor: statusCfg.bg }]}>
-            <Text style={[s.statusBadgeText, { color: statusCfg.color }]}>{statusCfg.label}</Text>
+          <View style={[s.statusBadge, { backgroundColor: isFinal ? GRAY + "30" : statusCfg.bg }]}>
+            <Text style={[s.statusBadgeText, { color: isFinal ? GRAY : statusCfg.color }]}>{statusCfg.label}</Text>
           </View>
         </View>
 
         <View style={s.cardBody}>
-          <View style={[s.iconBox, { backgroundColor: colors.officerBg }]}>
+          <View style={[s.iconBox, { backgroundColor: isFinal ? GRAY + "30" : colors.officerBg }]}>
             {config.gifPath ? (
               <Image source={config.gifPath} style={s.cardGif} resizeMode="contain" />
             ) : (
-              <Ionicons name={config.icon} size={24} color={colors.textPrimary} />
+              <Ionicons name={config.icon} size={24} color={isFinal ? GRAY : colors.textPrimary} />
             )}
           </View>
           <View style={s.cardInfo}>
             <View style={s.citizenNameRow}>
-              <Text style={[s.citizenName, { color: colors.textPrimary }]}>{item.citizenAlias || "Usuario LENSE"}</Text>
+              <Text style={[s.citizenName, { color: isFinal ? GRAY : colors.textPrimary }]}>{item.citizenAlias || "Usuario LENSE"}</Text>
               {(item.citizenId) && (
-                <View style={[s.citizenStatusBadge, { backgroundColor: (item.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[item.participantStatus.citizen]?.color || "#94A3B8") : "#94A3B8") + "20" }]}>
-                  <View style={[s.citizenStatusDot, { backgroundColor: item.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[item.participantStatus.citizen]?.color || "#94A3B8") : "#94A3B8" }]} />
-                  <Text style={[s.citizenStatusLabel, { color: item.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[item.participantStatus.citizen]?.color || "#94A3B8") : "#94A3B8" }]}>
+                <View style={[s.citizenStatusBadge, { backgroundColor: (isFinal ? GRAY : (item.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[item.participantStatus.citizen]?.color || "#94A3B8") : "#94A3B8")) + "20" }]}>
+                  <View style={[s.citizenStatusDot, { backgroundColor: isFinal ? GRAY : (item.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[item.participantStatus.citizen]?.color || "#94A3B8") : "#94A3B8") }]} />
+                  <Text style={[s.citizenStatusLabel, { color: isFinal ? GRAY : (item.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[item.participantStatus.citizen]?.color || "#94A3B8") : "#94A3B8") }]}>
                     {item.participantStatus?.citizen ? (CITIZEN_STATUS_LABELS[item.participantStatus.citizen]?.label || "Desconocido") : "Sin datos"}
                   </Text>
                 </View>
               )}
               {item.participantStatus?.communication && (
-                <View style={[s.commModeBadge, { backgroundColor: (COMM_MODE_LABELS[item.participantStatus.communication]?.color || "#94A3B8") + "20" }]}>
-                  <Text style={[s.commModeLabel, { color: COMM_MODE_LABELS[item.participantStatus.communication]?.color || "#94A3B8" }]}>
+                <View style={[s.commModeBadge, { backgroundColor: (isFinal ? GRAY : (COMM_MODE_LABELS[item.participantStatus.communication]?.color || "#94A3B8")) + "20" }]}>
+                  <Text style={[s.commModeLabel, { color: isFinal ? GRAY : (COMM_MODE_LABELS[item.participantStatus.communication]?.color || "#94A3B8") }]}>
                     {COMM_MODE_LABELS[item.participantStatus.communication]?.label}
                   </Text>
                 </View>
               )}
             </View>
-            <Text style={[s.locationText, { color: colors.textSecondary }]}>{item.address || (item.latitude ? `${item.latitude?.toFixed(4)}, ${item.longitude?.toFixed(4)}` : "Ubicación no disponible")}</Text>
-            <Text style={[s.folioText, { color: colors.emptyText }]}>Folio #{item.id.slice(0, 8).toUpperCase()}</Text>
-            <Text style={[s.timeLabel, { color: colors.badgeRed }]}>{getElapsedTime(item.createdAt)}</Text>
+            <Text style={[s.locationText, { color: isFinal ? GRAY : colors.textSecondary }]}>{item.address || (item.latitude ? `${item.latitude?.toFixed(4)}, ${item.longitude?.toFixed(4)}` : "Ubicación no disponible")}</Text>
+            <Text style={[s.folioText, { color: isFinal ? GRAY : colors.emptyText }]}>Folio #{item.id.slice(0, 8).toUpperCase()}</Text>
+            <Text style={[s.timeLabel, { color: isFinal ? GRAY : colors.badgeRed }]}>{getElapsedTime(item.createdAt)}</Text>
           </View>
         </View>
 
@@ -259,7 +262,7 @@ export default function DispatchPanelScreen({ navigation }) {
         )}
       </TouchableOpacity>
     );
-  };
+  }, [colors, navigation, handleTakeProcedure]);
 
   const misCasosActivos = myCases.filter((c) => c.status !== "ANULADO" && c.status !== "CERRADO");
   const data = activeTab === "activos" ? activos : activeTab === "cancelados" ? cancelados : misCasosActivos;
@@ -403,7 +406,7 @@ export default function DispatchPanelScreen({ navigation }) {
         renderItem={renderCard}
         contentContainerStyle={data.length === 0 ? [s.emptyContainer, { paddingBottom: insets.bottom }] : [s.list, { paddingBottom: insets.bottom }]}
         windowSize={5}
-        removeClippedSubviews={Platform.OS === "android"}
+        removeClippedSubviews={Platform.OS !== "web"}
         maxToRenderPerBatch={10}
         initialNumToRender={6}
         ListEmptyComponent={
