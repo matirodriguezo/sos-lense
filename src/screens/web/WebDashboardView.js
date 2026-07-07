@@ -35,6 +35,13 @@ import {
 } from "../../services/incidentService";
 import { getCurrentAlias, getShiftStart } from "../../services/userStore";
 import MessageBubble from "../../components/MessageBubble";
+import WebRTCView from "../../components/WebRTCView";
+import {
+  listenSignaling,
+  sendOffer,
+  sendIceCandidate,
+  clearSignaling,
+} from "../../services/signalingService";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -115,15 +122,17 @@ const COMM_MODE_LABELS = {
   ALERT_ONLY: { label: "Alerta de ubicación", color: "#F59E0B" },
 };
 
-function WebVideoCallPanel({ incidentDetail, onClose }) {
+function WebVideoCallPanel({ incidentDetail, onClose, myUid }) {
+  const incidentId = incidentDetail?.id;
+  const citizenId = incidentDetail?.citizenId;
+  const webrtcRef = useRef(null);
   const [vpConnecting, setVpConnecting] = useState(true);
   const [vpCallActive, setVpCallActive] = useState(false);
+  const [vpError, setVpError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
+  const callActiveRef = useRef(false);
   const pulseAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const timer = setTimeout(() => { setVpConnecting(false); setVpCallActive(true); }, 3000);
-    return () => clearTimeout(timer);
-  }, []);
+  const timeoutRef = useRef(null);
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -138,32 +147,121 @@ function WebVideoCallPanel({ incidentDetail, onClose }) {
 
   const pulseOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
 
+  useEffect(() => {
+    if (!incidentId || !citizenId || !myUid) return;
+    console.log("[WebVC] listening for citizen signaling", citizenId);
+    const unsub = listenSignaling(incidentId, citizenId, {
+      onAnswer: (sdp) => {
+        console.log("[WebVC] citizen answer");
+        webrtcRef.current?.forwardSignaling("answer", sdp);
+      },
+      onIce: (candidate) => {
+        webrtcRef.current?.forwardSignaling("ice", candidate);
+      },
+    });
+    return () => {
+      unsub();
+      clearSignaling(incidentId, myUid).catch(() => {});
+    };
+  }, [incidentId, citizenId, myUid]);
+
+  useEffect(() => {
+    timeoutRef.current = setTimeout(() => {
+      if (!callActiveRef.current && !vpError) {
+        console.warn("[WebVC] connection timeout");
+        setVpError("Tiempo de conexión agotado");
+      }
+    }, 25000);
+    return () => clearTimeout(timeoutRef.current);
+  }, [retryKey]);
+
+  const handleWebRTCMessage = useCallback((type, data) => {
+    console.log("[WebVC] WebRTC msg:", type);
+    switch (type) {
+      case "ready":
+        webrtcRef.current?.forwardSignaling("makeOffer");
+        break;
+      case "offer":
+        sendOffer(incidentId, myUid, data).catch(console.warn);
+        break;
+      case "ice":
+        sendIceCandidate(incidentId, myUid, data).catch(console.warn);
+        break;
+      case "remote_on":
+        console.log("[WebVC] remote connected!");
+        callActiveRef.current = true;
+        setVpConnecting(false);
+        setVpCallActive(true);
+        clearTimeout(timeoutRef.current);
+        break;
+      case "disconnected":
+        console.warn("[WebVC] disconnected");
+        setVpError("Conexión perdida");
+        break;
+      case "error":
+        console.warn("[WebVC] error:", data);
+        setVpError(data);
+        break;
+    }
+  }, [incidentId, myUid]);
+
+  const handleRetry = useCallback(() => {
+    webrtcRef.current?.hangUp();
+    clearSignaling(incidentId, myUid).catch(() => {});
+    callActiveRef.current = false;
+    setVpConnecting(true);
+    setVpCallActive(false);
+    setVpError(null);
+    setRetryKey((k) => k + 1);
+  }, [incidentId, myUid]);
+
+  const handleClose = useCallback(() => {
+    webrtcRef.current?.hangUp();
+    clearSignaling(incidentId, myUid).catch(() => {});
+    onClose();
+  }, [incidentId, myUid, onClose]);
+
   return (
     <View style={vpStyles.container}>
       <View style={vpStyles.header}>
-        <Text style={vpStyles.headerTitle}>📱 Videollamada</Text>
-        <TouchableOpacity onPress={onClose} style={vpStyles.closeBtn}>
+        <Text style={vpStyles.headerTitle}>Videollamada</Text>
+        <TouchableOpacity onPress={handleClose} style={vpStyles.closeBtn}>
           <Ionicons name="close" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
       <View style={vpStyles.body}>
-        {vpConnecting ? (
+        {vpError ? (
           <View style={vpStyles.centerContent}>
-            <Animated.View style={[vpStyles.pulseCircle, { opacity: pulseOpacity }]}>
-              <MaterialCommunityIcons name="cellphone-link" size={40} color="#4ADE80" />
-            </Animated.View>
-            <Text style={vpStyles.connectingText}>Conectando...</Text>
-            <Text style={vpStyles.connectingSub}>Estableciendo enlace</Text>
-            <ActivityIndicator size="small" color="#4ADE80" style={{ marginTop: 12 }} />
+            <MaterialCommunityIcons name="video-off" size={40} color="#EF4444" />
+            <Text style={[vpStyles.connectingText, { color: "#EF4444" }]}>Error</Text>
+            <Text style={vpStyles.connectingSub}>{vpError}</Text>
+            <TouchableOpacity style={vpStyles.retryBtn} onPress={handleRetry}>
+              <Text style={vpStyles.retryBtnText}>Reintentar</Text>
+            </TouchableOpacity>
           </View>
         ) : (
-          <View style={vpStyles.centerContent}>
-            <MaterialCommunityIcons name="video" size={56} color="#4ADE80" />
-            <Text style={vpStyles.connectedText}>VIDEOLLAMADA ACTIVA</Text>
-            <Text style={vpStyles.connectedSub}>Conexión establecida</Text>
-            <Text style={vpStyles.elapsedText}>
-              {new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}
-            </Text>
+          <View style={{ flex: 1 }}>
+            <WebRTCView
+              key={retryKey}
+              ref={webrtcRef}
+              style={{ flex: 1 }}
+              onWebRTCMessage={handleWebRTCMessage}
+            />
+            {vpConnecting && !vpCallActive && (
+              <View style={vpStyles.overlay}>
+                <Animated.View style={[vpStyles.pulseCircle, { opacity: pulseOpacity }]}>
+                  <MaterialCommunityIcons name="cellphone-link" size={40} color="#4ADE80" />
+                </Animated.View>
+                <Text style={vpStyles.connectingText}>Conectando...</Text>
+                <Text style={vpStyles.connectingSub}>Estableciendo enlace</Text>
+                <ActivityIndicator size="small" color="#4ADE80" style={{ marginTop: 12 }} />
+              </View>
+            )}
+            {vpCallActive && (
+              <View style={vpStyles.overlayTop}>
+                <Text style={vpStyles.connectedText}>VIDEOLLAMADA ACTIVA</Text>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -199,7 +297,33 @@ const vpStyles = StyleSheet.create({
   },
   headerTitle: { color: "#4ADE80", fontSize: 13, fontWeight: "700" },
   closeBtn: { width: 28, height: 28, borderRadius: 14, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(255,255,255,0.1)", cursor: "pointer" },
-  body: { flex: 1, justifyContent: "center", alignItems: "center", padding: 16 },
+  body: { flex: 1, justifyContent: "center", alignItems: "center" },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.7)",
+    zIndex: 2,
+  },
+  overlayTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+    alignItems: "center",
+    paddingVertical: 8,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  retryBtn: {
+    marginTop: 16,
+    backgroundColor: "#4ADE80",
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 8,
+    cursor: "pointer",
+  },
+  retryBtnText: { color: "#000", fontSize: 14, fontWeight: "700" },
   centerContent: { alignItems: "center", justifyContent: "center" },
   pulseCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(74,222,128,0.1)", justifyContent: "center", alignItems: "center" },
   connectingText: { color: "#4ADE80", marginTop: 16, fontSize: 16, fontWeight: "900", letterSpacing: 1 },
@@ -797,7 +921,7 @@ export default function WebDashboardView() {
                 </View>
 
                 {/* Video Call Panel */}
-                {showVideoCallPanel && <WebVideoCallPanel incidentDetail={incidentDetail} onClose={() => setShowVideoCallPanel(false)} />}
+                {showVideoCallPanel && <WebVideoCallPanel incidentDetail={incidentDetail} onClose={() => setShowVideoCallPanel(false)} myUid={uid} />}
 
                 {/* Right: Info + Call + Actions */}
                 <View style={[s.infoSection, { borderLeftColor: colors.border }]}>

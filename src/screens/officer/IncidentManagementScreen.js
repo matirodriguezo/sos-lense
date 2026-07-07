@@ -33,9 +33,19 @@ import {
 import { getCurrentAlias } from "../../services/userStore";
 import MessageBubble from "../../components/MessageBubble";
 import { useTheme } from "../../context/ThemeContext";
+import WebRTCView from "../../components/WebRTCView";
+import {
+  listenSignaling,
+  sendOffer,
+  sendIceCandidate,
+  clearSignaling,
+} from "../../services/signalingService";
 import { useNotifications } from "../../context/NotificationContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+
+console.log("%c[INCIDENT-MGMT] v2 - WEBRTC ENABLED", "color:#4ADE80;font-size:16px;font-weight:bold");
+
 const DISPATCH_OPTIONS = [
   { id: 1, icon: "police-badge", label: "Despachar Patrulla", color: "#1976D2" },
   { id: 2, icon: "ambulance", label: "Solicitar SAMU", color: "#D32F2F" },
@@ -71,23 +81,23 @@ export default function IncidentManagementScreen({ route, navigation }) {
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [callActive, setCallActive] = useState(false);
   const [connecting, setConnecting] = useState(true);
+  const [callError, setCallError] = useState(null);
   const flatListRef = useRef(null);
   const intervalRef = useRef(null);
   const markedRef = useRef(new Set());
   const pulseAnim = useRef(new Animated.Value(0)).current;
+  const webRTCRef = useRef(null);
+  const connectionTimeoutRef = useRef(null);
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
-  // Simulated connecting sequence
   useEffect(() => {
     console.log("[IncidentMgmt] Mounted, incident:", incidentId, "autoOpenChat:", autoOpenChat);
-    const timer = setTimeout(() => {
-      setConnecting(false);
-      setCallActive(true);
-      console.log("[IncidentMgmt] Connection established");
-    }, 3000);
+    connectionTimeoutRef.current = setTimeout(() => {
+      setCallError("No se pudo establecer la videollamada. Verifica que el ciudadano esté conectado.");
+    }, 25000);
     return () => {
-      clearTimeout(timer);
+      if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
       console.log("[IncidentMgmt] Unmounted");
     };
   }, []);
@@ -175,6 +185,33 @@ export default function IncidentManagementScreen({ route, navigation }) {
     }
   }, [messages, showChatModal]);
 
+  // Real WebRTC signaling — listen for citizen's answer and ICE
+  useEffect(() => {
+    if (!incident?.citizenId) return;
+    const citizenId = incident.citizenId;
+    const myUid = auth.currentUser?.uid;
+    if (!myUid) return;
+
+    console.log("[IncidentMgmt] Setting up signaling listener for citizen:", citizenId);
+
+    const unsubSignaling = listenSignaling(incidentId, citizenId, {
+      onAnswer: (sdp) => {
+        console.log("[IncidentMgmt] Received answer from citizen");
+        webRTCRef.current?.forwardSignaling("answer", sdp);
+      },
+      onIce: (candidate) => {
+        webRTCRef.current?.forwardSignaling("ice", candidate);
+      },
+    });
+
+    return () => {
+      console.log("[IncidentMgmt] Cleaning up signaling");
+      unsubSignaling();
+      clearSignaling(incidentId, myUid);
+      webRTCRef.current?.hangUp();
+    };
+  }, [incidentId, incident?.citizenId]);
+
   const handleSend = async () => {
     if (!input.trim()) return;
     const text = input.trim();
@@ -226,6 +263,37 @@ export default function IncidentManagementScreen({ route, navigation }) {
 
   const isMine = (msg) => msg.senderId === auth.currentUser?.uid;
 
+  const handleWebRTCMessage = (type, data) => {
+    switch (type) {
+      case "ready":
+        console.log("[IncidentMgmt] WebRTC ready, creating offer");
+        webRTCRef.current?.forwardSignaling("makeOffer");
+        break;
+      case "offer":
+        sendOffer(incidentId, auth.currentUser?.uid, data).catch(() => {});
+        break;
+      case "ice":
+        sendIceCandidate(incidentId, auth.currentUser?.uid, data).catch(() => {});
+        break;
+      case "remote_on":
+        console.log("[IncidentMgmt] Remote video received");
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
+        setConnecting(false);
+        setCallActive(true);
+        break;
+      case "disconnected":
+        console.warn("[IncidentMgmt] WebRTC disconnected");
+        break;
+      case "error":
+        console.error("[IncidentMgmt] WebRTC error:", data);
+        setCallError(data);
+        break;
+    }
+  };
+
   const openMaps = () => {
     if (!incident?.latitude || !incident?.longitude) {
       Alert.alert("Ubicación no disponible", "No se ha registrado la ubicación del ciudadano.");
@@ -269,12 +337,29 @@ export default function IncidentManagementScreen({ route, navigation }) {
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       <View style={{ flex: 1, position: "relative" }}>
-        {/* Connecting overlay */}
+        {/* WebRTC video background */}
+        {!isFinal && !callError && (
+          <WebRTCView ref={webRTCRef} onWebRTCMessage={handleWebRTCMessage} style={s.webRTCBg} />
+        )}
+
+        {/* Overlay content */}
         {isFinal ? (
           <View style={s.connectingContainer}>
             <MaterialCommunityIcons name="check-circle-outline" size={80} color={GRAY} />
             <Text style={[s.connectedText, { color: GRAY }]}>PROCEDIMIENTO FINALIZADO</Text>
             <Text style={[s.connectedSub, { color: GRAY }]}>Este caso ha sido cerrado.</Text>
+          </View>
+        ) : callError ? (
+          <View style={s.connectingContainer}>
+            <MaterialCommunityIcons name="close-circle-outline" size={80} color="#EF4444" />
+            <Text style={[s.connectedText, { color: "#EF4444" }]}>ERROR DE CONEXIÓN</Text>
+            <Text style={[s.connectingSub, { color: "rgba(255,255,255,0.5)", marginTop: 8, fontSize: 13, textAlign: "center", paddingHorizontal: 32 }]}>{callError}</Text>
+            <TouchableOpacity
+              style={{ marginTop: 24, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: "#4ADE80", borderRadius: 8 }}
+              onPress={() => { setCallError(null); setConnecting(true); webRTCRef.current?.hangUp(); }}
+            >
+              <Text style={{ color: "#000", fontWeight: "bold", fontSize: 14 }}>Reintentar</Text>
+            </TouchableOpacity>
           </View>
         ) : connecting ? (
           <View style={s.connectingContainer}>
@@ -285,13 +370,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
             <Text style={s.connectingSub}>Estableciendo enlace con ciudadano</Text>
             <ActivityIndicator size="small" color="#4ADE80" style={{ marginTop: 20 }} />
           </View>
-        ) : (
-          <View style={s.connectingContainer}>
-            <MaterialCommunityIcons name="video" size={80} color="#4ADE80" />
-            <Text style={s.connectedText}>VIDEOLLAMADA ACTIVA</Text>
-            <Text style={s.connectedSub}>Conexión establecida con el ciudadano</Text>
-          </View>
-        )}
+        ) : null}
 
         <View style={[s.header, { top: insets.top }]}>
           <TouchableOpacity style={[s.backBtn, { backgroundColor: isFinal ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.15)" }]} onPress={handleBack}>
@@ -469,4 +548,5 @@ const makeStyles = (colors) =>
     citizenBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 4, alignSelf: "center" },
     commBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 2, alignSelf: "center" },
     citizenBadgeText: { color: "#fff", fontSize: 9, fontWeight: "bold", letterSpacing: 0.3 },
+    webRTCBg: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
   });

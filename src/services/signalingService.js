@@ -5,7 +5,6 @@ import {
   onSnapshot,
   serverTimestamp,
   arrayUnion,
-  updateDoc,
 } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
 
@@ -22,7 +21,13 @@ export function listenSignaling(incidentId, remoteUid, callbacks) {
   console.log("[Signal] listen start", incidentId, remoteUid);
 
   return onSnapshot(ref, (snap) => {
-    if (!snap.exists()) { console.log("[Signal] snap no doc"); return; }
+    if (!snap.exists()) {
+      console.log("[Signal] snap no doc — resetting flags");
+      forwardedOffer = false;
+      forwardedAnswer = false;
+      seenIce.clear();
+      return;
+    }
     const data = snap.data();
     console.log("[Signal] snap type=" + (data.type || "?") + " ice=" + ((data.ice && data.ice.length) || 0) + " sdp=" + (data.sdp ? "yes" : "no"));
 
@@ -34,8 +39,15 @@ export function listenSignaling(incidentId, remoteUid, callbacks) {
 
     if (data.type === "answer" && data.sdp && !forwardedAnswer) {
       forwardedAnswer = true;
-      console.log("[Signal] forwarding answer");
-      try { callbacks?.onAnswer?.(JSON.parse(data.sdp)); } catch { callbacks?.onAnswer?.(data.sdp); }
+      try {
+        const parsed = JSON.parse(data.sdp);
+        const mlines = (parsed.sdp || "").split("\n").filter((l) => l.startsWith("m=")).join(", ");
+        console.log("[Signal] forwarding answer m-lines:", mlines);
+        callbacks?.onAnswer?.(parsed);
+      } catch {
+        console.log("[Signal] forwarding answer (raw)");
+        callbacks?.onAnswer?.(data.sdp);
+      }
     }
 
     if (data.ice && Array.isArray(data.ice)) {
@@ -83,9 +95,7 @@ export async function sendIceCandidate(incidentId, uid, candidate) {
   console.log("[Signal] sendIce", incidentId, uid);
   const ref = createSignalingChannel(incidentId, uid);
   try {
-    await updateDoc(ref, {
-      ice: arrayUnion(JSON.stringify(candidate)),
-    });
+    await setDoc(ref, { ice: arrayUnion(JSON.stringify(candidate)) }, { merge: true });
   } catch (e) {
     console.log("[Signal] sendIce error", e.message);
   }
