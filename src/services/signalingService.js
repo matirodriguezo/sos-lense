@@ -19,15 +19,22 @@ export function listenSignaling(incidentId, remoteUid, callbacks) {
   let forwardedAnswer = false;
 
   console.log("[Signal] listen start", incidentId, remoteUid);
+  let hadDoc = false;
 
   return onSnapshot(ref, (snap) => {
     if (!snap.exists()) {
-      console.log("[Signal] snap no doc — resetting flags");
+      if (hadDoc) {
+        console.log("[Signal] remote doc deleted — remote hung up");
+        callbacks?.onHangup?.();
+      } else {
+        console.log("[Signal] snap no doc (initial)");
+      }
       forwardedOffer = false;
       forwardedAnswer = false;
       seenIce.clear();
       return;
     }
+    hadDoc = true;
     const data = snap.data();
     console.log("[Signal] snap type=" + (data.type || "?") + " ice=" + ((data.ice && data.ice.length) || 0) + " sdp=" + (data.sdp ? "yes" : "no"));
 

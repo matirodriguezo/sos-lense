@@ -21,7 +21,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 <body>
 <div id="loading"><div class="spinner"></div><span>Conectando...</span></div>
 <button id="startBtn" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;padding:16px 32px;font-size:16px;border-radius:12px;border:none;background:#4ADE80;color:#000;font-weight:bold">Iniciar c\u00e1mara</button>
-<video id="remote" autoplay playsinline></video>
+<video id="remote" autoplay muted playsinline></video>
 <video id="local" autoplay muted playsinline></video>
 <script>
 (function(){

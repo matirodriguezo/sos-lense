@@ -127,11 +127,13 @@ function WebVideoCallPanel({ incidentDetail, onClose, myUid }) {
   const webrtcRef = useRef(null);
   const [vpConnecting, setVpConnecting] = useState(true);
   const [vpCallActive, setVpCallActive] = useState(false);
+  const [vpCallEnded, setVpCallEnded] = useState(false);
   const [vpError, setVpError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
   const callActiveRef = useRef(false);
   const pulseAnim = useRef(new Animated.Value(0)).current;
   const timeoutRef = useRef(null);
+  const endedTimerRef = useRef(null);
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -157,8 +159,16 @@ function WebVideoCallPanel({ incidentDetail, onClose, myUid }) {
       onIce: (candidate) => {
         webrtcRef.current?.forwardSignaling("ice", candidate);
       },
+      onHangup: () => {
+        console.log("[WebVC] citizen hung up");
+        setVpCallEnded(true);
+        webrtcRef.current?.hangUp();
+        clearTimeout(timeoutRef.current);
+        endedTimerRef.current = setTimeout(() => onClose(), 3000);
+      },
     });
     return () => {
+      clearTimeout(endedTimerRef.current);
       unsub();
       clearSignaling(incidentId, myUid).catch(() => {});
     };
@@ -210,6 +220,7 @@ function WebVideoCallPanel({ incidentDetail, onClose, myUid }) {
     callActiveRef.current = false;
     setVpConnecting(true);
     setVpCallActive(false);
+    setVpCallEnded(false);
     setVpError(null);
     setRetryKey((k) => k + 1);
   }, [incidentId, myUid]);
@@ -259,6 +270,13 @@ function WebVideoCallPanel({ incidentDetail, onClose, myUid }) {
             {vpCallActive && (
               <View style={vpStyles.overlayTop}>
                 <Text style={vpStyles.connectedText}>VIDEOLLAMADA ACTIVA</Text>
+              </View>
+            )}
+            {vpCallEnded && (
+              <View style={vpStyles.overlay}>
+                <MaterialCommunityIcons name="phone-hangup" size={48} color="#EF4444" />
+                <Text style={[vpStyles.connectingText, { color: "#EF4444", marginTop: 16 }]}>LLAMADA FINALIZADA</Text>
+                <Text style={vpStyles.connectingSub}>El ciudadano colgó</Text>
               </View>
             )}
           </View>
