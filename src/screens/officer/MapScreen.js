@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, StatusBar, Linking, Platform, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { WebView } from "react-native-webview";
 import { auth } from "../../firebase/firebaseConfig";
-import { listenMyCases } from "../../services/incidentService";
+import { listenAllActiveIncidents } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-const ACTIVE_STATUSES = ["ACTIVO", "EN_CURSO", "NO_CLASIFICADO"];
 
 const sortByTimeAsc = (a, b) => {
   const tA = a.createdAt?.toMillis?.() || 0;
@@ -42,17 +42,86 @@ export default function MapScreen({ navigation }) {
   const s = useMemo(() => makeStyles(colors), [colors]);
 
   useEffect(() => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) return;
-    const unsub = listenMyCases(uid, (data) => {
-      const active = data
-        .filter((i) => ACTIVE_STATUSES.includes(i.status))
-        .sort(sortByTimeAsc);
-      setIncidents(active);
+    const unsub = listenAllActiveIncidents((data) => {
+      const withCoords = data.filter((i) => i.latitude && i.longitude);
+      setIncidents(withCoords.sort(sortByTimeAsc));
       setLoading(false);
     });
     return unsub;
   }, []);
+
+  const mapHtml = useMemo(() => {
+    const markers = incidents.map((i) => ({
+      lat: i.latitude,
+      lng: i.longitude,
+      label: i.citizenAlias || "Usuario",
+      type: i.type || "Sin tipo",
+      status: i.status || "",
+      id: i.id,
+      folio: i.id.slice(0, 8).toUpperCase(),
+    }));
+    const center = markers.length > 0 ? `[${markers[0].lat}, ${markers[0].lng}]` : "[-33.4489, -70.6693]";
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: system-ui, -apple-system, sans-serif; }
+          #map { width: 100vw; height: 100vh; }
+          .leaflet-popup-content-wrapper { border-radius: 8px; }
+          .leaflet-popup-content { margin: 8px 12px; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script>
+          var map = L.map('map', { zoomControl: true });
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap', maxZoom: 19
+          }).addTo(map);
+          var markers = ${JSON.stringify(markers)};
+          var bounds = [];
+          var colors = {
+            'NO_CLASIFICADO': '#F57C00',
+            'ACTIVO': '#D32F2F',
+            'EN_CURSO': '#0B5E2E',
+            'CERRADO': '#666666',
+            'ANULADO': '#9E9E9E'
+          };
+          markers.forEach(function(m) {
+            if (!m.lat || !m.lng) return;
+            var color = colors[m.status] || '#3B82F6';
+            var icon = L.divIcon({
+              className: '',
+              html: '<div style="width:22px;height:22px;border-radius:50%;background:'+color+';border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;">●</div>',
+              iconSize: [22, 22],
+              iconAnchor: [11, 11],
+              popupAnchor: [0, -14]
+            });
+            var marker = L.marker([m.lat, m.lng], { icon: icon }).addTo(map);
+            marker.bindPopup(
+              '<b>' + m.label + '</b><br/>' +
+              m.type + '<br/>' +
+              'Folio: ' + m.folio + '<br/>' +
+              'Estado: ' + m.status
+            );
+            bounds.push([m.lat, m.lng]);
+          });
+          if (bounds.length > 0) {
+            map.fitBounds(bounds, { padding: [40, 40] });
+          } else {
+            map.setView(${center}, 12);
+          }
+        </script>
+      </body>
+      </html>
+    `;
+  }, [incidents]);
 
   const openMaps = (lat, lng) => {
     if (!lat || !lng) {
@@ -89,105 +158,103 @@ export default function MapScreen({ navigation }) {
         <View style={{ alignItems: "center" }}>
           <Text style={[s.headerTitle, { color: colors.gold }]}>Mapa Global</Text>
           <Text style={[s.headerSub, { color: colors.whiteTranslucent }]}>
-            {incidents.length} caso{incidents.length !== 1 ? "s" : ""} activo{incidents.length !== 1 ? "s" : ""}
+            {incidents.length} incidente{incidents.length !== 1 ? "s" : ""} activo{incidents.length !== 1 ? "s" : ""}
           </Text>
         </View>
         <View style={{ width: 44 }} />
       </View>
 
-      <View style={[s.mapArea, { backgroundColor: colors.mapPlaceholderBg }]}>
-        <View style={s.mapPlaceholder}>
-          <MaterialCommunityIcons name="radar" size={80} color={colors.primary + "20"} />
-          <View style={[s.radarTarget, { backgroundColor: colors.badgeRed, borderColor: colors.badgeRed + "50" }]} />
-          <Text style={[s.mapHint, { color: colors.textSecondary }]}>Vista satelital simulada</Text>
-        </View>
-
+      <View style={s.mapArea}>
+        <WebView
+          source={{ html: mapHtml }}
+          style={s.webView}
+          scrollEnabled={false}
+          bounces={false}
+        />
         <View style={[s.legendBox, { backgroundColor: colors.blackTranslucent }]}>
-          <Text style={s.legendTitle}>MIS INCIDENTES</Text>
+          <Text style={s.legendTitle}>INCIDENTES ACTIVOS</Text>
           <Text style={s.legendText}>
             <Text style={{ color: colors.badgeRed }}>●</Text> Activos: {incidents.length}
           </Text>
         </View>
+      </View>
 
-        <View style={[s.bottomList, { backgroundColor: colors.surface }]}>
-          <Text style={[s.listTitle, { color: colors.textSecondary }]}>MIS INCIDENTES ACTIVOS</Text>
-          {incidents.length === 0 ? (
-            <View style={s.emptyState}>
-              <Ionicons name="shield-checkmark-outline" size={48} color={colors.border} />
-              <Text style={[s.emptyTitle, { color: colors.textSecondary }]}>Sin incidentes activos</Text>
-              <Text style={[s.emptySub, { color: colors.textSecondary }]}>Los casos que tomes aparecerán aquí.</Text>
-            </View>
-          ) : (
-            incidents.map((item) => (
-              <View
-                key={item.id}
-                style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              >
-                <View style={s.cardHeader}>
-                  <View style={[s.dot, { backgroundColor: colors.badgeRed }]} />
-                  <Text style={[s.cardType, { color: colors.textPrimary }]}>
-                    {TYPE_LABELS[item.type] || item.type || "Sin clasificar"}
-                  </Text>
-                  <View style={[s.elapsedBadge, { backgroundColor: colors.badgeRed + "15" }]}>
-                    <Text style={[s.elapsedText, { color: colors.badgeRed }]}>
-                      {getElapsed(item.createdAt)}
-                    </Text>
-                  </View>
-                </View>
-
-                <Text style={[s.cardFolio, { color: colors.textSecondary }]}>
-                  Folio #{item.id.slice(0, 8).toUpperCase()}
+      <View style={[s.bottomList, { backgroundColor: colors.surface }]}>
+        <Text style={[s.listTitle, { color: colors.textSecondary }]}>INCIDENTES ACTIVOS</Text>
+        {incidents.length === 0 ? (
+          <View style={s.emptyState}>
+            <Ionicons name="shield-checkmark-outline" size={48} color={colors.border} />
+            <Text style={[s.emptyTitle, { color: colors.textSecondary }]}>Sin incidentes activos</Text>
+            <Text style={[s.emptySub, { color: colors.textSecondary }]}>Los nuevos requerimientos aparecerán aquí.</Text>
+          </View>
+        ) : (
+          incidents.map((item) => (
+            <View
+              key={item.id}
+              style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <View style={s.cardHeader}>
+                <View style={[s.dot, { backgroundColor: colors.badgeRed }]} />
+                <Text style={[s.cardType, { color: colors.textPrimary }]}>
+                  {TYPE_LABELS[item.type] || item.type || "Sin clasificar"}
                 </Text>
-
-                {item.address && (
-                  <Text style={[s.cardAddress, { color: colors.textSecondary }]} numberOfLines={2}>
-                    {item.address}
+                <View style={[s.elapsedBadge, { backgroundColor: colors.badgeRed + "15" }]}>
+                  <Text style={[s.elapsedText, { color: colors.badgeRed }]}>
+                    {getElapsed(item.createdAt)}
                   </Text>
-                )}
-
-                <View style={s.cardCoords}>
-                  <MaterialCommunityIcons name="crosshairs-gps" size={14} color={colors.primary} />
-                  <Text style={[s.coordText, { color: colors.textSecondary }]}>
-                    {item.latitude?.toFixed(6)}, {item.longitude?.toFixed(6)}
-                  </Text>
-                </View>
-
-                <View style={s.cardActions}>
-                  <TouchableOpacity
-                    style={[s.actionBtn, { backgroundColor: colors.primary }]}
-                    onPress={() => openMaps(item.latitude, item.longitude)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="location-outline" size={16} color={colors.white} />
-                    <Text style={s.actionBtnText}>Ver en Mapas</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.actionBtn, { backgroundColor: colors.blueDispatch }]}
-                    onPress={() => {
-                      Alert.alert("Acceder", "¿Deseas acceder a este incidente?", [
-                        { text: "Cancelar", style: "cancel" },
-                        {
-                          text: "Acceder",
-                          onPress: () =>
-                            navigation.navigate("Emergencia", {
-                              screen: "IncidentManagement",
-                              params: { incidentId: item.id },
-                            }),
-                        },
-                      ]);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialCommunityIcons name="video" size={16} color={colors.white} />
-                    <Text style={s.actionBtnText}>Acceder al Incidente</Text>
-                  </TouchableOpacity>
                 </View>
               </View>
-            ))
-          )}
 
+              <Text style={[s.cardFolio, { color: colors.textSecondary }]}>
+                Folio #{item.id.slice(0, 8).toUpperCase()}
+              </Text>
 
-        </View>
+              {item.address && (
+                <Text style={[s.cardAddress, { color: colors.textSecondary }]} numberOfLines={2}>
+                  {item.address}
+                </Text>
+              )}
+
+              <View style={s.cardCoords}>
+                <MaterialCommunityIcons name="crosshairs-gps" size={14} color={colors.primary} />
+                <Text style={[s.coordText, { color: colors.textSecondary }]}>
+                  {item.latitude?.toFixed(6)}, {item.longitude?.toFixed(6)}
+                </Text>
+              </View>
+
+              <View style={s.cardActions}>
+                <TouchableOpacity
+                  style={[s.actionBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => openMaps(item.latitude, item.longitude)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="location-outline" size={16} color={colors.white} />
+                  <Text style={s.actionBtnText}>Ver en Mapas</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.actionBtn, { backgroundColor: colors.blueDispatch }]}
+                  onPress={() => {
+                    Alert.alert("Acceder", "¿Deseas acceder a este incidente?", [
+                      { text: "Cancelar", style: "cancel" },
+                      {
+                        text: "Acceder",
+                        onPress: () =>
+                          navigation.navigate("Emergencia", {
+                            screen: "IncidentManagement",
+                            params: { incidentId: item.id },
+                          }),
+                      },
+                    ]);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons name="video" size={16} color={colors.white} />
+                  <Text style={s.actionBtnText}>Acceder al Incidente</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
       </View>
     </SafeAreaView>
   );
@@ -206,9 +273,7 @@ const makeStyles = (colors) =>
     headerSub: { fontSize: 11, marginTop: 2 },
 
     mapArea: { flex: 1, position: "relative" },
-    mapPlaceholder: { flex: 1, justifyContent: "center", alignItems: "center" },
-    radarTarget: { position: "absolute", width: 20, height: 20, borderRadius: 10, borderWidth: 4 },
-    mapHint: { position: "absolute", bottom: 20, fontSize: 11, fontStyle: "italic" },
+    webView: { flex: 1, backgroundColor: "#0f1117" },
 
     legendBox: {
       position: "absolute", top: 16, left: 16,
@@ -221,7 +286,7 @@ const makeStyles = (colors) =>
       padding: 16,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
-      maxHeight: 320,
+      maxHeight: 300,
     },
     listTitle: { fontSize: 11, fontWeight: "bold", letterSpacing: 1, marginBottom: 12 },
     emptyState: { alignItems: "center", paddingVertical: 24 },

@@ -34,6 +34,12 @@ export async function triggerSOS(citizenId, { latitude, longitude, address, citi
     observations: "",
     closedReason: "",
     cancelled: false,
+    locationHistory: [{
+      lat: latitude,
+      lng: longitude,
+      label: "Inicio de emergencia",
+      _t: Date.now(),
+    }],
     participantStatus: {
       citizen: "CITIZEN_ALERT_SENT",
       citizenUpdatedAt: serverTimestamp(),
@@ -120,6 +126,18 @@ export function listenIncidentById(incidentId, callback) {
     }
   }, (error) => {
     console.warn(`${LOG} listenIncidentById error:`, error?.code || error);
+  });
+}
+
+export function listenLocationHistory(incidentId, callback) {
+  const q = query(
+    collection(db, "incidents", incidentId, "locationHistory"),
+    orderBy("_t", "asc")
+  );
+  return onSnapshot(q, (snapshot) => {
+    callback(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+  }, (error) => {
+    console.warn(`${LOG} listenLocationHistory error:`, error?.code || error);
   });
 }
 
@@ -279,6 +297,20 @@ export const COMM_MODE = {
   CHAT_ONLY: "CHAT_ONLY",
   ALERT_ONLY: "ALERT_ONLY",
 };
+
+export async function updateIncidentLocation(incidentId, latitude, longitude, label) {
+  await updateDoc(doc(db, "incidents", incidentId), {
+    latitude,
+    longitude,
+    locationHistory: arrayUnion({
+      lat: latitude,
+      lng: longitude,
+      label: label || `${new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}`,
+      _t: Date.now(),
+    }),
+    updatedAt: serverTimestamp(),
+  });
+}
 
 export async function updateCommunicationMode(incidentId, mode) {
   await updateDoc(doc(db, "incidents", incidentId), {

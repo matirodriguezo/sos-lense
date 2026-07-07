@@ -16,6 +16,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
+import { WebView } from "react-native-webview";
 import { auth } from "../../firebase/firebaseConfig";
 import {
   listenIncidentById,
@@ -69,6 +70,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
   const [elapsed, setElapsed] = useState("00:00");
   const [showChatModal, setShowChatModal] = useState(autoOpenChat || false);
   const [showDispatchModal, setShowDispatchModal] = useState(false);
+  const [showMapTraceModal, setShowMapTraceModal] = useState(false);
   const [callActive, setCallActive] = useState(false);
   const [connecting, setConnecting] = useState(true);
   const flatListRef = useRef(null);
@@ -252,6 +254,82 @@ export default function IncidentManagementScreen({ route, navigation }) {
   const isFinal = incident?.status === "CERRADO" || incident?.status === "ANULADO";
   const GRAY = "#6B7280";
 
+  const traceMapHtml = useMemo(() => {
+    const pts = [];
+    const labels = [];
+    const times = [];
+    if (incident?.locationHistory?.length > 0) {
+      incident.locationHistory.forEach((p) => { if (p.lat && p.lng) { pts.push([p.lat, p.lng]); labels.push(p.label || ""); times.push(p._t || null); } });
+    } else if (incident?.latitude && incident?.longitude) {
+      pts.push([incident.latitude, incident.longitude]);
+      labels.push("Actual");
+    }
+    const count = pts.length;
+    const center = count > 0 ? `[${pts[0][0]}, ${pts[0][1]}]` : "[-33.4489, -70.6693]";
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: system-ui, sans-serif; background: #0f1117; }
+          #map { width: 100vw; height: 100vh; }
+          .leaflet-popup-content-wrapper { border-radius: 8px; }
+          .leaflet-popup-content { margin: 8px 12px; font-size: 13px; line-height: 1.4; }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script>
+          var map = L.map('map', { zoomControl: true });
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap', maxZoom: 19
+          }).addTo(map);
+          var pts = ${JSON.stringify(pts)};
+          var lbls = ${JSON.stringify(labels)};
+          var tms = ${JSON.stringify(times)};
+          var count = pts.length;
+          pts.forEach(function(pt, i) {
+            var isNewest = i === count - 1;
+            var isOldest = i === 0;
+            var num = i + 1;
+            var bg = isNewest ? '#D32F2F' : isOldest ? '#6B7280' : '#3B82F6';
+            var size = isNewest ? 32 : 26;
+            var icon = L.divIcon({
+              className: '',
+              html: '<div style="width:'+size+'px;height:'+size+'px;border-radius:50%;background:'+bg+';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;font-family:sans-serif;">'+num+'</div>',
+              iconSize: [size, size], iconAnchor: [size/2, size/2],
+            });
+            var marker = L.marker(pt, { icon }).addTo(map);
+            var label = lbls[i] || 'Punto ' + num;
+            var tm = tms[i];
+            var timeStr = tm ? new Date(tm).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '';
+            marker.bindPopup('<b>#'+num+'</b> &mdash; '+label + (timeStr ? '<br/><span style="color:#9CA3AF;font-size:11px;">' + timeStr + '</span>' : '') + (isNewest ? '<br/><i style="color:#D32F2F">Última ubicación</i>' : '') + (isOldest && count > 1 ? '<br/><i style="color:#6B7280">Inicio</i>' : ''));
+          });
+          if (count > 1) {
+            L.polyline(pts, { color: '#3B82F6', weight: 2, opacity: 0.5, dashArray: '5,5' }).addTo(map);
+          }
+          if (count > 0) map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
+          else map.setView(${center}, 12);
+
+          var legend = L.control({ position: 'bottomleft' });
+          legend.onAdd = function() {
+            var div = L.DomUtil.create('div');
+            div.style.cssText = 'background:rgba(15,17,23,0.85);color:#fff;padding:4px 10px;border-radius:6px;font-size:11px;font-family:sans-serif;font-weight:600;';
+            div.innerHTML = count + (count === 1 ? ' ubicación' : ' ubicaciones');
+            return div;
+          };
+          legend.addTo(map);
+        </script>
+      </body>
+      </html>
+    `;
+  }, [incident?.latitude, incident?.longitude, incident?.locationHistory]);
+
   const renderMessage = useCallback(({ item }) => (
     <MessageBubble
       message={item}
@@ -325,7 +403,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
               <MaterialCommunityIcons name="radio-handheld" size={22} color={isFinal ? "#4B5563" : colors.white} />
               <Text style={[s.ctrlLabel, { color: isFinal ? "#4B5563" : colors.white }]}>Despacho</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: isFinal ? GRAY : "#16A34A" }]} onPress={openMaps} disabled={isFinal}>
+            <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: isFinal ? GRAY : "#16A34A" }]} onPress={() => setShowMapTraceModal(true)} disabled={isFinal}>
               <Ionicons name="location-outline" size={22} color={isFinal ? "#4B5563" : colors.white} />
               <Text style={[s.ctrlLabel, { color: isFinal ? "#4B5563" : colors.white }]}>Ubicación</Text>
             </TouchableOpacity>
@@ -360,6 +438,28 @@ export default function IncidentManagementScreen({ route, navigation }) {
             </View>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={showMapTraceModal} transparent animationType="slide">
+        <View style={[s.mapTraceContainer, { backgroundColor: colors.drawerHeaderBg }]}>
+          <View style={s.mapTraceHeader}>
+            <View>
+              <Text style={s.mapTraceTitle}>Trazabilidad de Ubicación</Text>
+              <Text style={s.mapTraceSub}>
+                {(incident?.locationHistory?.length || 1)} {(incident?.locationHistory?.length || 0) === 1 ? "ubicación" : "ubicaciones"} — Folio #{incidentId?.slice(0, 8)?.toUpperCase()}
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TouchableOpacity style={s.mapTraceExtBtn} onPress={openMaps}>
+                <Ionicons name="open-outline" size={18} color={colors.white} />
+              </TouchableOpacity>
+              <TouchableOpacity style={s.mapTraceCloseBtn} onPress={() => setShowMapTraceModal(false)}>
+                <Ionicons name="close" size={22} color={colors.white} />
+              </TouchableOpacity>
+            </View>
+          </View>
+          <WebView source={{ html: traceMapHtml }} style={{ flex: 1, backgroundColor: "#0f1117" }} scrollEnabled={false} bounces={false} />
+        </View>
       </Modal>
 
       <Modal visible={showChatModal} transparent animationType="slide">
@@ -469,4 +569,16 @@ const makeStyles = (colors) =>
     citizenBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 4, alignSelf: "center" },
     commBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 2, alignSelf: "center" },
     citizenBadgeText: { color: "#fff", fontSize: 9, fontWeight: "bold", letterSpacing: 0.3 },
+
+    /* MAP TRACE MODAL */
+    mapTraceContainer: { flex: 1, marginTop: 40, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: "hidden" },
+    mapTraceHeader: {
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      paddingHorizontal: 16, paddingVertical: 12,
+      backgroundColor: colors.drawerHeaderBg,
+    },
+    mapTraceTitle: { color: colors.white, fontSize: 15, fontWeight: "700" },
+    mapTraceSub: { color: colors.whiteTranslucent, fontSize: 11, marginTop: 2 },
+    mapTraceCloseBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center", backgroundColor: colors.whiteTranslucent },
+    mapTraceExtBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center", backgroundColor: colors.primary },
   });
