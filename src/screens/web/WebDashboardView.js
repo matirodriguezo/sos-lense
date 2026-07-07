@@ -18,6 +18,7 @@ import { doc, getDoc } from "firebase/firestore";
 import {
   listenAllActiveIncidents,
   listenAllCancelled,
+  listenAllFinalized,
   listenMyCases,
   listenIncidentById,
   listenMessages,
@@ -37,7 +38,7 @@ import MessageBubble from "../../components/MessageBubble";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
-const SIDEBAR_WIDTH = 340;
+const SIDEBAR_WIDTH = 400;
 const STATUS_CONFIG = {
   NO_CLASIFICADO: { label: "Sin clasificar", color: "#F57C00" },
   ACTIVO: { label: "Activo", color: "#D32F2F" },
@@ -88,6 +89,12 @@ const formatShiftTime = () => {
   const minutes = Math.floor((totalSec % 3600) / 60);
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
+};
+
+const sortByTime = (a, b) => {
+  const tA = a.createdAt?.toMillis?.() || 0;
+  const tB = b.createdAt?.toMillis?.() || 0;
+  return tB - tA;
 };
 
 const ACTIVE_STATUSES = ["NO_CLASIFICADO", "ACTIVO", "EN_CURSO"];
@@ -218,6 +225,7 @@ export default function WebDashboardView() {
   const [activos, setActivos] = useState([]);
   const [myCases, setMyCases] = useState([]);
   const [cancelados, setCancelados] = useState([]);
+  const [finalizados, setFinalizados] = useState([]);
   const [activeTab, setActiveTab] = useState("activos");
   const [search, setSearch] = useState("");
   const [selectedIncident, setSelectedIncident] = useState(null);
@@ -251,11 +259,12 @@ export default function WebDashboardView() {
     getDoc(doc(db, "users", uid)).then((snap) => {
       if (snap.exists()) setUserData(snap.data());
     });
-    const unsubActive = listenAllActiveIncidents(setActivos);
-    const unsubMy = listenMyCases(uid, setMyCases);
-    const unsubCancelled = listenAllCancelled(setCancelados);
+    const unsubActive = listenAllActiveIncidents((data) => setActivos(data.sort(sortByTime)));
+    const unsubMy = listenMyCases(uid, (data) => setMyCases(data.sort(sortByTime)));
+    const unsubCancelled = listenAllCancelled((data) => setCancelados(data.sort(sortByTime)));
+    const unsubFinalized = listenAllFinalized((data) => setFinalizados(data.sort(sortByTime)));
     const timer = setInterval(() => setNow(Date.now()), 10000);
-    return () => { unsubActive(); unsubMy(); unsubCancelled(); clearInterval(timer); };
+    return () => { unsubActive(); unsubMy(); unsubCancelled(); unsubFinalized(); clearInterval(timer); };
   }, []);
 
   useEffect(() => {
@@ -420,6 +429,7 @@ export default function WebDashboardView() {
     let data = [];
     if (activeTab === "activos") data = activos;
     else if (activeTab === "mycases") data = myActiveCases;
+    else if (activeTab === "finalizados") data = finalizados;
     else data = cancelados;
     if (!search.trim()) return data;
     const q = search.toLowerCase();
@@ -537,7 +547,8 @@ export default function WebDashboardView() {
             {[
               { key: "activos", label: "Activos", count: activos.length },
               { key: "mycases", label: "Mis Casos", count: myActiveCases.length },
-              { key: "cancelados", label: "Cancelados", count: cancelados.length },
+              { key: "finalizados", label: "Finalizados", count: finalizados.length },
+              { key: "anulados", label: "Anulados", count: cancelados.length },
             ].map((tab) => (
               <TouchableOpacity
                 key={tab.key}
@@ -583,8 +594,12 @@ export default function WebDashboardView() {
                   <Text style={[s.welcomeStatLabel, { color: colors.warning }]}>Mis Casos</Text>
                 </View>
                 <View style={[s.welcomeStat, { backgroundColor: colors.statusRedBg, borderColor: colors.statusRedBorder }]}>
+                  <Text style={[s.welcomeStatNum, { color: colors.success }]}>{finalizados.length}</Text>
+                  <Text style={[s.welcomeStatLabel, { color: colors.success }]}>Finalizados</Text>
+                </View>
+                <View style={[s.welcomeStat, { backgroundColor: colors.statusRedBg, borderColor: colors.statusRedBorder }]}>
                   <Text style={[s.welcomeStatNum, { color: colors.success }]}>{cancelados.length}</Text>
-                  <Text style={[s.welcomeStatLabel, { color: colors.success }]}>Cancelados</Text>
+                  <Text style={[s.welcomeStatLabel, { color: colors.success }]}>Anulados</Text>
                 </View>
               </View>
             </View>
@@ -970,7 +985,7 @@ const makeStyles = (colors) =>
     searchInput: { flex: 1, fontSize: 14, outlineStyle: "none", outlineWidth: 0 },
     tabsRow: { flexDirection: "row", marginHorizontal: 12, marginBottom: 4 },
     tab: { flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: 2, borderBottomColor: "transparent", cursor: "pointer" },
-    tabText: { fontSize: 12, fontWeight: "600" },
+    tabText: { fontSize: 13, fontWeight: "600" },
     sidebarList: { flex: 1, paddingHorizontal: 8, paddingBottom: 8 },
     emptySidebar: { alignItems: "center", paddingTop: 60 },
     emptyText: { fontSize: 14, marginTop: 8 },

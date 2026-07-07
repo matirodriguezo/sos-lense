@@ -16,7 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { signOut } from "firebase/auth";
 import { auth, db } from "../../firebase/firebaseConfig";
 import { doc, getDoc } from "firebase/firestore";
-import { listenAllActiveIncidents, listenAllCancelled, listenMyCases, COMM_MODE } from "../../services/incidentService";
+import { listenAllActiveIncidents, listenAllCancelled, listenAllFinalized, listenMyCases, COMM_MODE } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
 import { getShiftStart } from "../../services/userStore";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -93,6 +93,7 @@ export default function DispatchPanelScreen({ navigation }) {
   const [activos, setActivos] = useState([]);
   const [myCases, setMyCases] = useState([]);
   const [cancelados, setCancelados] = useState([]);
+  const [finalizados, setFinalizados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [menuVisible, setMenuVisible] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -116,11 +117,16 @@ export default function DispatchPanelScreen({ navigation }) {
       setCancelados(data.sort(sortByTime));
       setLoading(false);
     });
+    const unsubFinalized = listenAllFinalized((data) => {
+      setFinalizados(data.sort(sortByTime));
+      setLoading(false);
+    });
     const interval = setInterval(() => setNow(Date.now()), 30000);
     return () => {
       unsubActive();
       unsubMyCases();
       unsubCancelled();
+      unsubFinalized();
       clearInterval(interval);
     };
   }, []);
@@ -265,7 +271,7 @@ export default function DispatchPanelScreen({ navigation }) {
   }, [colors, navigation, handleTakeProcedure]);
 
   const misCasosActivos = myCases.filter((c) => c.status !== "ANULADO" && c.status !== "CERRADO");
-  const data = activeTab === "activos" ? activos : activeTab === "cancelados" ? cancelados : misCasosActivos;
+  const data = activeTab === "activos" ? activos : activeTab === "mycases" ? misCasosActivos : activeTab === "finalizados" ? finalizados : cancelados;
 
   if (loading) {
     return (
@@ -392,11 +398,17 @@ export default function DispatchPanelScreen({ navigation }) {
         ]); }}>
           <Text style={[s.tabText, { color: colors.textSecondary }, activeTab === "mycases" && { color: colors.primary, fontWeight: "bold" }]}>Mis Casos ({misCasosActivos.length})</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[s.tab, activeTab === "cancelados" && { borderBottomColor: colors.primary }]} onPress={() => { if (activeTab !== "cancelados") Alert.alert("Cambiar vista", "¿Ver incidentes cancelados?", [
+        <TouchableOpacity style={[s.tab, activeTab === "finalizados" && { borderBottomColor: colors.primary }]} onPress={() => { if (activeTab !== "finalizados") Alert.alert("Cambiar vista", "¿Ver finalizados?", [
           { text: "Cancelar", style: "cancel" },
-          { text: "Ver", onPress: () => setActiveTab("cancelados") },
+          { text: "Ver", onPress: () => setActiveTab("finalizados") },
         ]); }}>
-          <Text style={[s.tabText, { color: colors.textSecondary }, activeTab === "cancelados" && { color: colors.primary, fontWeight: "bold" }]}>Cancelados ({cancelados.length})</Text>
+          <Text style={[s.tabText, { color: colors.textSecondary }, activeTab === "finalizados" && { color: colors.primary, fontWeight: "bold" }]}>Finalizados ({finalizados.length})</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[s.tab, activeTab === "anulados" && { borderBottomColor: colors.primary }]} onPress={() => { if (activeTab !== "anulados") Alert.alert("Cambiar vista", "¿Ver anulados?", [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Ver", onPress: () => setActiveTab("anulados") },
+        ]); }}>
+          <Text style={[s.tabText, { color: colors.textSecondary }, activeTab === "anulados" && { color: colors.primary, fontWeight: "bold" }]}>Anulados ({cancelados.length})</Text>
         </TouchableOpacity>
       </View>
 
@@ -413,10 +425,10 @@ export default function DispatchPanelScreen({ navigation }) {
           <View style={s.emptyState}>
             <Ionicons name="shield-checkmark-outline" size={60} color={colors.border} />
             <Text style={[s.emptyTitle, { color: colors.textSecondary }]}>
-              {activeTab === "activos" ? "Sin incidentes activos" : activeTab === "cancelados" ? "Sin cancelaciones" : "Sin casos asignados"}
+              {activeTab === "activos" ? "Sin incidentes activos" : activeTab === "mycases" ? "Sin casos asignados" : activeTab === "finalizados" ? "Sin finalizados" : "Sin anulados"}
             </Text>
             <Text style={[s.emptySub, { color: colors.textSecondary }]}>
-              {activeTab === "activos" ? "Los nuevos requerimientos aparecerán aquí." : activeTab === "cancelados" ? "No hay incidentes cancelados por usuarios." : "Los casos que tomes aparecerán aquí."}
+              {activeTab === "activos" ? "Los nuevos requerimientos aparecerán aquí." : activeTab === "mycases" ? "Los casos que tomes aparecerán aquí." : activeTab === "finalizados" ? "No hay incidentes finalizados." : "No hay incidentes anulados."}
             </Text>
           </View>
         }

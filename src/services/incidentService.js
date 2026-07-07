@@ -59,6 +59,18 @@ export function listenAllActiveIncidents(callback) {
   });
 }
 
+export function listenAllFinalized(callback) {
+  const q = query(
+    collection(db, "incidents"),
+    where("status", "==", "CERRADO")
+  );
+  return onSnapshot(q, (snapshot) => {
+    callback(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (error) => {
+    console.warn(`${LOG} listenAllFinalized error:`, error?.code || error);
+  });
+}
+
 export function listenAllCancelled(callback) {
   const q = query(
     collection(db, "incidents"),
