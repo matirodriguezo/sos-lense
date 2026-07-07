@@ -853,6 +853,29 @@ export default function WebDashboardView() {
                     </View>
                   )}
 
+                  {/* Emergency Contact */}
+                  {incidentDetail?.emergencyContact && (
+                    <View style={[s.emergencyContactBox, { borderColor: isFinal ? GRAY : "#DC2626", backgroundColor: isFinal ? GRAY + "15" : "#DC262615" }]}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <MaterialCommunityIcons name="account-alert" size={18} color={isFinal ? GRAY : "#DC2626"} />
+                        <Text style={[s.emergencyContactTitle, { color: isFinal ? GRAY : "#B91C1C" }]}>CONTACTO DE EMERGENCIA</Text>
+                      </View>
+                      <Text style={[s.emergencyContactName, { color: isFinal ? GRAY : colors.textPrimary }]}>
+                        {incidentDetail.emergencyContact.name || "Sin nombre"}
+                      </Text>
+                      {incidentDetail.emergencyContact.phone && (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+                          <TouchableOpacity onPress={() => window.open(`tel:${incidentDetail.emergencyContact.phone}`, "_self")}>
+                            <Text style={[s.emergencyContactAction, { color: isFinal ? GRAY : "#2563EB" }]}>📞 {incidentDetail.emergencyContact.phone}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => window.open(`sms:${incidentDetail.emergencyContact.phone}`, "_self")}>
+                            <Text style={[s.emergencyContactAction, { color: isFinal ? GRAY : "#2563EB" }]}>💬 SMS</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
                   {/* Tomar Procedimiento */}
                   {!incidentDetail?.officerId && isSelectedActive && !isFinal && (
                     <TouchableOpacity style={[s.actionBtnPrimary, { backgroundColor: colors.primary }]} onPress={handleTakeProcedure}>
@@ -1116,4 +1139,10 @@ const makeStyles = (colors) =>
     dispatchGrid: { flexDirection: "row", gap: 12 },
     dispatchBox: { flex: 1, borderRadius: 14, paddingVertical: 20, alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 8 },
     dispatchBoxText: { color: colors.white, fontSize: 12, fontWeight: "bold", textAlign: "center", paddingHorizontal: 4 },
+
+    /* EMERGENCY CONTACT */
+    emergencyContactBox: { borderRadius: 10, borderWidth: 1.5, padding: 12, gap: 4 },
+    emergencyContactTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+    emergencyContactName: { fontSize: 15, fontWeight: "700", marginTop: 2 },
+    emergencyContactAction: { fontSize: 13, fontWeight: "600", textDecorationLine: "underline", cursor: "pointer" },
   });

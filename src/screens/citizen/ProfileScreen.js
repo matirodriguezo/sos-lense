@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Switch } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../../firebase/firebaseConfig";
 import { listenCitizenHistory } from "../../services/incidentService";
 import { useTheme } from "../../context/ThemeContext";
@@ -11,6 +11,9 @@ export default function CitizenProfileScreen({ navigation }) {
   const { colors, isDark, toggleTheme } = useTheme();
   const [userData, setUserData] = useState(null);
   const [caseCount, setCaseCount] = useState(0);
+  const [emergencyName, setEmergencyName] = useState("");
+  const [emergencyPhone, setEmergencyPhone] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -20,7 +23,35 @@ export default function CitizenProfileScreen({ navigation }) {
 
   const loadUserData = async () => {
     const snap = await getDoc(doc(db, "users", auth.currentUser?.uid));
-    if (snap.exists()) setUserData(snap.data());
+    if (snap.exists()) {
+      const data = snap.data();
+      setUserData(data);
+      setEmergencyName(data.emergencyContact?.name || "");
+      setEmergencyPhone(data.emergencyContact?.phone || "");
+    }
+  };
+
+  const saveEmergencyContact = async () => {
+    if (!emergencyName.trim()) {
+      Alert.alert("Error", "Ingresa el nombre del contacto.");
+      return;
+    }
+    if (!emergencyPhone.trim()) {
+      Alert.alert("Error", "Ingresa el teléfono del contacto.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, "users", auth.currentUser?.uid), {
+        emergencyContact: { name: emergencyName.trim(), phone: emergencyPhone.trim() },
+      });
+      Alert.alert("Guardado", "Contacto de emergencia actualizado.");
+    } catch (e) {
+      console.warn("[Profile] Save emergency contact error:", e);
+      Alert.alert("Error", "No se pudo guardar. Intenta de nuevo.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleLogout = () => {
@@ -94,6 +125,38 @@ export default function CitizenProfileScreen({ navigation }) {
           <Text style={[s.dataSub, { color: colors.textSecondary }]}>Región Metropolitana</Text>
         </View>
 
+        <View style={[s.dataCard, { backgroundColor: colors.surface, borderColor: colors.primary, borderWidth: 2 }]}>
+          <View style={s.dataHeader}>
+            <Ionicons name="alert-circle-outline" size={20} color={colors.danger} />
+            <Text style={[s.dataTitle, { color: colors.danger }]}>CONTACTO DE EMERGENCIA</Text>
+          </View>
+          <Text style={[s.dataSub, { color: colors.textSecondary, marginBottom: 12 }]}>
+            Este contacto recibirá un SMS cuando actives una emergencia.
+          </Text>
+          <TextInput
+            style={[s.emergencyInput, { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border }]}
+            placeholder="Nombre completo"
+            placeholderTextColor={colors.textSecondary}
+            value={emergencyName}
+            onChangeText={setEmergencyName}
+          />
+          <TextInput
+            style={[s.emergencyInput, { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border }]}
+            placeholder="Teléfono (ej: +56912345678)"
+            placeholderTextColor={colors.textSecondary}
+            value={emergencyPhone}
+            onChangeText={setEmergencyPhone}
+            keyboardType="phone-pad"
+          />
+          <TouchableOpacity
+            style={[s.saveBtn, { backgroundColor: colors.danger, opacity: saving ? 0.6 : 1 }]}
+            onPress={saveEmergencyContact}
+            disabled={saving}
+          >
+            <Text style={s.saveBtnText}>{saving ? "Guardando..." : "Guardar Contacto"}</Text>
+          </TouchableOpacity>
+        </View>
+
         <TouchableOpacity style={[s.logoutBtn, { backgroundColor: colors.surface, borderColor: colors.badgeRed }]} onPress={() => {
           Alert.alert("Cerrar Sesión", "¿Estás seguro de cerrar tu sesión?", [
             { text: "Cancelar", style: "cancel" },
@@ -135,6 +198,15 @@ const makeStyles = (colors) =>
     dataValueBig: { fontSize: 28, fontWeight: "900" },
     dataValue: { fontSize: 18, fontWeight: "bold" },
     dataSub: { fontSize: 12, marginTop: 4 },
+
+    emergencyInput: {
+      borderWidth: 1, borderRadius: 10, padding: 14, fontSize: 14,
+      marginBottom: 10,
+    },
+    saveBtn: {
+      padding: 14, borderRadius: 10, alignItems: "center", marginTop: 4,
+    },
+    saveBtnText: { color: "#fff", fontWeight: "bold", fontSize: 14 },
 
     logoutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: "auto", padding: 16, borderRadius: 12, borderWidth: 1, gap: 8 },
     logoutText: { fontSize: 14, fontWeight: "bold" },

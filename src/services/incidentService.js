@@ -17,9 +17,9 @@ import { db } from "../firebase/firebaseConfig";
 
 const LOG = "[IncidentSvc]";
 
-export async function triggerSOS(citizenId, { latitude, longitude, address, citizenAlias }) {
+export async function triggerSOS(citizenId, { latitude, longitude, address, citizenAlias, emergencyContact }) {
   console.log(`${LOG} triggerSOS: citizen=${citizenId.slice(0, 6)}..., lat=${latitude.toFixed(4)}, lng=${longitude.toFixed(4)}`);
-  const docRef = await addDoc(collection(db, "incidents"), {
+  const docData = {
     citizenId,
     citizenAlias: citizenAlias || "",
     officerId: null,
@@ -42,7 +42,11 @@ export async function triggerSOS(citizenId, { latitude, longitude, address, citi
     },
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+  };
+  if (emergencyContact) {
+    docData.emergencyContact = emergencyContact;
+  }
+  const docRef = await addDoc(collection(db, "incidents"), docData);
   console.log(`${LOG} Incident created: ${docRef.id}`);
   return docRef.id;
 }

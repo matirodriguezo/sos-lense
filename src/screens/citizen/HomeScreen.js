@@ -25,7 +25,7 @@ import { db } from "../../firebase/firebaseConfig";
 import { triggerSOS, listenCitizenHistory } from "../../services/incidentService";
 import { getCurrentAlias } from "../../services/userStore";
 import { INCIDENT_STATUS, CENCO_PHONE } from "../../constants/roles";
-import { sendSOSBySMS } from "../../services/smsFallback";
+import { sendSOSBySMS, sendEmergencyAlertSMS } from "../../services/smsFallback";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
@@ -231,16 +231,26 @@ export default function HomeScreen({ navigation }) {
       setLoadingMessage("Enviando ubicación a CENCO...");
       const address = await getAddress(latitude, longitude);
 
+      const userSnap = await getDoc(doc(db, "users", user.uid));
+      const emergencyContact = userSnap.exists() ? userSnap.data().emergencyContact : null;
+      console.log(`${LOG} emergencyContact:`, emergencyContact ? `${emergencyContact.name} ${emergencyContact.phone}` : "none");
+
       const netState = await NetInfo.fetch();
       const isOnline = netState.isConnected && netState.isInternetReachable !== false;
 
       let incidentId = null;
       if (isOnline) {
-        incidentId = await triggerSOS(user.uid, { latitude, longitude, address, citizenAlias });
+        incidentId = await triggerSOS(user.uid, { latitude, longitude, address, citizenAlias, emergencyContact });
         console.log(`${LOG} Incident created: ${incidentId}`);
       } else {
         console.log(`${LOG} Offline — falling back to SMS`);
         await sendSOSBySMS([CENCO_PHONE], { latitude, longitude, address, alias: citizenAlias });
+      }
+
+      if (emergencyContact?.phone) {
+        setLoadingMessage(`Notificando a ${emergencyContact.name}...`);
+        await sendEmergencyAlertSMS(emergencyContact.phone, { latitude, longitude, address, alias: citizenAlias });
+        console.log(`${LOG} Emergency contact notified: ${emergencyContact.name} ${emergencyContact.phone}`);
       }
 
       setLoadingMessage("Ubicación enviada ✓");

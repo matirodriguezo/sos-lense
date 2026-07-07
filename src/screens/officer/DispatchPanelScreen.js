@@ -8,6 +8,7 @@ import {
   Dimensions,
   StatusBar,
   Alert,
+  Linking,
   Image,
   ActivityIndicator,
   Platform,
@@ -234,7 +235,29 @@ export default function DispatchPanelScreen({ navigation }) {
                   </Text>
                 </View>
               )}
+              {item.emergencyContact && (
+                <View style={[s.emergencyContactDot, { backgroundColor: isFinal ? GRAY : "#DC2626" }]} />
+              )}
             </View>
+            {item.emergencyContact && (
+              <View style={[s.emergencyCardBadge, { backgroundColor: isFinal ? GRAY + "20" : "#DC262620", borderColor: isFinal ? GRAY : "#DC2626" }]}>
+                <Text style={[s.emergencyCardBadgeTitle, { color: isFinal ? GRAY : "#B91C1C" }]}>CONTACTO DE EMERGENCIA</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={[s.emergencyCardBadgeName, { color: isFinal ? GRAY : colors.textPrimary }]}>{item.emergencyContact.name || "Sin nombre"}</Text>
+                  {item.emergencyContact.phone ? (
+                    <>
+                      <TouchableOpacity onPress={() => Linking.openURL(`tel:${item.emergencyContact.phone}`)}>
+                        <Text style={[s.emergencyCardBadgeAction, { color: isFinal ? GRAY : "#2563EB" }]}>📞</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => Linking.openURL(`sms:${item.emergencyContact.phone}`)}>
+                        <Text style={[s.emergencyCardBadgeAction, { color: isFinal ? GRAY : "#2563EB" }]}>💬</Text>
+                      </TouchableOpacity>
+                      <Text style={[s.emergencyCardBadgePhone, { color: isFinal ? GRAY : colors.textSecondary }]}>{item.emergencyContact.phone}</Text>
+                    </>
+                  ) : null}
+                </View>
+              </View>
+            )}
             <Text style={[s.locationText, { color: isFinal ? GRAY : colors.textSecondary }]}>{item.address || (item.latitude ? `${item.latitude?.toFixed(4)}, ${item.longitude?.toFixed(4)}` : "Ubicación no disponible")}</Text>
             <Text style={[s.folioText, { color: isFinal ? GRAY : colors.emptyText }]}>Folio #{item.id.slice(0, 8).toUpperCase()}</Text>
             <Text style={[s.timeLabel, { color: isFinal ? GRAY : colors.badgeRed }]}>{getElapsedTime(item.createdAt)}</Text>
@@ -523,6 +546,12 @@ const makeStyles = (colors) =>
     commModeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
     commModeLabel: { fontSize: 10, fontWeight: "700" },
     citizenStatusLabel: { fontSize: 10, fontWeight: "bold" },
+    emergencyContactDot: { width: 8, height: 8, borderRadius: 4 },
+    emergencyCardBadge: { borderWidth: 1, borderRadius: 8, padding: 8, marginTop: 8 },
+    emergencyCardBadgeTitle: { fontSize: 9, fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase" },
+    emergencyCardBadgeName: { fontSize: 13, fontWeight: "700" },
+    emergencyCardBadgeAction: { fontSize: 14 },
+    emergencyCardBadgePhone: { fontSize: 12 },
     locationText: { fontSize: 13, marginTop: 4 },
     folioText: { fontSize: 11, marginTop: 4 },
     assignBtn: { paddingVertical: 14, alignItems: "center" },
