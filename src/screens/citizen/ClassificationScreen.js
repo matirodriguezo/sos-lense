@@ -19,6 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase/firebaseConfig";
 import { cancelIncident, getIncident, updateParticipantStatus, CITIZEN_STATUS, updateCommunicationMode, COMM_MODE } from "../../services/incidentService";
+import { updateIncidentLocation } from "../../services/locationService";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 const INCIDENT_OPTIONS = [
@@ -35,6 +36,8 @@ export default function ClassificationScreen({ route, navigation }) {
   const [restored, setRestored] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [updatingLocation, setUpdatingLocation] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState(null);
   const insets = useSafeAreaInsets();
 
   const [loadedCount, setLoadedCount] = useState(0);
@@ -52,10 +55,13 @@ export default function ClassificationScreen({ route, navigation }) {
   useEffect(() => {
     (async () => {
       const incident = await getIncident(incidentId);
-      if (incident?.type && incident.type !== "Por definir") {
-        setSelected(incident.type);
-        setRestored(true);
-        console.log("[Classification] Pre-selected type:", incident.type);
+      if (incident) {
+        if (incident.type && incident.type !== "Por definir") {
+          setSelected(incident.type);
+          setRestored(true);
+          console.log("[Classification] Pre-selected type:", incident.type);
+        }
+        setCurrentLocation(incident.address || (incident.latitude ? `${incident.latitude.toFixed(4)}, ${incident.longitude.toFixed(4)}` : null));
       }
     })();
   }, [incidentId]);
@@ -125,6 +131,18 @@ export default function ClassificationScreen({ route, navigation }) {
     updateCommunicationMode(incidentId, COMM_MODE.CHAT_ONLY).catch(() => {});
     navigation.navigate("VideoCall", { incidentId, chatOnly: true });
   };
+
+  const handleUpdateLocation = useCallback(async () => {
+    if (!incidentId || updatingLocation) return;
+    setUpdatingLocation(true);
+    try {
+      const result = await updateIncidentLocation(incidentId);
+      setCurrentLocation(result.address || `${result.latitude.toFixed(4)}, ${result.longitude.toFixed(4)}`);
+    } catch (err) {
+      Alert.alert("Error", err.message || "No se pudo actualizar la ubicación");
+    }
+    setUpdatingLocation(false);
+  }, [incidentId, updatingLocation]);
 
   return (
     <SafeAreaView style={[s.safeArea, { backgroundColor: colors.background }]}>
@@ -231,6 +249,27 @@ export default function ClassificationScreen({ route, navigation }) {
             <Text style={[s.otherCardText, { color: colors.textPrimary }, selected === "OTRO" && { color: colors.primary }]}>
               No sé / Otro tipo de emergencia
             </Text>
+          </TouchableOpacity>
+
+          {/* Current location */}
+          <View style={[s.locationCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Ionicons name="location-outline" size={16} color={colors.primary} />
+            <Text style={[s.locationText, { color: colors.textSecondary }]} numberOfLines={1}>
+              {currentLocation || "Obteniendo ubicación..."}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[s.updateLocationBtn, { borderColor: colors.border, opacity: updatingLocation ? 0.6 : 1 }]}
+            onPress={handleUpdateLocation}
+            disabled={updatingLocation}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="locate-outline" size={16} color={colors.primary} />
+            <Text style={[s.updateLocationText, { color: colors.primary }]}>
+              {updatingLocation ? "Actualizando ubicación..." : "Actualizar ubicación"}
+            </Text>
+            {updatingLocation && <ActivityIndicator size="small" color={colors.primary} />}
           </TouchableOpacity>
 
           {/* Direct options */}
@@ -372,6 +411,19 @@ const makeStyles = (colors, insets) =>
       borderRadius: 8, borderWidth: 1, marginBottom: 6,
     },
     restoredHintText: { fontSize: 11, fontWeight: "600" },
+
+    locationCard: {
+      flexDirection: "row", alignItems: "center",
+      borderRadius: 10, padding: 12, borderWidth: 1,
+      gap: 8, marginTop: 24,
+    },
+    locationText: { flex: 1, fontSize: 12 },
+    updateLocationBtn: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center",
+      borderRadius: 10, height: 38, borderWidth: 1, gap: 6,
+      marginTop: 10,
+    },
+    updateLocationText: { fontSize: 12, fontWeight: "600" },
 
     directSection: { marginTop: 32, gap: 12 },
     directLabel: { fontSize: 12, fontWeight: "600", textAlign: "center", letterSpacing: 0.5 },
