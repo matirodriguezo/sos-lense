@@ -17,7 +17,8 @@ import {
   Easing,
 } from "react-native";
 import { WebView } from "react-native-webview";
-import { auth } from "../../firebase/firebaseConfig";
+import { auth, db } from "../../firebase/firebaseConfig";
+import { doc, getDoc } from "firebase/firestore";
 import {
   listenIncidentById,
   listenMessages,
@@ -83,6 +84,7 @@ export default function IncidentManagementScreen({ route, navigation }) {
   const [showMapTraceModal, setShowMapTraceModal] = useState(false);
   const [callActive, setCallActive] = useState(false);
   const [connecting, setConnecting] = useState(true);
+  const [emergencyContact, setEmergencyContact] = useState(null);
   const [callError, setCallError] = useState(null);
   const flatListRef = useRef(null);
   const intervalRef = useRef(null);
@@ -132,8 +134,32 @@ export default function IncidentManagementScreen({ route, navigation }) {
     return () => pulse.stop();
   }, []);
 
+  const loadEmergencyContact = useCallback(async (citizenId) => {
+    if (!citizenId) return;
+    try {
+      // Force server read to avoid stale IndexedDB cache on web
+      let snap;
+      try {
+        snap = await getDoc(doc(db, "users", citizenId), { source: "server" });
+      } catch {
+        snap = await getDoc(doc(db, "users", citizenId));
+      }
+      if (snap.exists()) {
+        const ec = snap.data().emergencyContact;
+        if (ec?.phone) {
+          console.log("[IncidentMgmt] emergencyContact loaded from user doc:", ec.name);
+          setEmergencyContact(ec);
+        } else {
+          console.log("[IncidentMgmt] No emergencyContact in user doc");
+        }
+      }
+    } catch (e) {
+      console.warn("[IncidentMgmt] Error loading emergency contact:", e);
+    }
+  }, []);
+
   useEffect(() => {
-    const unsubIncident = listenIncidentById(incidentId, (data) => {
+    const unsubIncident = listenIncidentById(incidentId, async (data) => {
       setIncident(data);
       if (data.officerId && data.officerId !== auth.currentUser.uid) {
         Alert.alert("Caso ya asignado", `Este caso ya fue tomado por ${data.officerAlias || "otro oficial"}.`);
@@ -141,7 +167,12 @@ export default function IncidentManagementScreen({ route, navigation }) {
         return;
       }
       if (data.citizenId) {
-        // Keep track of citizen ID for message marking
+        if (data.emergencyContact) {
+          console.log("[IncidentMgmt] emergencyContact from incident doc:", data.emergencyContact.name);
+          setEmergencyContact(data.emergencyContact);
+        } else {
+          loadEmergencyContact(data.citizenId);
+        }
       }
       if (!data.officerId) {
         const officerAlias = getCurrentAlias();
@@ -161,6 +192,8 @@ export default function IncidentManagementScreen({ route, navigation }) {
 
     return () => { leaveChat(); unsubIncident(); unsubMessages(); if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [incidentId]);
+
+
 
   useEffect(() => {
     if (route.params?.autoOpenChat) {
@@ -460,24 +493,44 @@ export default function IncidentManagementScreen({ route, navigation }) {
               <Text style={[s.headerTitle, { color: isFinal ? GRAY : colors.white }]}>#{incidentId?.slice(0, 8)?.toUpperCase()}</Text>
               <Text style={[s.elapsedText, { color: isFinal ? GRAY : colors.whiteTranslucent }]}>{elapsed}</Text>
             </View>
-            {(incident?.citizenId) && (
-              <View style={[s.citizenBadge, { backgroundColor: isFinal ? GRAY : (CITIZEN_STATUS_MAP[incident?.participantStatus?.citizen]?.color || "#9E9E9E") }]}>
-                <Text style={s.citizenBadgeText}>{incident?.participantStatus?.citizen ? (CITIZEN_STATUS_MAP[incident.participantStatus.citizen]?.label || "Desconocido") : "Sin datos"}</Text>
-              </View>
-            )}
-            {incident?.participantStatus?.communication && (
-              <View style={[s.commBadge, { backgroundColor: isFinal ? GRAY : (COMM_MODE_MAP[incident.participantStatus.communication]?.color || "#9E9E9E") }]}>
-                <Text style={s.citizenBadgeText}>{COMM_MODE_MAP[incident.participantStatus.communication]?.label || "Desconocido"}</Text>
-              </View>
-            )}
+              {(incident?.citizenId) && (
+                <View style={[s.citizenBadge, { backgroundColor: isFinal ? GRAY : (CITIZEN_STATUS_MAP[incident?.participantStatus?.citizen]?.color || "#9E9E9E") }]}>
+                  <Text style={s.citizenBadgeText}>{incident?.participantStatus?.citizen ? (CITIZEN_STATUS_MAP[incident.participantStatus.citizen]?.label || "Desconocido") : "Sin datos"}</Text>
+                </View>
+              )}
+              {incident?.participantStatus?.communication && (
+                <View style={[s.commBadge, { backgroundColor: isFinal ? GRAY : (COMM_MODE_MAP[incident.participantStatus.communication]?.color || "#9E9E9E") }]}>
+                  <Text style={s.citizenBadgeText}>{COMM_MODE_MAP[incident.participantStatus.communication]?.label || "Desconocido"}</Text>
+                </View>
+              )}
+            </View>
+            <View style={[s.statusBadge, { backgroundColor: isFinal ? GRAY : colors.badgeRed }]}>
+              <Text style={[s.statusBadgeText, { color: colors.white }]}>● {isFinal ? incident?.status === "ANULADO" ? "ANULADO" : "FINALIZADO" : "EN CURSO"}</Text>
+            </View>
           </View>
-          <View style={[s.statusBadge, { backgroundColor: isFinal ? GRAY : colors.badgeRed }]}>
-            <Text style={[s.statusBadgeText, { color: colors.white }]}>● {isFinal ? incident?.status === "ANULADO" ? "ANULADO" : "FINALIZADO" : "EN CURSO"}</Text>
-          </View>
-        </View>
 
+        {/* Emergency contact card — below header, visible in flow */}
+        {emergencyContact && (
+          <View style={s.emergencyCardInFlow}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.emergencyCardLabel}>Contacto de Emergencia</Text>
+              <Text style={s.emergencyCardName}>{emergencyContact.name || "Sin nombre"}</Text>
+              <Text style={s.emergencyCardPhone}>{emergencyContact.phone}</Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TouchableOpacity style={s.emergencyActionBtn} onPress={() => Linking.openURL(`tel:${emergencyContact.phone}`)}>
+                <Ionicons name="call" size={18} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity style={s.emergencyActionBtn} onPress={() => Linking.openURL(`sms:${emergencyContact.phone}`)}>
+                <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Bottom bar — in the flow */}
         {(callActive || isFinal) && (
-          <View style={[s.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
+          <View style={[s.bottomBarInFlow, { paddingBottom: insets.bottom + 8 }]}>
             <TouchableOpacity style={[s.ctrlBtn, { backgroundColor: isFinal ? GRAY : colors.blueDispatch }]} onPress={() => setShowDispatchModal(true)} disabled={isFinal}>
               <MaterialCommunityIcons name="radio-handheld" size={22} color={isFinal ? "#4B5563" : colors.white} />
               <Text style={[s.ctrlLabel, { color: isFinal ? "#4B5563" : colors.white }]}>Despacho</Text>
@@ -506,6 +559,18 @@ export default function IncidentManagementScreen({ route, navigation }) {
                 <Ionicons name="location" size={18} color={colors.primary} />
                 <Text style={[s.addressText, { color: colors.textPrimary }]} numberOfLines={2}>{incident.address}</Text>
               </TouchableOpacity>
+            )}
+            {emergencyContact && (
+              <View style={[s.emergencyCard, { backgroundColor: colors.inputBg }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <Ionicons name="alert-circle" size={18} color={colors.danger} />
+                  <Text style={[s.emergencyTitle, { color: colors.danger }]}>Contacto de Emergencia</Text>
+                </View>
+                <Text style={[s.emergencyName, { color: colors.textPrimary }]}>{emergencyContact.name}</Text>
+                <TouchableOpacity onPress={() => Linking.openURL(`tel:${emergencyContact.phone}`)}>
+                  <Text style={[s.emergencyPhone, { color: colors.primary }]}>{emergencyContact.phone}</Text>
+                </TouchableOpacity>
+              </View>
             )}
             <View style={s.dispatchGrid}>
               {DISPATCH_OPTIONS.map((item) => (
@@ -615,6 +680,10 @@ const makeStyles = (colors) =>
       flexDirection: "row", justifyContent: "center", gap: 14,
       paddingTop: 10, paddingHorizontal: 16,
     },
+    bottomBarInFlow: {
+      flexDirection: "row", justifyContent: "center", gap: 14,
+      paddingTop: 10, paddingHorizontal: 16, paddingBottom: 8,
+    },
     ctrlBtn: {
       width: 80, height: 64, borderRadius: 32,
       justifyContent: "center", alignItems: "center",
@@ -632,6 +701,25 @@ const makeStyles = (colors) =>
     dispatchSheetTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 16 },
     addressCard: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, padding: 12, marginBottom: 16 },
     addressText: { fontSize: 13, fontWeight: "500", flex: 1 },
+    emergencyCard: { borderRadius: 10, padding: 12, marginBottom: 16, borderLeftWidth: 3, borderLeftColor: colors.danger },
+    emergencyTitle: { fontSize: 12, fontWeight: "700" },
+    emergencyName: { fontSize: 14, fontWeight: "600", marginLeft: 26, marginBottom: 2 },
+    emergencyPhone: { fontSize: 14, fontWeight: "500", marginLeft: 26, textDecorationLine: "underline" },
+
+    emergencyCardInFlow: {
+      flexDirection: "row", alignItems: "center",
+      padding: 14, marginHorizontal: 16, marginBottom: 10,
+      borderRadius: 12, gap: 12,
+      backgroundColor: "rgba(220,38,38,0.85)",
+    },
+    emergencyCardLabel: { color: "rgba(255,255,255,0.7)", fontSize: 10, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
+    emergencyCardName: { color: "#fff", fontSize: 15, fontWeight: "700", marginTop: 2 },
+    emergencyCardPhone: { color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: "500", marginTop: 1 },
+    emergencyActionBtn: {
+      width: 38, height: 38, borderRadius: 19,
+      backgroundColor: "rgba(255,255,255,0.25)",
+      justifyContent: "center", alignItems: "center",
+    },
     dispatchGrid: { flexDirection: "row", gap: 12 },
     dispatchBox: { flex: 1, borderRadius: 14, paddingVertical: 20, alignItems: "center", justifyContent: "center" },
     dispatchBoxText: { color: colors.white, fontSize: 12, fontWeight: "bold", textAlign: "center", paddingHorizontal: 4 },
