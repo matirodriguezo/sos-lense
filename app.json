@@ -37,6 +37,13 @@
     },
     "plugins": [
       [
+        "expo-camera",
+        {
+          "cameraPermission": "S.O.S. Carabineros necesita la cámara para videollamada con la central policial.",
+          "microphonePermission": "S.O.S. Carabineros necesita el micrófono para comunicación por voz con la central policial."
+        }
+      ],
+      [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "S.O.S. Carabineros necesita acceso a tu ubicación para enviar alertas de emergencia.",

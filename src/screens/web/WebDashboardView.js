@@ -7,7 +7,6 @@ import {
   ScrollView,
   TextInput,
   Modal,
-  Platform,
   ActivityIndicator,
   Animated,
   Easing,
@@ -35,6 +34,13 @@ import {
 } from "../../services/incidentService";
 import { getCurrentAlias, getShiftStart } from "../../services/userStore";
 import MessageBubble from "../../components/MessageBubble";
+import WebRTCView from "../../components/WebRTCView";
+import {
+  listenSignaling,
+  sendOffer,
+  sendIceCandidate,
+  clearSignaling,
+} from "../../services/signalingService";
 import { useTheme } from "../../context/ThemeContext";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -115,15 +121,17 @@ const COMM_MODE_LABELS = {
   ALERT_ONLY: { label: "Alerta de ubicación", color: "#F59E0B" },
 };
 
-function WebVideoCallPanel({ incidentDetail, onClose }) {
+function WebVideoCallPanel({ incidentDetail, onClose, myUid }) {
+  const incidentId = incidentDetail?.id;
+  const citizenId = incidentDetail?.citizenId;
+  const webrtcRef = useRef(null);
   const [vpConnecting, setVpConnecting] = useState(true);
   const [vpCallActive, setVpCallActive] = useState(false);
+  const [vpError, setVpError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
+  const callActiveRef = useRef(false);
   const pulseAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const timer = setTimeout(() => { setVpConnecting(false); setVpCallActive(true); }, 3000);
-    return () => clearTimeout(timer);
-  }, []);
+  const timeoutRef = useRef(null);
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -138,32 +146,121 @@ function WebVideoCallPanel({ incidentDetail, onClose }) {
 
   const pulseOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
 
+  useEffect(() => {
+    if (!incidentId || !citizenId || !myUid) return;
+    console.log("[WebVC] listening for citizen signaling", citizenId);
+    const unsub = listenSignaling(incidentId, citizenId, {
+      onAnswer: (sdp) => {
+        console.log("[WebVC] citizen answer");
+        webrtcRef.current?.forwardSignaling("answer", sdp);
+      },
+      onIce: (candidate) => {
+        webrtcRef.current?.forwardSignaling("ice", candidate);
+      },
+    });
+    return () => {
+      unsub();
+      clearSignaling(incidentId, myUid).catch(() => {});
+    };
+  }, [incidentId, citizenId, myUid]);
+
+  useEffect(() => {
+    timeoutRef.current = setTimeout(() => {
+      if (!callActiveRef.current && !vpError) {
+        console.warn("[WebVC] connection timeout");
+        setVpError("Tiempo de conexión agotado");
+      }
+    }, 25000);
+    return () => clearTimeout(timeoutRef.current);
+  }, [retryKey]);
+
+  const handleWebRTCMessage = useCallback((type, data) => {
+    console.log("[WebVC] WebRTC msg:", type);
+    switch (type) {
+      case "ready":
+        webrtcRef.current?.forwardSignaling("makeOffer");
+        break;
+      case "offer":
+        sendOffer(incidentId, myUid, data).catch(console.warn);
+        break;
+      case "ice":
+        sendIceCandidate(incidentId, myUid, data).catch(console.warn);
+        break;
+      case "remote_on":
+        console.log("[WebVC] remote connected!");
+        callActiveRef.current = true;
+        setVpConnecting(false);
+        setVpCallActive(true);
+        clearTimeout(timeoutRef.current);
+        break;
+      case "disconnected":
+        console.warn("[WebVC] disconnected");
+        setVpError("Conexión perdida");
+        break;
+      case "error":
+        console.warn("[WebVC] error:", data);
+        setVpError(data);
+        break;
+    }
+  }, [incidentId, myUid]);
+
+  const handleRetry = useCallback(() => {
+    webrtcRef.current?.hangUp();
+    clearSignaling(incidentId, myUid).catch(() => {});
+    callActiveRef.current = false;
+    setVpConnecting(true);
+    setVpCallActive(false);
+    setVpError(null);
+    setRetryKey((k) => k + 1);
+  }, [incidentId, myUid]);
+
+  const handleClose = useCallback(() => {
+    webrtcRef.current?.hangUp();
+    clearSignaling(incidentId, myUid).catch(() => {});
+    onClose();
+  }, [incidentId, myUid, onClose]);
+
   return (
     <View style={vpStyles.container}>
       <View style={vpStyles.header}>
-        <Text style={vpStyles.headerTitle}>📱 Videollamada</Text>
-        <TouchableOpacity onPress={onClose} style={vpStyles.closeBtn}>
+        <Text style={vpStyles.headerTitle}>Videollamada</Text>
+        <TouchableOpacity onPress={handleClose} style={vpStyles.closeBtn}>
           <Ionicons name="close" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
       <View style={vpStyles.body}>
-        {vpConnecting ? (
+        {vpError ? (
           <View style={vpStyles.centerContent}>
-            <Animated.View style={[vpStyles.pulseCircle, { opacity: pulseOpacity }]}>
-              <MaterialCommunityIcons name="cellphone-link" size={40} color="#4ADE80" />
-            </Animated.View>
-            <Text style={vpStyles.connectingText}>Conectando...</Text>
-            <Text style={vpStyles.connectingSub}>Estableciendo enlace</Text>
-            <ActivityIndicator size="small" color="#4ADE80" style={{ marginTop: 12 }} />
+            <MaterialCommunityIcons name="video-off" size={40} color="#EF4444" />
+            <Text style={[vpStyles.connectingText, { color: "#EF4444" }]}>Error</Text>
+            <Text style={vpStyles.connectingSub}>{vpError}</Text>
+            <TouchableOpacity style={vpStyles.retryBtn} onPress={handleRetry}>
+              <Text style={vpStyles.retryBtnText}>Reintentar</Text>
+            </TouchableOpacity>
           </View>
         ) : (
-          <View style={vpStyles.centerContent}>
-            <MaterialCommunityIcons name="video" size={56} color="#4ADE80" />
-            <Text style={vpStyles.connectedText}>VIDEOLLAMADA ACTIVA</Text>
-            <Text style={vpStyles.connectedSub}>Conexión establecida</Text>
-            <Text style={vpStyles.elapsedText}>
-              {new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}
-            </Text>
+          <View style={{ flex: 1 }}>
+            <WebRTCView
+              key={retryKey}
+              ref={webrtcRef}
+              style={{ flex: 1 }}
+              onWebRTCMessage={handleWebRTCMessage}
+            />
+            {vpConnecting && !vpCallActive && (
+              <View style={vpStyles.overlay}>
+                <Animated.View style={[vpStyles.pulseCircle, { opacity: pulseOpacity }]}>
+                  <MaterialCommunityIcons name="cellphone-link" size={40} color="#4ADE80" />
+                </Animated.View>
+                <Text style={vpStyles.connectingText}>Conectando...</Text>
+                <Text style={vpStyles.connectingSub}>Estableciendo enlace</Text>
+                <ActivityIndicator size="small" color="#4ADE80" style={{ marginTop: 12 }} />
+              </View>
+            )}
+            {vpCallActive && (
+              <View style={vpStyles.overlayTop}>
+                <Text style={vpStyles.connectedText}>VIDEOLLAMADA ACTIVA</Text>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -199,7 +296,33 @@ const vpStyles = StyleSheet.create({
   },
   headerTitle: { color: "#4ADE80", fontSize: 13, fontWeight: "700" },
   closeBtn: { width: 28, height: 28, borderRadius: 14, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(255,255,255,0.1)", cursor: "pointer" },
-  body: { flex: 1, justifyContent: "center", alignItems: "center", padding: 16 },
+  body: { flex: 1, justifyContent: "center", alignItems: "center" },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.7)",
+    zIndex: 2,
+  },
+  overlayTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+    alignItems: "center",
+    paddingVertical: 8,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  retryBtn: {
+    marginTop: 16,
+    backgroundColor: "#4ADE80",
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 8,
+    cursor: "pointer",
+  },
+  retryBtnText: { color: "#000", fontSize: 14, fontWeight: "700" },
   centerContent: { alignItems: "center", justifyContent: "center" },
   pulseCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(74,222,128,0.1)", justifyContent: "center", alignItems: "center" },
   connectingText: { color: "#4ADE80", marginTop: 16, fontSize: 16, fontWeight: "900", letterSpacing: 1 },
@@ -241,9 +364,18 @@ export default function WebDashboardView() {
   const [now, setNow] = useState(Date.now());
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [showVideoCallPanel, setShowVideoCallPanel] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [showDetailMapModal, setShowDetailMapModal] = useState(false);
   const chatScrollRef = useRef(null);
   const chatEndRef = useRef(null);
   const markedRef = useRef(new Set());
+  const mapContainerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const detailMapRef = useRef(null);
+  const detailMapInstanceRef = useRef(null);
+  const detailMapModalRef = useRef(null);
+  const detailMapModalInstanceRef = useRef(null);
   const uid = auth.currentUser?.uid;
   const isAssignedToMe = incidentDetail?.officerId === uid;
   const isTakenByOther = incidentDetail?.officerId && !isAssignedToMe;
@@ -252,6 +384,18 @@ export default function WebDashboardView() {
   const isSelectedActive = incidentDetail ? detailActive : selectedActive;
   const isFinal = incidentDetail?.status === "CERRADO" || incidentDetail?.status === "ANULADO";
   const GRAY = "#9CA3AF";
+  const myActiveCases = useMemo(() => myCases.filter((c) => ACTIVE_STATUSES.includes(c.status)), [myCases]);
+
+  const allMapIncidents = useMemo(() => {
+    const all = [...activos, ...myCases, ...finalizados, ...cancelados];
+    const seen = new Set();
+    return all.filter((i) => {
+      if (!i.latitude || !i.longitude) return false;
+      if (seen.has(i.id)) return false;
+      seen.add(i.id);
+      return true;
+    });
+  }, [activos, myCases, finalizados, cancelados]);
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
@@ -317,6 +461,224 @@ export default function WebDashboardView() {
       updateParticipantStatus(incidentDetail.id, "OFFICER", OFFICER_STATUS.IN_CALL).catch(() => {});
     }
   }, [isAssignedToMe, incidentDetail?.id]);
+
+  useEffect(() => {
+    if (!showMapModal) return;
+    let cancelled = false;
+    const initMap = async () => {
+      if (!document.getElementById("leaflet-css")) {
+        const link = document.createElement("link");
+        link.id = "leaflet-css";
+        link.rel = "stylesheet";
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+        document.head.appendChild(link);
+      }
+      const L = await new Promise((resolve) => {
+        if (window.L) { resolve(window.L); return; }
+        const script = document.createElement("script");
+        script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+        script.onload = () => resolve(window.L);
+        document.head.appendChild(script);
+      });
+      await new Promise((r) => setTimeout(r, 100));
+      if (cancelled || !mapContainerRef.current) return;
+      if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; }
+      const map = L.map(mapContainerRef.current, { zoomControl: true });
+      mapInstanceRef.current = map;
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap", maxZoom: 19,
+      }).addTo(map);
+      const markers = allMapIncidents.map((i) => {
+        let ownerLabel = "Sin tomar", ownerColor = "#F59E0B";
+        if (i.officerId === uid) { ownerLabel = "Tomado por mí"; ownerColor = "#3B82F6"; }
+        else if (i.officerId) { ownerLabel = `Tomado por ${i.officerAlias || "otro oficial"}`; ownerColor = "#8B5CF6"; }
+        return { lat: i.latitude, lng: i.longitude, label: i.citizenAlias || "Usuario", type: i.type || "", status: i.status || "", folio: i.id.slice(0, 8).toUpperCase(), ownerLabel, ownerColor };
+      });
+      const bounds = [];
+      markers.forEach((m) => {
+        if (!m.lat || !m.lng) return;
+        const icon = L.divIcon({
+          className: "",
+          html: `<div style="width:26px;height:26px;border-radius:50%;background:${m.ownerColor};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:bold;">●</div>`,
+          iconSize: [26, 26], iconAnchor: [13, 13], popupAnchor: [0, -18],
+        });
+        const marker = L.marker([m.lat, m.lng], { icon }).addTo(map);
+        marker.bindPopup(
+          `<b>${m.label}</b><br/>${m.type ? m.type + " · " : ""}Folio: ${m.folio}<br/>Estado: ${m.status}<br/><span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;color:#fff;background:${m.ownerColor};margin-top:4px;">${m.ownerLabel}</span>`
+        );
+        bounds.push([m.lat, m.lng]);
+      });
+      if (bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
+      else map.setView([-33.4489, -70.6693], 12);
+    };
+    initMap();
+    return () => { cancelled = true; if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; } };
+  }, [showMapModal, allMapIncidents, uid]);
+
+  // Incident detail map - traceability
+  useEffect(() => {
+    if (!incidentDetail?.id || !detailMapRef.current) {
+      if (detailMapInstanceRef.current) { detailMapInstanceRef.current.remove(); detailMapInstanceRef.current = null; }
+      return;
+    }
+    let cancelled = false;
+    const initDetailMap = async () => {
+      if (!document.getElementById("leaflet-css")) {
+        const link = document.createElement("link");
+        link.id = "leaflet-css";
+        link.rel = "stylesheet";
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+        document.head.appendChild(link);
+      }
+      const L = await new Promise((resolve) => {
+        if (window.L) { resolve(window.L); return; }
+        const script = document.createElement("script");
+        script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+        script.onload = () => resolve(window.L);
+        document.head.appendChild(script);
+      });
+      await new Promise((r) => setTimeout(r, 100));
+      if (cancelled || !detailMapRef.current) return;
+      if (detailMapInstanceRef.current) { detailMapInstanceRef.current.remove(); detailMapInstanceRef.current = null; }
+      const map = L.map(detailMapRef.current, { zoomControl: false, dragging: true });
+      detailMapInstanceRef.current = map;
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap", maxZoom: 19,
+      }).addTo(map);
+
+      // Build ordered points from locationHistory array
+      const pts = [];
+      const labels = [];
+      const times = [];
+      if (incidentDetail.locationHistory?.length > 0) {
+        incidentDetail.locationHistory.forEach((p) => {
+          if (p.lat && p.lng) { pts.push([p.lat, p.lng]); labels.push(p.label || ""); times.push(p._t || null); }
+        });
+      } else if (incidentDetail.latitude && incidentDetail.longitude) {
+        pts.push([incidentDetail.latitude, incidentDetail.longitude]);
+        labels.push("Actual");
+      }
+
+      if (pts.length === 0) { map.setView([-33.4489, -70.6693], 12); return; }
+
+      const count = pts.length;
+      pts.forEach((pt, i) => {
+        const isNewest = i === count - 1;
+        const isOldest = i === 0;
+        const num = i + 1;
+        const bg = isNewest ? "#D32F2F" : isOldest ? "#6B7280" : "#3B82F6";
+        const size = isNewest ? 28 : 22;
+        const icon = L.divIcon({
+          className: "",
+          html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;font-family:sans-serif;">${num}</div>`,
+          iconSize: [size, size], iconAnchor: [size / 2, size / 2],
+        });
+        const marker = L.marker(pt, { icon }).addTo(map);
+        const label = labels[i] || `Punto ${num}`;
+        const t = times[i];
+        const timeStr = t ? new Date(t).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : "";
+        marker.bindPopup(`<b>#${num}</b> — ${label}${timeStr ? '<br/><span style="color:#9CA3AF;font-size:11px;">' + timeStr + "</span>" : ""}${isNewest ? '<br/><i style="color:#D32F2F">Última ubicación</i>' : ""}${isOldest && count > 1 ? '<br/><i style="color:#6B7280">Inicio</i>' : ""}`);
+      });
+
+      if (count > 1) {
+        L.polyline(pts, { color: "#3B82F6", weight: 2, opacity: 0.5, dashArray: "5, 5" }).addTo(map);
+      }
+      map.fitBounds(L.latLngBounds(pts), { padding: [30, 30] });
+
+      // Legend badge
+      const legend = L.control({ position: "bottomleft" });
+      legend.onAdd = () => {
+        const div = L.DomUtil.create("div");
+        div.style.cssText = "background:rgba(15,17,23,0.85);color:#fff;padding:4px 10px;border-radius:6px;font-size:11px;font-family:sans-serif;font-weight:600;";
+        div.innerHTML = `${count} ${count === 1 ? "ubicación" : "ubicaciones"}`;
+        return div;
+      };
+      legend.addTo(map);
+    };
+    initDetailMap();
+    return () => { cancelled = true; };
+  }, [incidentDetail?.id, incidentDetail?.latitude, incidentDetail?.longitude, incidentDetail?.locationHistory]);
+
+  // Expanded detail map modal
+  useEffect(() => {
+    if (!showDetailMapModal || !detailMapModalRef.current) {
+      if (detailMapModalInstanceRef.current) { detailMapModalInstanceRef.current.remove(); detailMapModalInstanceRef.current = null; }
+      return;
+    }
+    let cancelled = false;
+    const initDetailMapModal = async () => {
+      if (!document.getElementById("leaflet-css")) {
+        const link = document.createElement("link");
+        link.id = "leaflet-css";
+        link.rel = "stylesheet";
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+        document.head.appendChild(link);
+      }
+      const L = await new Promise((resolve) => {
+        if (window.L) { resolve(window.L); return; }
+        const script = document.createElement("script");
+        script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+        script.onload = () => resolve(window.L);
+        document.head.appendChild(script);
+      });
+      await new Promise((r) => setTimeout(r, 100));
+      if (cancelled || !detailMapModalRef.current) return;
+      if (detailMapModalInstanceRef.current) { detailMapModalInstanceRef.current.remove(); detailMapModalInstanceRef.current = null; }
+      const map = L.map(detailMapModalRef.current, { zoomControl: true });
+      detailMapModalInstanceRef.current = map;
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap", maxZoom: 19,
+      }).addTo(map);
+
+      const pts = [];
+      const labels = [];
+      const times = [];
+      if (incidentDetail?.locationHistory?.length > 0) {
+        incidentDetail.locationHistory.forEach((p) => {
+          if (p.lat && p.lng) { pts.push([p.lat, p.lng]); labels.push(p.label || ""); times.push(p._t || null); }
+        });
+      } else if (incidentDetail?.latitude && incidentDetail?.longitude) {
+        pts.push([incidentDetail.latitude, incidentDetail.longitude]);
+        labels.push("Actual");
+      }
+      if (pts.length === 0) { map.setView([-33.4489, -70.6693], 12); return; }
+
+      const count = pts.length;
+      pts.forEach((pt, i) => {
+        const isNewest = i === count - 1;
+        const isOldest = i === 0;
+        const num = i + 1;
+        const bg = isNewest ? "#D32F2F" : isOldest ? "#6B7280" : "#3B82F6";
+        const size = isNewest ? 32 : 26;
+        const icon = L.divIcon({
+          className: "",
+          html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;font-family:sans-serif;">${num}</div>`,
+          iconSize: [size, size], iconAnchor: [size / 2, size / 2],
+        });
+        const marker = L.marker(pt, { icon }).addTo(map);
+        const label = labels[i] || `Punto ${num}`;
+        const t = times[i];
+        const timeStr = t ? new Date(t).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : "";
+        marker.bindPopup(`<b>#${num}</b> — ${label}${timeStr ? '<br/><span style="color:#9CA3AF;font-size:11px;">' + timeStr + "</span>" : ""}${isNewest ? '<br/><i style="color:#D32F2F">Última ubicación</i>' : ""}${isOldest && count > 1 ? '<br/><i style="color:#6B7280">Inicio</i>' : ""}`);
+      });
+
+      if (count > 1) {
+        L.polyline(pts, { color: "#3B82F6", weight: 2, opacity: 0.5, dashArray: "5, 5" }).addTo(map);
+      }
+      map.fitBounds(L.latLngBounds(pts), { padding: [50, 50] });
+
+      const legend = L.control({ position: "bottomleft" });
+      legend.onAdd = () => {
+        const div = L.DomUtil.create("div");
+        div.style.cssText = "background:rgba(15,17,23,0.85);color:#fff;padding:4px 12px;border-radius:6px;font-size:12px;font-family:sans-serif;font-weight:600;";
+        div.innerHTML = `${count} ${count === 1 ? "ubicación" : "ubicaciones"}`;
+        return div;
+      };
+      legend.addTo(map);
+    };
+    initDetailMapModal();
+    return () => { cancelled = true; };
+  }, [showDetailMapModal, incidentDetail?.id, incidentDetail?.latitude, incidentDetail?.longitude, incidentDetail?.locationHistory]);
 
   const handleSelectIncident = (incident) => {
     setSelectedIncident(incident);
@@ -423,8 +785,6 @@ export default function WebDashboardView() {
     }
   };
 
-  const myActiveCases = myCases.filter((c) => ACTIVE_STATUSES.includes(c.status));
-
   const filteredData = useMemo(() => {
     let data = [];
     if (activeTab === "activos") data = activos;
@@ -495,7 +855,7 @@ export default function WebDashboardView() {
     );
   };
 
-  return (
+    return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       {/* TOP BAR */}
       <View style={[s.topBar, { backgroundColor: colors.drawerHeaderBg }]}>
@@ -522,9 +882,12 @@ export default function WebDashboardView() {
           <TouchableOpacity style={s.themeToggle} onPress={toggleTheme}>
             <Ionicons name={isDark ? "moon" : "sunny"} size={18} color={colors.white} />
           </TouchableOpacity>
-          <TouchableOpacity style={[s.logoutBtn, { backgroundColor: colors.whiteTranslucent }]} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={16} color={colors.white} />
-            <Text style={s.logoutBtnText}>Finalizar Turno</Text>
+          <TouchableOpacity style={[s.mapBtn, { backgroundColor: colors.blueDispatch }]} onPress={() => setShowMapModal(true)}>
+            <Ionicons name="map-outline" size={16} color={colors.white} />
+            <Text style={s.mapBtnText}>Mapa Global</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.avatarButton, { backgroundColor: colors.primary, borderColor: colors.gold }]} onPress={() => setShowProfileModal(true)}>
+            <MaterialCommunityIcons name="police-badge" size={20} color={colors.gold} />
           </TouchableOpacity>
         </View>
       </View>
@@ -797,7 +1160,7 @@ export default function WebDashboardView() {
                 </View>
 
                 {/* Video Call Panel */}
-                {showVideoCallPanel && <WebVideoCallPanel incidentDetail={incidentDetail} onClose={() => setShowVideoCallPanel(false)} />}
+                {showVideoCallPanel && <WebVideoCallPanel incidentDetail={incidentDetail} onClose={() => setShowVideoCallPanel(false)} myUid={uid} />}
 
                 {/* Right: Info + Call + Actions */}
                 <View style={[s.infoSection, { borderLeftColor: colors.border }]}>
@@ -874,6 +1237,24 @@ export default function WebDashboardView() {
                         </View>
                       )}
                     </View>
+                  )}
+
+                  {/* Detail Map */}
+                  {incidentDetail?.id && (
+                    <TouchableOpacity activeOpacity={0.85} onPress={() => setShowDetailMapModal(true)} style={s.detailMapWrap}>
+                      <View style={s.detailMapHeader}>
+                        <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+                        <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: "600", flex: 1 }}>UBICACIÓN DEL CIUDADANO</Text>
+                        <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "600" }}>Expandir</Text>
+                      </View>
+                      <View ref={detailMapRef} style={s.detailMap} />
+                      {incidentDetail.latitude && (
+                        <Text style={{ color: colors.textSecondary, fontSize: 10, paddingHorizontal: 8, paddingBottom: 4 }}>
+                          {incidentDetail.locationHistory?.length || 1} {incidentDetail.locationHistory?.length === 1 ? "ubicación" : "ubicaciones"}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
                   )}
 
                   {/* Tomar Procedimiento */}
@@ -973,6 +1354,115 @@ export default function WebDashboardView() {
             </View>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Profile Modal */}
+      <Modal visible={showProfileModal} transparent animationType="fade">
+        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setShowProfileModal(false)}>
+          <View style={[s.profileModal, { backgroundColor: colors.surface }]}>
+            <View style={[s.profileHeader, { backgroundColor: colors.drawerHeaderBg }]}>
+              <TouchableOpacity onPress={() => setShowProfileModal(false)} style={{ alignSelf: "flex-end" }}>
+                <Ionicons name="close" size={24} color={colors.white} />
+              </TouchableOpacity>
+              <View style={s.profileAvatarSection}>
+                <View style={[s.profileAvatarLarge, { backgroundColor: colors.primary, borderColor: colors.gold }]}>
+                  <MaterialCommunityIcons name="police-badge" size={48} color={colors.gold} />
+                </View>
+                <View style={[s.serviceBadge, { backgroundColor: colors.success }]}>
+                  <Text style={s.serviceBadgeText}>● En Servicio</Text>
+                </View>
+                <Text style={[s.profileName, { color: colors.white }]}>{userData?.alias || "Operador"}</Text>
+                {userData?.rut && <Text style={[s.profileRank, { color: colors.gold }]}>Placa: {userData.rut}</Text>}
+              </View>
+            </View>
+
+            <ScrollView style={s.profileBody} contentContainerStyle={s.profileBodyContent}>
+              <View style={[s.themeRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                <Ionicons name={isDark ? "moon" : "sunny"} size={20} color={colors.textPrimary} />
+                <Text style={[s.themeLabel, { color: colors.textPrimary }]}>Modo oscuro</Text>
+                <TouchableOpacity style={[s.themeToggleBtn, { backgroundColor: isDark ? colors.primary : colors.textSecondary }]} onPress={toggleTheme}>
+                  <View style={[s.themeToggleThumb, { alignSelf: isDark ? "flex-end" : "flex-start", backgroundColor: colors.white }]} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={[s.dataCard, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                <View style={s.dataHeader}>
+                  <MaterialCommunityIcons name="badge-account-outline" size={20} color={colors.textSecondary} />
+                  <Text style={[s.dataTitle, { color: colors.textSecondary }]}>NÚMERO DE PLACA / RUT</Text>
+                </View>
+                <Text style={[s.dataValueBig, { color: colors.textPrimary }]}>{userData?.rut || "—"}</Text>
+                <Text style={[s.dataSub, { color: colors.textSecondary }]}>Credencial Validada</Text>
+              </View>
+
+              <View style={[s.dataCard, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                <View style={s.dataHeader}>
+                  <Ionicons name="mail-outline" size={20} color={colors.textSecondary} />
+                  <Text style={[s.dataTitle, { color: colors.textSecondary }]}>EMAIL INSTITUCIONAL</Text>
+                </View>
+                <Text style={[s.dataValue, { color: colors.textPrimary }]}>{auth.currentUser?.email || "—"}</Text>
+              </View>
+
+              <View style={[s.dataCard, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                <View style={s.dataHeader}>
+                  <Ionicons name="shield-checkmark-outline" size={20} color={colors.textSecondary} />
+                  <Text style={[s.dataTitle, { color: colors.textSecondary }]}>UNIDAD ASIGNADA</Text>
+                </View>
+                <Text style={[s.dataValue, { color: colors.textPrimary }]}>Central de Comunicaciones (CENCO)</Text>
+                <Text style={[s.dataSub, { color: colors.textSecondary }]}>Sector Sur, Región Metropolitana</Text>
+              </View>
+
+              <TouchableOpacity style={[s.profileLogoutBtn, { borderColor: colors.danger }]} onPress={() => { setShowProfileModal(false); handleLogout(); }}>
+                <Ionicons name="log-out-outline" size={20} color={colors.danger} />
+                <Text style={[s.profileLogoutText, { color: colors.danger }]}>Finalizar Turno</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Map Modal */}
+      <Modal visible={showMapModal} transparent animationType="fade">
+        <View style={[s.mapModalContainer, { backgroundColor: colors.drawerHeaderBg }]}>
+          <View style={s.mapModalHeader}>
+            <Text style={s.mapModalTitle}>
+              <MaterialCommunityIcons name="map" size={18} color={colors.gold} />  Mapa Global — {allMapIncidents.length} incidentes
+            </Text>
+            <TouchableOpacity style={s.mapModalClose} onPress={() => setShowMapModal(false)}>
+              <Ionicons name="close" size={22} color={colors.white} />
+            </TouchableOpacity>
+          </View>
+          <View style={s.mapModalBody}>
+            <View ref={mapContainerRef} style={{ flex: 1 }} />
+            {allMapIncidents.length === 0 && (
+              <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", pointerEvents: "none" }}>
+                <Ionicons name="map-outline" size={64} color={colors.border} />
+                <Text style={{ color: colors.textSecondary, fontSize: 16, marginTop: 12 }}>Sin incidentes con ubicación</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showDetailMapModal} transparent animationType="fade">
+        <View style={[s.mapModalContainer, { backgroundColor: colors.drawerHeaderBg }]}>
+          <View style={s.mapModalHeader}>
+            <Text style={s.mapModalTitle}>
+              <Ionicons name="location-outline" size={18} color={colors.gold} />  Trazabilidad — Folio #{incidentDetail?.id?.slice(0, 8)?.toUpperCase()}
+            </Text>
+            <TouchableOpacity style={s.mapModalClose} onPress={() => setShowDetailMapModal(false)}>
+              <Ionicons name="close" size={22} color={colors.white} />
+            </TouchableOpacity>
+          </View>
+          <View style={s.mapModalBody}>
+            <View ref={detailMapModalRef} style={{ flex: 1 }} />
+            {!incidentDetail?.latitude && (
+              <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", pointerEvents: "none" }}>
+                <Ionicons name="map-outline" size={64} color={colors.border} />
+                <Text style={{ color: colors.textSecondary, fontSize: 16, marginTop: 12 }}>Sin ubicación disponible</Text>
+              </View>
+            )}
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -1106,7 +1596,7 @@ const makeStyles = (colors) =>
     sendBtn: { width: 40, height: 40, borderRadius: 10, justifyContent: "center", alignItems: "center", cursor: "pointer" },
 
     /* INFO SECTION */
-    infoSection: { width: 300, borderLeftWidth: 1, padding: 16, gap: 10, overflowY: "auto" },
+    infoSection: { width: 340, borderLeftWidth: 1, padding: 16, gap: 10, overflowY: "auto" },
 
     feedbackBar: { flexDirection: "row", alignItems: "center", justifyContent: "center", padding: 10, borderRadius: 8, borderWidth: 1 },
 
@@ -1131,7 +1621,7 @@ const makeStyles = (colors) =>
     quickChipText: { fontSize: 12, fontWeight: "600" },
 
     /* DISPATCH MODAL */
-    modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.6)" },
+    modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.6)", cursor: "pointer" },
     dispatchSheet: { borderRadius: 16, padding: 24, width: "90%", maxWidth: 500 },
     dispatchSheetTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 16 },
     addressCard: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, padding: 12, marginBottom: 16 },
@@ -1145,4 +1635,55 @@ const makeStyles = (colors) =>
     emergencyContactTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
     emergencyContactName: { fontSize: 15, fontWeight: "700", marginTop: 2 },
     emergencyContactAction: { fontSize: 13, fontWeight: "600", textDecorationLine: "underline", cursor: "pointer" },
+
+    /* USER MENU */
+    avatarButton: { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center", borderWidth: 2, cursor: "pointer" },
+    mapBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, cursor: "pointer" },
+    mapBtnText: { color: colors.white, fontSize: 13, fontWeight: "600" },
+
+    /* PROFILE MODAL */
+    profileModal: {
+      width: "90%", maxWidth: 420, maxHeight: "90%",
+      borderRadius: 16, overflow: "hidden",
+    },
+    profileHeader: { padding: 24, paddingTop: 16 },
+    profileAvatarSection: { alignItems: "center", marginTop: 8 },
+    profileAvatarLarge: { width: 80, height: 80, borderRadius: 40, justifyContent: "center", alignItems: "center", borderWidth: 3 },
+    serviceBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginTop: -10, borderWidth: 2, borderColor: colors.surface },
+    serviceBadgeText: { color: colors.white, fontSize: 10, fontWeight: "bold" },
+    profileName: { fontSize: 20, fontWeight: "bold", marginTop: 10 },
+    profileRank: { fontSize: 14, fontWeight: "600", marginTop: 4 },
+    profileBody: { flex: 1 },
+    profileBodyContent: { padding: 20, paddingBottom: 32 },
+    themeRow: { flexDirection: "row", alignItems: "center", borderRadius: 12, padding: 14, borderWidth: 1, marginBottom: 16, gap: 8 },
+    themeLabel: { flex: 1, fontSize: 14, fontWeight: "500" },
+    themeToggleBtn: { width: 44, height: 24, borderRadius: 12, padding: 2, justifyContent: "center" },
+    themeToggleThumb: { width: 20, height: 20, borderRadius: 10 },
+    dataCard: { padding: 16, borderRadius: 12, borderWidth: 1, marginBottom: 14 },
+    dataHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+    dataTitle: { fontSize: 11, fontWeight: "bold", letterSpacing: 1 },
+    dataValueBig: { fontSize: 26, fontWeight: "900" },
+    dataValue: { fontSize: 16, fontWeight: "bold" },
+    dataSub: { fontSize: 12, marginTop: 4 },
+    profileLogoutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", padding: 14, borderRadius: 12, borderWidth: 1, gap: 8, marginTop: 8, cursor: "pointer" },
+    profileLogoutText: { fontSize: 14, fontWeight: "bold" },
+
+    /* MAP MODAL */
+    mapModalContainer: { flex: 1, margin: 20, borderRadius: 16, overflow: "hidden" },
+    mapModalHeader: {
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      paddingHorizontal: 20, paddingVertical: 14,
+      backgroundColor: colors.drawerHeaderBg,
+      borderBottomWidth: 1, borderBottomColor: colors.border,
+    },
+    mapModalTitle: { color: colors.white, fontSize: 15, fontWeight: "700" },
+    mapModalClose: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center", cursor: "pointer", backgroundColor: colors.whiteTranslucent },
+    mapModalBody: { flex: 1, position: "relative", overflow: "hidden" },
+
+    /* DETAIL MAP */
+    detailMapWrap: { borderRadius: 10, overflow: "hidden", borderWidth: 1, borderColor: colors.border, marginBottom: 10 },
+    detailMapHeader: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 8, paddingVertical: 6 },
+    updateLocBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, cursor: "pointer" },
+    updateLocBtnText: { color: colors.white, fontSize: 11, fontWeight: "700" },
+    detailMap: { height: 160, backgroundColor: "#0f1117" },
   });

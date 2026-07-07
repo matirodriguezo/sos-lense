@@ -30,8 +30,16 @@ import {
   updateCommunicationMode,
 } from "../../services/incidentService";
 import * as ImagePicker from "expo-image-picker";
+import { Camera } from "expo-camera";
 import MessageBubble from "../../components/MessageBubble";
 import { useTheme } from "../../context/ThemeContext";
+import WebRTCView from "../../components/WebRTCView";
+import {
+  listenSignaling,
+  sendAnswer,
+  sendIceCandidate,
+  clearSignaling,
+} from "../../services/signalingService";
 import { useNotifications } from "../../context/NotificationContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -47,7 +55,7 @@ const QUICK_OPTIONS = [
 export default function VideoCallScreen({ route, navigation }) {
   const { colors } = useTheme();
   const { incidentId, autoOpenChat, chatOnly } = route.params;
-  const { enterChat, leaveChat } = useNotifications();
+  const { enterChat, leaveChat, enterVideoCall, leaveVideoCall } = useNotifications();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -57,31 +65,56 @@ export default function VideoCallScreen({ route, navigation }) {
   const [incident, setIncident] = useState(null);
   const [callActive, setCallActive] = useState(false);
   const [connecting, setConnecting] = useState(true);
+  const [callError, setCallError] = useState(null);
   const flatListRef = useRef(null);
   const insets = useSafeAreaInsets();
   const uid = auth.currentUser?.uid;
   const markedRef = useRef(new Set());
   const pulseAnim = useRef(new Animated.Value(0)).current;
+  const webRTCRef = useRef(null);
+  const pendingOfferRef = useRef(null);
+  const webRTCReadyRef = useRef(false);
+  const connectionTimeoutRef = useRef(null);
   const chatListRef = useRef(null);
 
   const s = useMemo(() => makeStyles(colors), [colors]);
 
-  // Simulated connecting sequence
   useEffect(() => {
     console.log("[VideoCall] Mounted, incident:", incidentId, "chatOnly:", chatOnly, "autoOpenChat:", autoOpenChat);
+    enterVideoCall(incidentId);
     if (chatOnly) {
       setConnecting(false);
       setCallActive(false);
       setShowChatModal(true);
-      return;
+      return () => leaveVideoCall();
     }
-    const timer = setTimeout(() => {
-      setConnecting(false);
-      setCallActive(true);
-      console.log("[VideoCall] Connection established");
-    }, 3000);
+    (async () => {
+      try {
+        if (Platform.OS === "android") {
+          const [cam, aud] = await Promise.all([
+            Camera.requestCameraPermissionsAsync(),
+            Camera.requestMicrophonePermissionsAsync(),
+          ]);
+          if (!cam.granted || !aud.granted) {
+            setCallError("Permisos de cámara y micrófono requeridos");
+            return;
+          }
+        }
+        console.log("[VideoCall] Permissions granted, init camera");
+        setTimeout(() => {
+          webRTCRef.current?.initCamera?.();
+        }, 500);
+      } catch (e) {
+        console.warn("[VideoCall] Permission error:", e);
+        setCallError("Error al solicitar permisos");
+      }
+    })();
+    connectionTimeoutRef.current = setTimeout(() => {
+      setCallError("No se pudo establecer la videollamada. Verifica tu conexión.");
+    }, 25000);
     return () => {
-      clearTimeout(timer);
+      leaveVideoCall();
+      if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
       console.log("[VideoCall] Unmounted");
     };
   }, []);
@@ -164,6 +197,38 @@ export default function VideoCallScreen({ route, navigation }) {
       markMessageAsRead(incidentId, m.id, uid);
     });
   }, [messages, showChatModal, incident?.officerId]);
+
+  // Real WebRTC signaling — listen for officer's offer and ICE
+  useEffect(() => {
+    if (chatOnly) return;
+    if (!incident?.officerId) return;
+    const officerId = incident.officerId;
+    const myUid = auth.currentUser?.uid;
+    if (!myUid) return;
+
+    console.log("[VideoCall] Setting up signaling listener for officer:", officerId);
+
+    const unsubSignaling = listenSignaling(incidentId, officerId, {
+      onOffer: (sdp) => {
+        console.log("[VideoCall] Received offer from officer");
+        if (webRTCReadyRef.current) {
+          webRTCRef.current?.forwardSignaling("offer", sdp);
+        } else {
+          pendingOfferRef.current = sdp;
+        }
+      },
+      onIce: (candidate) => {
+        webRTCRef.current?.forwardSignaling("ice", candidate);
+      },
+    });
+
+    return () => {
+      console.log("[VideoCall] Cleaning up signaling");
+      unsubSignaling();
+      clearSignaling(incidentId, myUid);
+      webRTCRef.current?.hangUp();
+    };
+  }, [incidentId, incident?.officerId, chatOnly]);
 
   const handleQuickRequest = async (request) => {
     Alert.alert("Enviar alerta rápida", `¿Confirmas el envío de: "${request}"?`, [
@@ -275,6 +340,43 @@ export default function VideoCallScreen({ route, navigation }) {
     }
   };
 
+  const handleWebRTCMessage = (type, data) => {
+    switch (type) {
+      case "ready":
+        webRTCReadyRef.current = true;
+        if (pendingOfferRef.current) {
+          webRTCRef.current?.forwardSignaling("offer", pendingOfferRef.current);
+          pendingOfferRef.current = null;
+        }
+        break;
+      case "answer":
+        sendAnswer(incidentId, auth.currentUser?.uid, data).catch(() => {});
+        break;
+      case "ice":
+        sendIceCandidate(incidentId, auth.currentUser?.uid, data).catch(() => {});
+        break;
+      case "remote_on":
+        console.log("[VideoCall] Remote video received");
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
+        setConnecting(false);
+        setCallActive(true);
+        break;
+      case "disconnected":
+        console.warn("[VideoCall] WebRTC disconnected");
+        break;
+      case "error":
+        console.error("[VideoCall] WebRTC error:", data);
+        setCallError(data);
+        break;
+      case "hangup":
+        console.log("[VideoCall] WebRTC hung up");
+        break;
+    }
+  };
+
   const pulseOpacity = pulseAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0.3, 1],
@@ -305,6 +407,11 @@ export default function VideoCallScreen({ route, navigation }) {
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
 
+        {/* WebRTC video background */}
+        {!chatOnly && !callError && (
+          <WebRTCView ref={webRTCRef} onWebRTCMessage={handleWebRTCMessage} style={s.webRTCBg} />
+        )}
+
         {chatOnly ? (
           <View style={s.center}>
             <View style={[s.chatOnlyBadge, { backgroundColor: colors.blueDispatch }]}>
@@ -323,6 +430,18 @@ export default function VideoCallScreen({ route, navigation }) {
               </TouchableOpacity>
             )}
           </View>
+        ) : callError ? (
+          <View style={s.center}>
+            <MaterialCommunityIcons name="close-circle-outline" size={80} color="#EF4444" />
+            <Text style={[s.connectedText, { color: "#EF4444" }]}>ERROR DE CONEXIÓN</Text>
+            <Text style={[s.connectingSub, { color: "rgba(255,255,255,0.5)", marginTop: 8, fontSize: 13, textAlign: "center", paddingHorizontal: 32 }]}>{callError}</Text>
+            <TouchableOpacity
+              style={{ marginTop: 24, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: "#4ADE80", borderRadius: 8 }}
+              onPress={() => { setCallError(null); setConnecting(true); webRTCRef.current?.hangUp(); }}
+            >
+              <Text style={{ color: "#000", fontWeight: "bold", fontSize: 14 }}>Reintentar</Text>
+            </TouchableOpacity>
+          </View>
         ) : connecting ? (
           <View style={s.center}>
             <Animated.View style={[s.pulseCircle, { opacity: pulseOpacity }]}>
@@ -332,13 +451,7 @@ export default function VideoCallScreen({ route, navigation }) {
             <Text style={s.connectingSub}>Estableciendo enlace con CENCO</Text>
             <ActivityIndicator size="small" color="#4ADE80" style={{ marginTop: 20 }} />
           </View>
-        ) : (
-          <View style={s.center}>
-            <MaterialCommunityIcons name="video" size={80} color="#4ADE80" />
-            <Text style={s.connectedText}>LLAMADA ACTIVA</Text>
-            <Text style={s.connectedSub}>Conexión establecida con CENCO</Text>
-          </View>
-        )}
+        ) : null}
 
         {!chatOnly && (
           <View style={[s.topBar, { top: insets.top }]}>
@@ -545,4 +658,5 @@ const makeStyles = (colors) =>
     modalCancelText: { fontWeight: "bold" },
     modalConfirmBtn: { flex: 1, height: 48, borderRadius: 8, justifyContent: "center", alignItems: "center" },
     modalConfirmText: { fontWeight: "bold" },
+    webRTCBg: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
   });

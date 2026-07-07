@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback } f
 import { auth, db } from "../firebase/firebaseConfig";
 import { collection, query, where, onSnapshot, orderBy, doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { listenSignaling } from "../services/signalingService";
 
 const LOG_TAG = "[NotificationCtx]";
 
@@ -20,14 +21,29 @@ export function NotificationProvider({ children }) {
   const authUnsub = useRef(null);
   const isVisibleRef = useRef(true);
   const prevCountRef = useRef(0);
+  const signalUnsubs = useRef([]);
+  const seenOffersRef = useRef(new Set());
+  const inVideoCallRef = useRef(false);
 
   const showBanner = useCallback((senderName, text, incidentId, role) => {
     if (bannerTimer.current) clearTimeout(bannerTimer.current);
     const navTarget = role === "OFFICER"
-      ? { route: "Emergencia", params: { screen: "IncidentManagement", params: { incidentId, autoOpenChat: true } } }
+      ? { route: "Emergencia", screen: "IncidentManagement", params: { incidentId, autoOpenChat: true } }
       : { route: "VideoCall", params: { incidentId, chatOnly: true } };
     setBanner({ senderName, text, incidentId, ...navTarget });
     bannerTimer.current = setTimeout(() => setBanner(null), 4000);
+  }, []);
+
+  const showIncomingCall = useCallback((incidentId, officerName) => {
+    if (bannerTimer.current) clearTimeout(bannerTimer.current);
+    setBanner({
+      senderName: officerName || "Oficial",
+      text: "Videollamada entrante",
+      incidentId,
+      route: "VideoCall",
+      params: { incidentId },
+    });
+    bannerTimer.current = setTimeout(() => setBanner(null), 10000);
   }, []);
 
   const enterChat = useCallback((incidentId) => {
@@ -96,9 +112,12 @@ export function NotificationProvider({ children }) {
             try {
               msgUnsubs.current.forEach((u) => u());
               msgUnsubs.current = [];
+              signalUnsubs.current.forEach((u) => u());
+              signalUnsubs.current = [];
 
               if (snapshot.empty) {
                 console.log(`${LOG_TAG} No active incidents found`);
+                seenOffersRef.current.clear();
                 return;
               }
 
@@ -150,6 +169,21 @@ export function NotificationProvider({ children }) {
                   console.warn(`${LOG_TAG} message listener error:`, error?.code || error);
                 });
                 msgUnsubs.current.push(unsub);
+
+                // Signaling listener for citizen: detect incoming video call
+                if (!isOfficer && incident.officerId) {
+                  const signalKey = `${incident.id}-${incident.officerId}`;
+                  const sigUnsub = listenSignaling(incident.id, incident.officerId, {
+                    onOffer: () => {
+                      if (inVideoCallRef.current) return;
+                      if (seenOffersRef.current.has(signalKey)) return;
+                      seenOffersRef.current.add(signalKey);
+                      console.log(`${LOG_TAG} Incoming video call for incident ${incident.id}`);
+                      showIncomingCall(incident.id, incident.officerAlias);
+                    },
+                  });
+                  signalUnsubs.current.push(sigUnsub);
+                }
               });
             } catch (e) {
               console.warn(`${LOG_TAG} incident listener callback error:`, e);
@@ -168,11 +202,20 @@ export function NotificationProvider({ children }) {
       if (authUnsub.current) authUnsub.current();
       if (incidentUnsub.current) incidentUnsub.current();
       msgUnsubs.current.forEach((u) => u());
+      signalUnsubs.current.forEach((u) => u());
       if (bannerTimer.current) clearTimeout(bannerTimer.current);
     };
-  }, [showBanner]);
+  }, [showBanner, showIncomingCall]);
 
-  const value = { banner, unreadCount, enterChat, leaveChat, enterChatList, leaveChatList };
+  const enterVideoCall = useCallback((incidentId) => {
+    inVideoCallRef.current = true;
+  }, []);
+
+  const leaveVideoCall = useCallback(() => {
+    inVideoCallRef.current = false;
+  }, []);
+
+  const value = { banner, unreadCount, enterChat, leaveChat, enterChatList, leaveChatList, enterVideoCall, leaveVideoCall };
 
   return (
     <NotificationContext.Provider value={value}>

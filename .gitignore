@@ -13,3 +13,4 @@ web-build/
 *.log
 api/.env
 .env
+.atl
