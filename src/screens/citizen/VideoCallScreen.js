@@ -220,7 +220,8 @@ export default function VideoCallScreen({ route, navigation }) {
         throw new Error(data.error?.message || "Error al subir a Cloudinary");
       }
 
-      await sendMessage(incidentId, "📹 Video adjunto", uid, "CITIZEN", data.secure_url, "video");
+      const videoUrl = data.secure_url.replace("/upload/", "/upload/f_auto,q_auto/");
+      await sendMessage(incidentId, "📹 Video adjunto", uid, "CITIZEN", videoUrl, "video");
     } catch (e) {
       console.warn("[VideoCall] Video upload error:", e?.message || e);
       Alert.alert("Error", "No se pudo enviar el video. Verifica tu conexión.");
