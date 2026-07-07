@@ -29,9 +29,6 @@ import {
   COMM_MODE,
   updateCommunicationMode,
 } from "../../services/incidentService";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "../../firebase/firebaseConfig";
-import { readAsStringAsync, EncodingType } from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import MessageBubble from "../../components/MessageBubble";
 import { useTheme } from "../../context/ThemeContext";
@@ -209,21 +206,23 @@ export default function VideoCallScreen({ route, navigation }) {
     setUploading(true);
 
     try {
-      const base64 = await readAsStringAsync(videoUri, {
-        encoding: EncodingType.Base64,
-      });
-      const blob = await (
-        await fetch(`data:video/mp4;base64,${base64}`)
-      ).blob();
-      const filename = `video_${Date.now()}.mp4`;
-      const storageRef = ref(storage, `incident-videos/${incidentId}/${filename}`);
-      await uploadBytes(storageRef, blob);
-      const downloadUrl = await getDownloadURL(storageRef);
+      const formData = new FormData();
+      formData.append("file", { uri: videoUri, type: "video/mp4", name: "video.mp4" });
+      formData.append("upload_preset", process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET);
 
-      await sendMessage(incidentId, "📹 Video adjunto", uid, "CITIZEN", downloadUrl, "video");
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/${process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME}/video/upload`,
+        { method: "POST", body: formData }
+      );
+      const data = await res.json();
+
+      if (!data.secure_url) {
+        throw new Error(data.error?.message || "Error al subir a Cloudinary");
+      }
+
+      await sendMessage(incidentId, "📹 Video adjunto", uid, "CITIZEN", data.secure_url, "video");
     } catch (e) {
       console.warn("[VideoCall] Video upload error:", e?.message || e);
-      console.warn("[VideoCall] Error details:", JSON.stringify(e?.customMetadata ?? e?.serverResponse ?? e, null, 2));
       Alert.alert("Error", "No se pudo enviar el video. Verifica tu conexión.");
     } finally {
       setUploading(false);
