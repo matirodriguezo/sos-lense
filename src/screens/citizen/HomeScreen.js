@@ -25,7 +25,7 @@ import { db } from "../../firebase/firebaseConfig";
 import { triggerSOS, listenCitizenHistory } from "../../services/incidentService";
 import { getCurrentAlias } from "../../services/userStore";
 import { INCIDENT_STATUS, CENCO_PHONE } from "../../constants/roles";
-import { sendSOSBySMS, sendEmergencyAlertSMS } from "../../services/smsFallback";
+import { sendSOSBySMS } from "../../services/smsFallback";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
 import { SPACING, FONT_SIZE, FONT_WEIGHT, RADIUS } from "../../constants/theme";
@@ -245,12 +245,6 @@ export default function HomeScreen({ navigation }) {
       } else {
         console.log(`${LOG} Offline — falling back to SMS`);
         await sendSOSBySMS([CENCO_PHONE], { latitude, longitude, address, alias: citizenAlias });
-      }
-
-      if (emergencyContact?.phone) {
-        setLoadingMessage(`Notificando a ${emergencyContact.name}...`);
-        await sendEmergencyAlertSMS(emergencyContact.phone, { latitude, longitude, address, alias: citizenAlias });
-        console.log(`${LOG} Emergency contact notified: ${emergencyContact.name} ${emergencyContact.phone}`);
       }
 
       setLoadingMessage("Ubicación enviada ✓");
