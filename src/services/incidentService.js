@@ -180,7 +180,7 @@ export async function sendSystemMessage(incidentId, text) {
   });
 }
 
-export async function sendMessage(incidentId, text, senderId, senderRole) {
+export async function sendMessage(incidentId, text, senderId, senderRole, mediaUrl, mediaType) {
   await addDoc(collection(db, "incidents", incidentId, "messages"), {
     text,
     senderId,
@@ -188,6 +188,8 @@ export async function sendMessage(incidentId, text, senderId, senderRole) {
     createdAt: serverTimestamp(),
     readBy: [],
     status: "sent",
+    ...(mediaUrl && { mediaUrl }),
+    ...(mediaType && { mediaType }),
   });
 }
 

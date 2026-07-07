@@ -1,6 +1,7 @@
 import { memo, useMemo } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Video, ResizeMode } from "expo-av";
 import { useTheme } from "../context/ThemeContext";
 
 const formatTime = (createdAt) => {
@@ -33,11 +34,23 @@ function MessageBubble({ message, isMine, otherRole, otherUserId, currentUserId,
 
   const time = useMemo(() => formatTime(message.createdAt), [message.createdAt]);
 
+  const hasVideo = message.mediaUrl && message.mediaType === "video";
+
   return (
     <View style={[s.bubble, isMine ? [s.bubbleMine, { backgroundColor: colors.chatMineBg }] : [s.bubbleOther, { backgroundColor: colors.border }]]}>
       <Text style={[s.meta, isMine ? { color: colors.whiteTranslucent, textAlign: "right" } : { color: colors.textSecondary }]}>
         {senderName}
       </Text>
+      {hasVideo ? (
+        <View style={s.videoContainer}>
+          <Video
+            source={{ uri: message.mediaUrl }}
+            useNativeControls
+            resizeMode={ResizeMode.CONTAIN}
+            style={s.videoPlayer}
+          />
+        </View>
+      ) : null}
       <Text style={[s.text, isMine ? { color: colors.white } : { color: colors.textPrimary }]}>{message.text}</Text>
       <View style={s.footer}>
         <Text style={[s.time, isMine ? { color: colors.whiteTranslucent } : { color: colors.textSecondary }]}>
@@ -66,6 +79,8 @@ const makeStyles = (colors) =>
     bubbleOther: { alignSelf: "flex-start", borderBottomLeftRadius: 4 },
     meta: { fontSize: 10, marginBottom: 4, fontWeight: "bold" },
     text: { fontSize: 14, lineHeight: 20 },
+    videoContainer: { marginBottom: 6, borderRadius: 8, overflow: "hidden" },
+    videoPlayer: { width: 200, height: 180, borderRadius: 8, backgroundColor: "#000" },
     footer: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 4, gap: 4 },
     time: { fontSize: 10 },
     tickContainer: { flexDirection: "row" },

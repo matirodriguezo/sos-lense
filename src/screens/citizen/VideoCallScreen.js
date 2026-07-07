@@ -29,6 +29,10 @@ import {
   COMM_MODE,
   updateCommunicationMode,
 } from "../../services/incidentService";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from "../../firebase/firebaseConfig";
+import { readAsStringAsync, EncodingType } from "expo-file-system/legacy";
+import * as ImagePicker from "expo-image-picker";
 import MessageBubble from "../../components/MessageBubble";
 import { useTheme } from "../../context/ThemeContext";
 import { useNotifications } from "../../context/NotificationContext";
@@ -49,6 +53,7 @@ export default function VideoCallScreen({ route, navigation }) {
   const { enterChat, leaveChat } = useNotifications();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [showChatModal, setShowChatModal] = useState(autoOpenChat || false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closeReason, setCloseReason] = useState("");
@@ -183,6 +188,46 @@ export default function VideoCallScreen({ route, navigation }) {
       await sendMessage(incidentId, text, uid, "CITIZEN");
       console.log("[VideoCall] Message sent (CITIZEN):", text.slice(0, 40));
     } catch (e) { console.warn("[VideoCall] Send error:", e); }
+  };
+
+  const handleRecordVideo = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permiso requerido", "Necesitamos acceso a la cámara para grabar video.");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["videos"],
+      videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
+      allowsEditing: false,
+    });
+
+    if (result.canceled || !result.assets?.length) return;
+
+    const videoUri = result.assets[0].uri;
+    setUploading(true);
+
+    try {
+      const base64 = await readAsStringAsync(videoUri, {
+        encoding: EncodingType.Base64,
+      });
+      const blob = await (
+        await fetch(`data:video/mp4;base64,${base64}`)
+      ).blob();
+      const filename = `video_${Date.now()}.mp4`;
+      const storageRef = ref(storage, `incident-videos/${incidentId}/${filename}`);
+      await uploadBytes(storageRef, blob);
+      const downloadUrl = await getDownloadURL(storageRef);
+
+      await sendMessage(incidentId, "📹 Video adjunto", uid, "CITIZEN", downloadUrl, "video");
+    } catch (e) {
+      console.warn("[VideoCall] Video upload error:", e?.message || e);
+      console.warn("[VideoCall] Error details:", JSON.stringify(e?.customMetadata ?? e?.serverResponse ?? e, null, 2));
+      Alert.alert("Error", "No se pudo enviar el video. Verifica tu conexión.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleCloseWithReason = async () => {
@@ -361,6 +406,12 @@ export default function VideoCallScreen({ route, navigation }) {
               ListEmptyComponent={<Text style={{ textAlign: "center", marginTop: 20, color: colors.textSecondary }}>Sin mensajes.</Text>}
               renderItem={renderMessage}
             />
+            {uploading && (
+              <View style={[s.uploadingBar, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[s.uploadingText, { color: colors.textSecondary }]}>Enviando video...</Text>
+              </View>
+            )}
             <View style={s.inputRow}>
               <TextInput
                 style={[s.chatInput, { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border }]}
@@ -369,8 +420,17 @@ export default function VideoCallScreen({ route, navigation }) {
                 placeholder="Escribe un mensaje..."
                 placeholderTextColor={colors.textSecondary}
                 onSubmitEditing={handleSend}
+                editable={!uploading}
               />
-              <TouchableOpacity style={[s.sendBtn, { backgroundColor: colors.primary }]} onPress={handleSend}>
+              <TouchableOpacity
+                style={[s.cameraBtn, { backgroundColor: colors.inputBg, borderColor: colors.border }]}
+                onPress={handleRecordVideo}
+                disabled={uploading}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="videocam-outline" size={20} color={uploading ? colors.iconMuted : colors.textPrimary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.sendBtn, { backgroundColor: colors.primary, opacity: uploading ? 0.5 : 1 }]} onPress={handleSend} disabled={uploading}>
                 <Ionicons name="send" size={18} color="#fff" />
               </TouchableOpacity>
             </View>
@@ -470,9 +530,12 @@ const makeStyles = (colors) =>
     chatSheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
     chatSheetTitle: { fontSize: 18, fontWeight: "bold" },
     chatList: { flex: 1 },
-    inputRow: { flexDirection: "row", gap: 12, marginTop: 16 },
+    inputRow: { flexDirection: "row", gap: 8, marginTop: 16 },
     chatInput: { flex: 1, borderRadius: 8, paddingHorizontal: 16, height: 48, borderWidth: 1, textAlignVertical: "center" },
+    cameraBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: "center", alignItems: "center", borderWidth: 1 },
     sendBtn: { width: 48, height: 48, borderRadius: 8, justifyContent: "center", alignItems: "center" },
+    uploadingBar: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 8, paddingHorizontal: 16, height: 40, borderWidth: 1, marginBottom: 8 },
+    uploadingText: { fontSize: 13, fontWeight: "600" },
 
     modalContent: { borderRadius: 16, padding: 24, width: "100%" },
     modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 16 },
