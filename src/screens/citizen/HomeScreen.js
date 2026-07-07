@@ -199,6 +199,17 @@ export default function HomeScreen({ navigation }) {
 
   const executeSOS = async () => {
     if (loading) return;
+    if (activeIncident) {
+      Alert.alert(
+        "Ya tienes una emergencia activa",
+        "Finaliza el procedimiento actual antes de crear uno nuevo.",
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Reingresar", onPress: () => navigation.navigate("Classification", { incidentId: activeIncident.id }) },
+        ]
+      );
+      return;
+    }
     console.log(`${LOG} SOS triggered`);
     animateButton();
     Vibration.vibrate([0, 200, 100, 200]);
