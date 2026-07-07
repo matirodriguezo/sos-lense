@@ -66,6 +66,7 @@ export default function VideoCallScreen({ route, navigation }) {
   const [callActive, setCallActive] = useState(false);
   const [connecting, setConnecting] = useState(true);
   const [callError, setCallError] = useState(null);
+  const [callEnded, setCallEnded] = useState(false);
   const flatListRef = useRef(null);
   const insets = useSafeAreaInsets();
   const uid = auth.currentUser?.uid;
@@ -219,6 +220,17 @@ export default function VideoCallScreen({ route, navigation }) {
       },
       onIce: (candidate) => {
         webRTCRef.current?.forwardSignaling("ice", candidate);
+      },
+      onHangup: () => {
+        console.log("[VideoCall] Officer hung up");
+        setCallEnded(true);
+        setConnecting(false);
+        setCallActive(false);
+        webRTCRef.current?.hangUp();
+        if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+        setTimeout(() => {
+          navigation.reset({ index: 0, routes: [{ name: "Home" }] });
+        }, 3000);
       },
     });
 
@@ -408,7 +420,7 @@ export default function VideoCallScreen({ route, navigation }) {
         </TouchableOpacity>
 
         {/* WebRTC video background */}
-        {!chatOnly && !callError && (
+        {!chatOnly && !callError && !callEnded && (
           <WebRTCView ref={webRTCRef} onWebRTCMessage={handleWebRTCMessage} style={s.webRTCBg} />
         )}
 
@@ -441,6 +453,12 @@ export default function VideoCallScreen({ route, navigation }) {
             >
               <Text style={{ color: "#000", fontWeight: "bold", fontSize: 14 }}>Reintentar</Text>
             </TouchableOpacity>
+          </View>
+        ) : callEnded ? (
+          <View style={s.center}>
+            <MaterialCommunityIcons name="phone-hangup" size={80} color="#EF4444" />
+            <Text style={[s.connectedText, { color: "#EF4444", marginTop: 16 }]}>LLAMADA FINALIZADA</Text>
+            <Text style={[s.connectingSub, { color: "rgba(255,255,255,0.5)", marginTop: 8, fontSize: 13, textAlign: "center", paddingHorizontal: 32 }]}>El carabinero finalizó la llamada</Text>
           </View>
         ) : connecting ? (
           <View style={s.center}>
